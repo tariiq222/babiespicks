@@ -36,3 +36,4 @@ minio-data/
 
 # Sentry
 .sentryclirc
+apps/api/.env

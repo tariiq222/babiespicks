@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum DataSource {
+  SCHEMA_ORG
+  AI_EXTRACTION
+  MANUAL
+}
+
+enum VerdictType {
+  WORTH_IT
+  WORTH_IT_WITH
+  WAIT
+  NOT_WORTH_IT
+}
+
+enum ContentType {
+  BEST_LIST
+  PRODUCT_REVIEW
+  BUYING_GUIDE
+}
+
+enum CouponStatus {
+  ACTIVE
+  EXPIRED
+  NEEDS_REVIEW
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ==================== MODELS ====================
+
+model Store {
+  id               String          @id @default(cuid())
+  name             String
+  slug             String          @unique
+  url              String
+  logoUrl          String?
+  affiliateNetwork String?
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+
+  products         Product[]
+  prices           ProductPrice[]
+  coupons          Coupon[]
+  affiliateClicks  AffiliateClick[]
+
+  @@map("stores")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  imageUrl    String?
+  order       Int        @default(0)
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  createdAt   DateTime   @default(now())
+
+  products     Product[]
+  contentPages ContentPage[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Product {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String     @unique
+  brand        String?
+  imageUrl     String?
+  storeId      String?
+  store        Store?     @relation(fields: [storeId], references: [id])
+  categoryId   String?
+  category     Category?  @relation(fields: [categoryId], references: [id])
+  sourceUrl    String?
+  dataSource   DataSource @default(MANUAL)
+  confidence   Float?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  translations  ProductTranslation[]
+  prices        ProductPrice[]
+  specs         ProductSpec[]
+  reviewSummary ProductReviewSummary?
+  verdict       Verdict?
+  affiliateClicks AffiliateClick[]
+  agentJobs     AgentJob[]
+
+  @@index([categoryId])
+  @@index([storeId])
+  @@index([slug])
+  @@map("products")
+}
+
+model ProductTranslation {
+  id              String  @id @default(cuid())
+  productId       String
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  locale          String  // "ar" | "en"
+  name            String
+  description     String?
+  slug            String
+  metaTitle       String?
+  metaDescription String?
+
+  @@unique([productId, locale])
+  @@index([locale, slug])
+  @@map("product_translations")
+}
+
+model ProductPrice {
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id])
+  price         Decimal  @db.Decimal(10, 2)
+  originalPrice Decimal? @db.Decimal(10, 2)
+  currency      String   @default("SAR")
+  url           String?
+  scrapedAt     DateTime @default(now())
+
+  @@index([productId, scrapedAt])
+  @@index([storeId])
+  @@map("product_prices")
+}
+
+model ProductSpec {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  key       String
+  value     String
+  locale    String  @default("ar")
+
+  @@index([productId])
+  @@map("product_specs")
+}
+
+model ProductReviewSummary {
+  id             String   @id @default(cuid())
+  productId      String   @unique
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  averageRating  Float
+  totalReviews   Int
+  sentimentScore Float    // -1 to 1
+  prosAr         Json?
+  prosEn         Json?
+  consAr         Json?
+  consEn         Json?
+  redFlags       Json?
+  analyzedAt     DateTime @default(now())
+
+  @@map("product_review_summaries")
+}
+
+model Verdict {
+  id             String      @id @default(cuid())
+  productId      String      @unique
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type           VerdictType
+  overallScore   Float
+  safetyScore    Float
+  qualityScore   Float
+  reviewsScore   Float
+  priceScore     Float
+  longTermScore  Float
+  reasoningAr    String      @db.Text
+  reasoningEn    String      @db.Text
+  conditionsAr   Json?
+  conditionsEn   Json?
+  isPublished    Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@map("verdicts")
+}
+
+model ContentPage {
+  id          String      @id @default(cuid())
+  type        ContentType
+  slug        String      @unique
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  isPublished Boolean     @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  translations  ContentPageTranslation[]
+  publishedPosts PublishedPost[]
+
+  @@index([type])
+  @@index([categoryId])
+  @@map("content_pages")
+}
+
+model ContentPageTranslation {
+  id              String      @id @default(cuid())
+  contentPageId   String
+  contentPage     ContentPage @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
+  locale          String
+  title           String
+  content         String      @db.Text
+  metaTitle       String?
+  metaDescription String?
+  excerpt         String?
+
+  @@unique([contentPageId, locale])
+  @@map("content_page_translations")
+}
+
+model Coupon {
+  id              String       @id @default(cuid())
+  code            String
+  storeId         String
+  store           Store        @relation(fields: [storeId], references: [id])
+  discountPercent Float?
+  discountAmount  Decimal?     @db.Decimal(10, 2)
+  description     String?
+  status          CouponStatus @default(ACTIVE)
+  validFrom       DateTime?
+  validUntil      DateTime?
+  createdAt       DateTime     @default(now())
+
+  @@index([storeId])
+  @@index([status])
+  @@map("coupons")
+}
+
+model AffiliateClick {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  userAgent String?
+  referrer  String?
+  ipHash    String?
+  sessionId String?
+  locale    String?
+  country   String?
+  createdAt DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([storeId, createdAt])
+  @@map("affiliate_clicks")
+}
+
+model AgentJob {
+  id          String    @id @default(cuid())
+  agentName   String
+  productId   String?
+  product     Product?  @relation(fields: [productId], references: [id])
+  status      JobStatus @default(PENDING)
+  input       Json?
+  output      Json?
+  error       String?   @db.Text
+  tokensUsed  Int?
+  costUsd     Decimal?  @db.Decimal(10, 6)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([agentName, status])
+  @@index([productId])
+  @@map("agent_jobs")
+}
+
+model PublishedPost {
+  id            String      @id @default(cuid())
+  contentPageId String
+  contentPage   ContentPage @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
+  channel       String      // "website", "telegram", "twitter"
+  publishedAt   DateTime    @default(now())
+  metadata      Json?
+
+  @@index([contentPageId])
+  @@map("published_posts")
+}
