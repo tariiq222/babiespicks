@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@openrouter/sdk':
+        specifier: ^0.12.35
+        version: 0.12.35
     devDependencies:
       turbo:
         specifier: ^2.9.14
@@ -26,6 +30,9 @@ importers:
   packages/ui: {}
 
 packages:
+
+  '@openrouter/sdk@0.12.35':
+    resolution: {integrity: sha512-s4QVLLnG1AmfW3TjnnHUqGfsCkzwVK+kboGcZmKbde09m1DPqgzl4RUFt/HJ5v97MX8aEaN0UG3mKv2S+qj2Gw==}
 
   '@turbo/darwin-64@2.9.14':
     resolution: {integrity: sha512-t7QiPflaEyBE4oayeZtSmu4mEfjgIrcNlNNl1z1dmIVPqEdtA7+CfTf8d7KXsOGPh6aNgWjKxyvQg9uGfDQF+A==}
@@ -66,7 +73,14 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
+
+  '@openrouter/sdk@0.12.35':
+    dependencies:
+      zod: 4.4.3
 
   '@turbo/darwin-64@2.9.14':
     optional: true
@@ -96,3 +110,5 @@ snapshots:
       '@turbo/windows-arm64': 2.9.14
 
   typescript@6.0.3: {}
+
+  zod@4.4.3: {}
