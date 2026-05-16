@@ -8,6 +8,7 @@ import { AffiliateModule } from './features/affiliate/affiliate.module';
 import { SearchModule } from './features/search/search.module';
 import { CoordinatorModule } from './agents/coordinator/coordinator.module';
 import { CronModule } from './features/cron/cron.module';
+import { NewsletterModule } from './features/newsletter/newsletter.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { CronModule } from './features/cron/cron.module';
     AffiliateModule,
     SearchModule,
     CronModule,
+    NewsletterModule,
     CoordinatorModule,
   ],
   controllers: [AppController],
