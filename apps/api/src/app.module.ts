@@ -7,6 +7,7 @@ import { ProductsModule } from './features/products/products.module';
 import { AffiliateModule } from './features/affiliate/affiliate.module';
 import { SearchModule } from './features/search/search.module';
 import { CoordinatorModule } from './agents/coordinator/coordinator.module';
+import { CronModule } from './features/cron/cron.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CoordinatorModule } from './agents/coordinator/coordinator.module';
     ProductsModule,
     AffiliateModule,
     SearchModule,
+    CronModule,
     CoordinatorModule,
   ],
   controllers: [AppController],
