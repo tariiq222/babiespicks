@@ -6,6 +6,7 @@ import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
 import { NewsletterSection } from '@/shared/components/newsletter-section';
+import { getProducts, getVerdictVariant, getLocalizedName } from '@/shared/lib/api';
 
 const CATEGORIES = [
   { key: 'formula', ar: 'حليب الأطفال', icon: 'ti-bottle', count: 42, tint: '#E8EFE9' },
@@ -16,18 +17,9 @@ const CATEGORIES = [
   { key: 'care', ar: 'العناية بالطفل', icon: 'ti-mug', count: 29, tint: '#E8EEEA' },
 ];
 
-const RECENT = [
-  { name: 'حفاضات بامبرز برميوم مقاس 4', variant: 'good' as const, score: 84, price: 115 },
-  { name: 'كرسي سيارة شيكو نكست فيت', variant: 'cond' as const, score: 72, price: 899 },
-  { name: 'رضّاعة فيليبس أفنت الزجاج', variant: 'good' as const, score: 81, price: 55 },
-  { name: 'مرطّب جونسون بزيت اللوز', variant: 'wait' as const, score: 58, price: 32 },
-  { name: 'حليب هيب بيو المرحلة الأولى', variant: 'good' as const, score: 92, price: 115 },
-  { name: 'منشفة استحمام عضوية بامبو', variant: 'good' as const, score: 88, price: 79 },
-  { name: 'لعبة منتسوري حلقات خشبية', variant: 'cond' as const, score: 74, price: 145 },
-  { name: 'كريم حفاض ساديت لبشرة الأطفال', variant: 'bad' as const, score: 42, price: 18 },
-];
-
-export default function HomePage() {
+export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  const { data: products } = await getProducts(locale, 8);
   return (
     <main>
       {/* HERO */}
@@ -175,21 +167,26 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* RECENT VERDICTS */}
+      {/* RECENT VERDICTS - from API */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12 md:mt-16">
         <SectionHead action="الكل" actionHref="/best">آخر أرائنا</SectionHead>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
-          {RECENT.map((p, i) => (
+          {products.map((p) => (
             <Link
-              key={i}
-              href="/products/sample"
+              key={p.id}
+              href={`/products/${p.slug}`}
               className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-[#fbf9f4] transition-colors"
             >
-              <ProductImage width={999} height={120} alt={p.name} radius={8} />
-              <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">{p.name}</div>
+              <ProductImage width={999} height={120} alt={getLocalizedName(p, locale)} radius={8} />
+              <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">
+                {getLocalizedName(p, locale)}
+              </div>
               <div className="flex items-center justify-between mt-3">
-                <VerdictPill variant={p.variant} score={p.score} />
-                <SarPrice amount={p.price} className="text-[12px] text-charcoal" />
+                <VerdictPill
+                  variant={getVerdictVariant(p.verdict?.type)}
+                  score={p.verdict?.overallScore}
+                />
+                {p.prices[0] && <SarPrice amount={Number(p.prices[0].price)} className="text-[12px] text-charcoal" />}
               </div>
             </Link>
           ))}
