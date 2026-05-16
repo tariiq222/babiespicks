@@ -10,6 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@sentry/browser": "^10.53.1",
     "next": "^16.2.6",
     "next-intl": "^4.12.0",
     "react": "^19.2.6",

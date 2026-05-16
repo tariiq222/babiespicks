@@ -1,8 +1,16 @@
 import 'reflect-metadata';
+import * as Sentry from '@sentry/node';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+
+if (process.env.GLITCHTIP_DSN) {
+  Sentry.init({
+    dsn: process.env.GLITCHTIP_DSN,
+    tracesSampleRate: 0.01,
+  });
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
