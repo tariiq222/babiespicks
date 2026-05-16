@@ -1,0 +1,12 @@
+{
+  "name": "@babiespicks/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'api dev - setup in BPK-008'",
+    "build": "echo 'api build - setup in BPK-008'",
+    "lint": "echo 'api lint - setup in BPK-008'",
+    "test": "echo 'api test - setup in BPK-008'",
+    "type-check": "echo 'api type-check - setup in BPK-008'"
+  }
+}

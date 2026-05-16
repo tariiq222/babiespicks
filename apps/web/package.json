@@ -1,0 +1,11 @@
+{
+  "name": "@babiespicks/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'web dev - setup in BPK-005'",
+    "build": "echo 'web build - setup in BPK-005'",
+    "lint": "echo 'web lint - setup in BPK-005'",
+    "type-check": "echo 'web type-check - setup in BPK-005'"
+  }
+}
