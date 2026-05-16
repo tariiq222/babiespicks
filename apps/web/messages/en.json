@@ -1,0 +1,46 @@
+{
+  "brand": {
+    "name": "BabiesPicks",
+    "tagline": "Our honest verdict on every baby product"
+  },
+  "nav": {
+    "home": "Home",
+    "categories": "Categories",
+    "bestLists": "Best Products",
+    "about": "About BabiesPicks",
+    "search": "Search for a product..."
+  },
+  "home": {
+    "heroTitle": "Our Honest Verdict Before You Buy",
+    "heroSubtitle": "We review baby & maternity products using 5 smart criteria to help you make the right decision",
+    "comingSoon": "Coming soon..."
+  },
+  "verdict": {
+    "worthIt": "Worth It",
+    "worthItWith": "Worth It (Conditional)",
+    "wait": "Wait",
+    "notWorthIt": "Not Worth It"
+  },
+  "axes": {
+    "safety": "Safety",
+    "quality": "Quality",
+    "reviews": "Reviews",
+    "price": "Price",
+    "longTerm": "Long-term Value"
+  },
+  "common": {
+    "readMore": "Read More",
+    "buyNow": "Buy Now",
+    "compare": "Compare",
+    "share": "Share",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Try again"
+  },
+  "footer": {
+    "disclosure": "BabiesPicks may earn a commission from links on this site. This does not affect our opinions.",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "about": "About Us"
+  }
+}

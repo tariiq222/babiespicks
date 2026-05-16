@@ -1,9 +1,9 @@
-import OpenRouter from '@openrouter/sdk';
+import OpenAI from 'openai';
 
 export type AIModel =
-  | 'anthropic/claude-sonnet-4'     // Verdict + Content (high quality)
-  | 'google/gemini-2.5-flash'       // Reviews (cheap + Arabic support)
-  | 'zhipu/glm-4.5-air';           // Data extraction (cheapest)
+  | 'anthropic/claude-sonnet-4'
+  | 'google/gemini-2.5-flash'
+  | 'zhipu/glm-4.5-air';
 
 interface ChatOptions {
   model: AIModel;
@@ -12,23 +12,23 @@ interface ChatOptions {
   maxTokens?: number;
 }
 
-interface CostInfo {
+export interface CostInfo {
   model: string;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
-  estimatedCostUsd: number;
 }
 
-let client: OpenRouter | null = null;
+let client: OpenAI | null = null;
 
-function getClient(): OpenRouter {
+function getClient(): OpenAI {
   if (!client) {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       throw new Error('OPENROUTER_API_KEY environment variable is required');
     }
-    client = new OpenRouter({
+    client = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
       apiKey,
       defaultHeaders: {
         'HTTP-Referer': 'https://babiespicks.com',
@@ -43,9 +43,9 @@ export async function chat(opts: ChatOptions): Promise<{
   content: string;
   cost: CostInfo;
 }> {
-  const openrouter = getClient();
+  const openai = getClient();
 
-  const response = await openrouter.chat.send({
+  const response = await openai.chat.completions.create({
     model: opts.model,
     messages: opts.messages,
     ...(opts.jsonMode && { response_format: { type: 'json_object' } }),
@@ -54,17 +54,15 @@ export async function chat(opts: ChatOptions): Promise<{
 
   const choice = response.choices?.[0];
   const content = choice?.message?.content ?? '';
-
-  const usage = response.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  const usage = response.usage;
 
   return {
     content,
     cost: {
       model: opts.model,
-      promptTokens: usage.prompt_tokens ?? 0,
-      completionTokens: usage.completion_tokens ?? 0,
-      totalTokens: usage.total_tokens ?? 0,
-      estimatedCostUsd: 0, // Will be calculated from model pricing
+      promptTokens: usage?.prompt_tokens ?? 0,
+      completionTokens: usage?.completion_tokens ?? 0,
+      totalTokens: usage?.total_tokens ?? 0,
     },
   };
 }
