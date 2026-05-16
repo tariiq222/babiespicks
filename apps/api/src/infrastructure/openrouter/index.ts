@@ -1,1 +1,1 @@
-export { chat, getClient, type AIModel } from './openrouter.client';
+export { chat, getClient, type AIModel, type CostInfo } from './openrouter.client';
