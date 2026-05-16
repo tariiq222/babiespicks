@@ -6,7 +6,6 @@ export function initGlitchTip() {
     Sentry.init({
       dsn,
       tracesSampleRate: 0.01,
-      autoSessionTracking: false,
     });
   }
 }

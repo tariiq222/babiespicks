@@ -1,31 +1,98 @@
 @import "tailwindcss";
 
 @theme {
+  /* Primary palette */
   --color-sage: #6B8E7F;
   --color-sage-deep: #2D4A2D;
   --color-sage-mid: #5C8A5C;
 
+  /* Backgrounds */
   --color-cream: #FAF8F5;
-  --color-linen: #F5F0EB;
+  --color-linen: #F4F1EC;
 
-  --color-rose-accent: #C27B7F;
-  --color-rose-light: #E8C4C8;
-  --color-honey: #D4A574;
-  --color-honey-light: #E8D5B7;
+  /* Text */
+  --color-charcoal: #2D3A35;
+  --color-stone: #5F6660;
 
-  --color-warm-gray: #6B6B6B;
-  --color-warm-gray-light: #9B9B9B;
-  --color-charcoal: #2C2C2C;
+  /* Borders */
+  --color-beige: #E8E2D8;
+  --color-warm-beige: #E8D5C4;
 
-  --color-verdict-worth: #4CAF50;
-  --color-verdict-conditional: #FF9800;
-  --color-verdict-wait: #9E9E9E;
-  --color-verdict-not-worth: #F44336;
+  /* Accent - Lavender */
+  --color-lavender: #F0EAF8;
+  --color-lavender-text: #4A3D5C;
+  --color-lavender-border: #8B7AAB;
 
-  --font-family-display: 'IBM Plex Sans Arabic', system-ui, sans-serif;
-  --font-family-body: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  /* Accent - Terracotta */
+  --color-terracotta: #B85542;
 
-  --radius-card: 16px;
-  --radius-button: 12px;
-  --radius-badge: 8px;
+  /* Verdict Colors */
+  --color-verdict-good-bg: #E8F0E8;
+  --color-verdict-good-text: #2D4A2D;
+  --color-verdict-good-border: #5C8A5C;
+
+  --color-verdict-cond-bg: #FDF4E8;
+  --color-verdict-cond-text: #6B4A1F;
+  --color-verdict-cond-border: #C8924A;
+
+  --color-verdict-wait-bg: #F0EAF8;
+  --color-verdict-wait-text: #4A3D5C;
+  --color-verdict-wait-border: #8B7AAB;
+
+  --color-verdict-bad-bg: #F5E6E6;
+  --color-verdict-bad-text: #6B2D2D;
+  --color-verdict-bad-border: #B07474;
+
+  /* Category Hero backgrounds */
+  --color-cat-formula: #E8EFE9;
+  --color-cat-diapers: #EAF0EE;
+  --color-cat-carseats: #E5EBE7;
+  --color-cat-bottles: #ECF2EE;
+  --color-cat-toys: #EBEFE6;
+  --color-cat-care: #E8EEEA;
+
+  /* Typography */
+  --font-family-arabic: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-family-inter: 'Inter', system-ui, sans-serif;
+
+  /* Border Radius */
+  --radius-card: 12px;
+  --radius-button: 8px;
+  --radius-badge: 12px;
+  --radius-pill: 9999px;
 }
+
+/* Base styles */
+html { scroll-behavior: smooth; }
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Hairline borders */
+.hairline { border: 0.5px solid var(--color-beige); }
+.hairline-b { border-bottom: 0.5px solid var(--color-beige); }
+.hairline-t { border-top: 0.5px solid var(--color-beige); }
+
+/* Product image placeholder */
+.placeholder-stripe {
+  background-color: var(--color-warm-beige);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,0.18) 0 6px,
+    transparent 6px 14px
+  );
+}
+
+/* RTL flip */
+[dir="rtl"] .flip-x { transform: scaleX(-1); }
+
+/* Selection */
+::selection { background: color-mix(in oklab, var(--color-sage) 33%, transparent); }
+
+/* SAR currency */
+.sar { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+
+/* Hide scrollbar */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
