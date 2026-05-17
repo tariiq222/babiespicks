@@ -12,11 +12,11 @@ export default function NotFound() {
           عذراً، لم نجد الصفحة التي تبحثين عنها. ربما تم نقلها أو حذفها.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/" className="bg-sage text-cream rounded-lg px-6 py-3 text-[14px] hover:bg-[#5b7d6f] inline-flex items-center justify-center gap-2">
+          <Link href="/" className="bg-sage text-cream rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover inline-flex items-center justify-center gap-2">
             <span>العودة للرئيسية</span>
             <i className="ti ti-arrow-left text-[14px]"></i>
           </Link>
-          <Link href="/categories" className="border border-sage text-sage rounded-lg px-6 py-3 text-[14px] hover:bg-[#6B8E7F0d] inline-flex items-center justify-center">
+          <Link href="/categories" className="border border-sage text-sage rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover-bg inline-flex items-center justify-center">
             تصفّحي الفئات
           </Link>
         </div>

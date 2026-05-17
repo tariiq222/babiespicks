@@ -1,10 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open]);
 
   return (
     <header className="sticky top-0 z-40 bg-cream/95 backdrop-blur hairline-b">
@@ -14,7 +21,7 @@ export function SiteHeader() {
           <div className="w-9 h-9 rounded-full bg-sage text-cream flex items-center justify-center text-[16px]">ب</div>
           <div className="leading-tight text-right">
             <div className="text-[14px] text-charcoal">بيبيز بيكس</div>
-            <div className="text-[9px] text-stone tracking-wider" style={{ fontFamily: 'Inter, system-ui' }}>BABIESPICKS</div>
+            <div className="text-[11px] text-stone tracking-wider font-inter">BABIESPICKS</div>
           </div>
         </Link>
 
@@ -31,7 +38,7 @@ export function SiteHeader() {
           {/* Search (lg+) */}
           <div className="hidden lg:flex items-center gap-2 bg-linen hairline rounded-full px-4 py-[7px] w-[200px]">
             <i className="ti ti-search text-stone text-[15px]"></i>
-            <input className="bg-transparent flex-1 text-[12px] outline-none text-right" placeholder="ابحثي عن منتج..." />
+            <input className="bg-transparent flex-1 text-[12px] outline-none text-right" placeholder="ابحثي عن منتج..." aria-label="ابحثي عن منتج" />
           </div>
 
           {/* Search icon (mobile) */}
@@ -46,7 +53,7 @@ export function SiteHeader() {
             aria-label="English"
           >
             <i className="ti ti-world text-[18px]"></i>
-            <span className="absolute bottom-[3px] left-[3px] text-[8px] text-sage leading-none tracking-wider" style={{ fontFamily: 'Inter' }}>
+            <span className="absolute bottom-[3px] left-[3px] text-[8px] text-sage leading-none tracking-wider font-inter">
               EN
             </span>
           </Link>
@@ -54,7 +61,7 @@ export function SiteHeader() {
           {/* Newsletter CTA */}
           <Link
             href="#newsletter"
-            className="hidden sm:inline-flex items-center gap-2 bg-sage text-cream rounded-full px-4 py-[8px] text-[12.5px] hover:bg-[#5b7d6f] relative"
+            className="hidden sm:inline-flex items-center gap-2 bg-sage text-cream rounded-full px-4 py-[8px] text-[12.5px] hover:bg-sage-hover relative"
           >
             <span className="absolute top-[6px] right-[6px] w-2 h-2 rounded-full bg-terracotta ring-2 ring-cream"></span>
             <i className="ti ti-sparkles text-[14px]"></i>

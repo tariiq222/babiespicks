@@ -34,10 +34,10 @@ export function SiteFooter() {
         <div>
           <div className="text-charcoal mb-3">تابعينا</div>
           <ul className="space-y-2 text-stone">
-            <li>إنستغرام</li>
-            <li>تيك توك</li>
-            <li>سناب شات</li>
-            <li>النشرة البريدية</li>
+            <li><a href="#" className="hover:text-charcoal">إنستغرام</a></li>
+            <li><a href="#" className="hover:text-charcoal">تيك توك</a></li>
+            <li><a href="#" className="hover:text-charcoal">سناب شات</a></li>
+            <li><Link href="#newsletter" className="hover:text-charcoal">النشرة البريدية</Link></li>
           </ul>
         </div>
       </div>

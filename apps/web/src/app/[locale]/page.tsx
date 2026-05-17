@@ -47,6 +47,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               <input
                 className="bg-transparent flex-1 text-[14px] outline-none text-right placeholder:text-stone/70"
                 placeholder="ابحثي عن منتج لطفلكِ..."
+                aria-label="ابحثي عن منتج لطفلكِ"
               />
               <button className="bg-sage text-cream rounded-full px-5 py-[7px] text-[12px]">ابحثي</button>
             </div>
@@ -58,7 +59,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               <div className="flex items-start gap-4">
                 <ProductImage width={80} height={80} radius={12} />
                 <div className="flex-1 min-w-0">
-                  <span className="inline-block bg-lavender text-lavender-text text-[10px] px-2 py-[2px] rounded-full">منتج الأسبوع</span>
+                  <span className="inline-block bg-lavender text-lavender-text text-[11px] px-2 py-[2px] rounded-full">منتج الأسبوع</span>
                   <div className="text-[15px] text-charcoal mt-1 leading-tight">حليب أبتاميل المرحلة الأولى</div>
                   <div className="text-[12px] text-stone mt-1">شهادات أوروبية، غني بـ DHA</div>
                   <div className="flex items-center gap-2 mt-2">
@@ -72,7 +73,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               <div className="flex items-start gap-4">
                 <ProductImage width={80} height={80} radius={12} />
                 <div className="flex-1 min-w-0">
-                  <span className="inline-block bg-verdict-cond-bg text-verdict-cond-text text-[10px] px-2 py-[2px] rounded-full">رأي جديد</span>
+                  <span className="inline-block bg-verdict-cond-bg text-verdict-cond-text text-[11px] px-2 py-[2px] rounded-full">رأي جديد</span>
                   <div className="text-[15px] text-charcoal mt-1 leading-tight">كرسي سيارة شيكو نكستفت</div>
                   <div className="text-[12px] text-stone mt-1">سهل التركيب، أمان عالي</div>
                   <div className="flex items-center gap-2 mt-2">
@@ -93,7 +94,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               <div className="text-[14px] text-charcoal leading-tight">3 آراء يومياً على تيليجرام</div>
               <div className="text-[12px] text-stone mt-[2px]">انضمي مع +420 أم سعودية</div>
             </div>
-            <button className="border border-sage text-sage rounded-lg px-4 py-2 text-[12px] hover:bg-[#6B8E7F0d] flex items-center gap-1 shrink-0">
+            <button className="border border-sage text-sage rounded-lg px-4 py-2 text-[12px] hover:bg-sage-hover-bg flex items-center gap-1 shrink-0">
               <span>انضمي</span>
               <i className="ti ti-arrow-left text-[14px]"></i>
             </button>
@@ -117,7 +118,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <Link
               key={c.key}
               href={`/categories/${c.key}`}
-              className="group bg-linen rounded-2xl py-6 md:py-8 px-3 text-center hover:bg-[#ece8df] transition-colors"
+              className="group bg-linen rounded-2xl py-6 md:py-8 px-3 text-center hover:bg-linen-hover transition-colors"
             >
               <div
                 className="w-12 h-12 md:w-14 md:h-14 rounded-full mx-auto grid place-items-center transition-transform group-hover:scale-105"
@@ -126,7 +127,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 <i className={`ti ${c.icon} text-sage text-[22px] md:text-[26px]`}></i>
               </div>
               <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight">{c.ar}</div>
-              <div className="text-[10px] md:text-[11px] text-stone mt-1">{c.count} منتج</div>
+              <div className="text-[11px] md:text-[11px] text-stone mt-1">{c.count} منتج</div>
             </Link>
           ))}
         </div>
@@ -137,7 +138,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         <SectionHead action="الأرشيف" actionHref="/best">اختيارات اليوم</SectionHead>
         <Link
           href="/products/aptamil-stage-1"
-          className="block w-full text-right bg-linen rounded-2xl p-5 md:p-8 grid md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr] gap-6 md:gap-8 hover:bg-[#ece8df] transition-colors"
+          className="block w-full text-right bg-linen rounded-2xl p-5 md:p-8 grid md:grid-cols-[260px_1fr] lg:grid-cols-[320px_1fr] gap-6 md:gap-8 hover:bg-linen-hover transition-colors"
         >
           <div className="bg-cream rounded-xl p-6 md:p-8 grid place-items-center">
             <ProductImage width={200} height={250} alt="اختيار اليوم" />
@@ -175,7 +176,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <Link
               key={p.id}
               href={`/products/${p.slug}`}
-              className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-[#fbf9f4] transition-colors"
+              className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-cream-hover transition-colors"
             >
               <ProductImage width={999} height={120} alt={getLocalizedName(p, locale)} radius={8} />
               <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">

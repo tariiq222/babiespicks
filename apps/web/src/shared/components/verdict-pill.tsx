@@ -15,10 +15,10 @@ const VERDICT_CLASS: Record<VerdictVariant, string> = {
 };
 
 const VERDICT_BORDER: Record<VerdictVariant, string> = {
-  good: '#5C8A5C',
-  cond: '#C8924A',
-  wait: '#8B7AAB',
-  bad: '#B07474',
+  good: 'var(--color-verdict-good-border)',
+  cond: 'var(--color-verdict-cond-border)',
+  wait: 'var(--color-verdict-wait-border)',
+  bad: 'var(--color-verdict-bad-border)',
 };
 
 export function VerdictPill({

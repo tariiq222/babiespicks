@@ -40,12 +40,14 @@ export default function CategoryPage() {
       {/* Sage tinted hero */}
       <section style={{ background: '#E8EFE9', borderBottom: '0.5px solid #C8D5CB' }}>
         <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 py-10 md:py-16">
-          <nav className="text-[12px] mb-4 flex items-center gap-1" style={{ color: '#3d5a44' }}>
-            <Link href="/" className="hover:text-sage-deep">الرئيسية</Link>
-            <span className="opacity-60">←</span>
-            <span className="text-sage-deep">الفئات</span>
-            <span className="opacity-60">←</span>
-            <span className="text-sage-deep">حليب الأطفال</span>
+          <nav aria-label="مسار التنقل" className="text-[12px] mb-4" style={{ color: '#3d5a44' }}>
+            <ol className="flex items-center gap-1">
+              <li><Link href="/" className="hover:text-sage-deep">الرئيسية</Link></li>
+              <li aria-hidden="true" className="opacity-60">←</li>
+              <li><Link href="/categories" className="hover:text-sage-deep">الفئات</Link></li>
+              <li aria-hidden="true" className="opacity-60">←</li>
+              <li aria-current="page" className="text-sage-deep">حليب الأطفال</li>
+            </ol>
           </nav>
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-cream grid place-items-center shrink-0">
@@ -70,7 +72,7 @@ export default function CategoryPage() {
                 }`}
               >
                 <div className="text-[13px]">{s.label}</div>
-                <div className={`text-[10px] mt-1 ${stage === i ? 'text-cream/80' : 'text-stone'}`}>{s.age}</div>
+                <div className={`text-[11px] mt-1 ${stage === i ? 'text-cream/80' : 'text-stone'}`}>{s.age}</div>
               </button>
             ))}
           </div>
@@ -98,8 +100,8 @@ export default function CategoryPage() {
             <div className="hairline-t my-5"></div>
             <h3 className="text-[14px] text-charcoal mb-3">نطاق السعر</h3>
             <div className="grid grid-cols-2 gap-2">
-              <input className="bg-cream rounded-lg px-2 py-2 text-[12px] outline-none text-right" placeholder="من" />
-              <input className="bg-cream rounded-lg px-2 py-2 text-[12px] outline-none text-right" placeholder="إلى" />
+              <input className="bg-cream rounded-lg px-2 py-2 text-[12px] outline-none text-right" placeholder="من" aria-label="السعر من" />
+              <input className="bg-cream rounded-lg px-2 py-2 text-[12px] outline-none text-right" placeholder="إلى" aria-label="السعر إلى" />
             </div>
             <div className="hairline-t my-5"></div>
             <h3 className="text-[14px] text-charcoal mb-3">العلامة التجارية</h3>
@@ -137,7 +139,7 @@ export default function CategoryPage() {
             <span className="text-[13px] text-stone">{CAT_PRODUCTS.length} منتج · مرحلة 1</span>
             <div className="ms-auto flex items-center gap-2">
               <span className="text-[12px] text-stone">ترتيب:</span>
-              <select className="bg-cream hairline rounded-lg px-3 py-[6px] text-[12px] outline-none text-right">
+              <select className="bg-cream hairline rounded-lg px-3 py-[6px] text-[12px] outline-none text-right" aria-label="ترتيب المنتجات">
                 <option value="top">الأعلى تقييماً</option>
                 <option value="cheap">الأرخص أولاً</option>
                 <option value="new">الأحدث</option>
@@ -151,7 +153,7 @@ export default function CategoryPage() {
               <Link
                 key={i}
                 href="/products/sample"
-                className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-[#fbf9f4] transition-colors"
+                className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-cream-hover transition-colors"
               >
                 <div className="relative">
                   <ProductImage width={999} height={120} alt={p.name} radius={6} />
@@ -159,11 +161,11 @@ export default function CategoryPage() {
                     <VerdictPill variant={p.variant} score={p.score} />
                   </div>
                   {p.organic && (
-                    <span className="absolute top-2 right-2 bg-cream text-[10px] text-sage-deep px-2 py-[2px] rounded-full hairline">عضوي</span>
+                    <span className="absolute top-2 right-2 bg-cream text-[11px] text-sage-deep px-2 py-[2px] rounded-full hairline">عضوي</span>
                   )}
                 </div>
                 <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">{p.name}</div>
-                <div className="text-[10px] md:text-[11px] text-stone mt-1">{p.size}</div>
+                <div className="text-[11px] md:text-[11px] text-stone mt-1">{p.size}</div>
                 <div className="text-[13px] text-charcoal mt-2"><SarPrice amount={p.price} /></div>
               </Link>
             ))}

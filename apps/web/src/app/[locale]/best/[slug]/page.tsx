@@ -40,13 +40,20 @@ const FAQS = [
 
 function FaqItem({ q, a, defaultOpen = false }: { q: string; a: string; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
+  const id = q.slice(0, 20).replace(/\s/g, '-');
   return (
-    <div className="hairline-b last:border-0">
-      <button onClick={() => setOpen((o) => !o)} className="w-full px-5 py-4 flex items-center gap-3 text-right hover:bg-linen/60" aria-expanded={open}>
+    <div className="hairline-b last:border-0" role="region" aria-labelledby={`faq-${id}`}>
+      <button
+        id={`faq-${id}`}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-4 flex items-center gap-3 text-right hover:bg-linen/60"
+        aria-expanded={open}
+        aria-controls={`faq-answer-${id}`}
+      >
         <span className="flex-1 text-[14px] text-charcoal">{q}</span>
-        <i className={`ti text-sage text-[18px] transition-transform ${open ? 'ti-minus' : 'ti-plus'}`}></i>
+        <i className={`ti text-sage text-[18px] transition-transform ${open ? 'ti-minus' : 'ti-plus'}`} aria-hidden="true"></i>
       </button>
-      {open && <div className="px-5 pb-5 text-[13px] text-stone leading-[1.9]">{a}</div>}
+      {open && <div id={`faq-answer-${id}`} role="region" className="px-5 pb-5 text-[13px] text-stone leading-[1.9]">{a}</div>}
     </div>
   );
 }
@@ -56,12 +63,14 @@ export default function BestListPage() {
     <main>
       {/* Header */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pt-8 md:pt-12">
-        <nav className="text-[12px] text-stone mb-4 flex items-center gap-1">
-          <Link href="/" className="hover:text-charcoal">الرئيسية</Link>
-          <span className="opacity-50">←</span>
-          <Link href="/categories/formula" className="hover:text-charcoal">حليب الأطفال</Link>
-          <span className="opacity-50">←</span>
-          <span className="text-charcoal">مرحلة أولى</span>
+        <nav aria-label="مسار التنقل" className="text-[12px] text-stone mb-4">
+          <ol className="flex items-center gap-1">
+            <li><Link href="/" className="hover:text-charcoal">الرئيسية</Link></li>
+            <li aria-hidden="true" className="opacity-50">←</li>
+            <li><Link href="/categories/formula" className="hover:text-charcoal">حليب الأطفال</Link></li>
+            <li aria-hidden="true" className="opacity-50">←</li>
+            <li aria-current="page" className="text-charcoal">مرحلة أولى</li>
+          </ol>
         </nav>
         <CategoryTag>دليل شراء · مايو 2026</CategoryTag>
         <h1 className="text-[30px] md:text-[44px] lg:text-[50px] text-charcoal leading-[1.3] mt-4 max-w-3xl">
@@ -81,7 +90,7 @@ export default function BestListPage() {
         <SectionHead>خلاصة سريعة</SectionHead>
         <div className="grid md:grid-cols-3 gap-4">
           {QUICK.map((q, i) => (
-            <Link key={i} href="/products/sample" className="bg-linen rounded-xl p-5 md:p-6 text-right flex items-center gap-4 hover:bg-[#ece8df] transition-colors">
+            <Link key={i} href="/products/sample" className="bg-linen rounded-xl p-5 md:p-6 text-right flex items-center gap-4 hover:bg-linen-hover transition-colors">
               <div className="text-[28px]" aria-hidden="true">{q.emoji}</div>
               <div className="flex-1 min-w-0">
                 <div className="text-[12px] text-stone">{q.label}</div>
@@ -89,7 +98,7 @@ export default function BestListPage() {
               </div>
               <div className="bg-verdict-good-bg text-verdict-good-text rounded-md text-center px-3 py-2 leading-none">
                 <div className="text-[20px]">{q.score}</div>
-                <div className="text-[9px] opacity-70 mt-[2px]">/100</div>
+                <div className="text-[11px] opacity-70 mt-[2px]">/100</div>
               </div>
             </Link>
           ))}
@@ -129,7 +138,7 @@ export default function BestListPage() {
           {/* Ranked list */}
           <div className="mt-5 space-y-3">
             {RANKS.map((r) => (
-              <Link key={r.rank} href="/products/sample" className="w-full bg-linen rounded-xl p-4 md:p-5 text-right flex items-center gap-4 md:gap-5 hover:bg-[#ece8df]">
+              <Link key={r.rank} href="/products/sample" className="w-full bg-linen rounded-xl p-4 md:p-5 text-right flex items-center gap-4 md:gap-5 hover:bg-linen-hover">
                 <div className="text-[22px] md:text-[26px] text-stone w-8 text-center">{r.rank}</div>
                 <div className="bg-cream rounded-lg p-2 hidden sm:block" style={{ width: 80 }}>
                   <ProductImage width={70} height={85} alt={r.name} radius={6} />

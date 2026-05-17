@@ -61,7 +61,7 @@ export function NewsletterSection() {
                     className="bg-transparent flex-1 px-3 py-[12px] text-[13px] outline-none text-right placeholder:text-stone/70"
                   />
                 </div>
-                <button className="bg-sage text-cream rounded-lg px-6 py-3 text-[14px] hover:bg-[#5b7d6f] whitespace-nowrap inline-flex items-center justify-center gap-2">
+                <button className="bg-sage text-cream rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover whitespace-nowrap inline-flex items-center justify-center gap-2">
                   <span>اشتركي مجاناً</span>
                   <i className="ti ti-arrow-left text-[14px]"></i>
                 </button>

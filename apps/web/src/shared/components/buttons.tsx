@@ -16,7 +16,7 @@ export function PrimaryButton({
       onClick={onClick}
       className={[
         'bg-sage text-cream rounded-lg transition-colors inline-flex items-center justify-center gap-2',
-        'hover:bg-[#5b7d6f] active:bg-[#4d6c60]',
+        'hover:bg-sage-hover active:bg-sage-active',
         size === 'lg' ? 'px-6 py-[14px] text-[15px]' : 'px-4 py-3 text-[14px]',
         full && 'w-full',
       ]
@@ -42,7 +42,7 @@ export function SecondaryButton({
     <button
       onClick={onClick}
       className={[
-        'border border-sage text-sage rounded-lg px-4 py-2 text-[13px] hover:bg-[#6B8E7F0d] transition-colors',
+        'border border-sage text-sage rounded-lg px-4 py-2 text-[13px] hover:bg-sage-hover-bg transition-colors',
         full && 'w-full',
       ]
         .filter(Boolean)

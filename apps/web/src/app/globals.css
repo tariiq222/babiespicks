@@ -43,6 +43,23 @@
   --color-verdict-bad-text: #6B2D2D;
   --color-verdict-bad-border: #B07474;
 
+  /* Hover states */
+  --color-sage-hover: #5b7d6f;
+  --color-sage-active: #4d6c60;
+  --color-sage-hover-bg: #6B8E7F0d;
+
+  /* Hero / gradients */
+  --color-hero-start: #E8EFE9;
+  --color-hero-end: #FAF8F5;
+
+  /* Category hero */
+  --color-cat-hero-text: #3d5a44;
+  --color-cat-hero-border: #C8D5CB;
+
+  /* Linen hover */
+  --color-linen-hover: #ece8df;
+  --color-cream-hover: #fbf9f4;
+
   /* Category Hero backgrounds */
   --color-cat-formula: #E8EFE9;
   --color-cat-diapers: #EAF0EE;
@@ -96,3 +113,16 @@ body {
 /* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Font utilities */
+.font-inter { font-family: 'Inter', system-ui, sans-serif; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

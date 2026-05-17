@@ -33,12 +33,14 @@ export default function ProductPage() {
     <main>
       {/* Breadcrumbs */}
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pt-6">
-        <nav className="text-[12px] text-stone flex items-center gap-1">
-          <Link href="/" className="hover:text-charcoal">الرئيسية</Link>
-          <span className="opacity-50">←</span>
-          <Link href="/categories/formula" className="hover:text-charcoal">حليب الأطفال</Link>
-          <span className="opacity-50">←</span>
-          <span className="text-charcoal">حليب أبتاميل المرحلة الأولى</span>
+        <nav aria-label="مسار التنقل" className="text-[12px] text-stone">
+          <ol className="flex items-center gap-1">
+            <li><Link href="/" className="hover:text-charcoal">الرئيسية</Link></li>
+            <li aria-hidden="true" className="opacity-50">←</li>
+            <li><Link href="/categories/formula" className="hover:text-charcoal">حليب الأطفال</Link></li>
+            <li aria-hidden="true" className="opacity-50">←</li>
+            <li aria-current="page" className="text-charcoal">حليب أبتاميل المرحلة الأولى</li>
+          </ol>
         </nav>
       </div>
 
@@ -88,7 +90,7 @@ export default function ProductPage() {
               <PrimaryButton full icon="ti-arrow-left" size="lg">اشتري من نون</PrimaryButton>
               <SecondaryButton>قارني الأسعار</SecondaryButton>
             </div>
-            <p className="text-[10px] text-stone text-center mt-3">إفصاح: نحصل على عمولة بسيطة عند الشراء</p>
+            <p className="text-[11px] text-stone text-center mt-3">إفصاح: نحصل على عمولة بسيطة عند الشراء</p>
           </div>
 
           {/* Short bullets */}
@@ -133,7 +135,7 @@ export default function ProductPage() {
               >
                 <span className={s.best ? 'text-verdict-good-text' : 'text-charcoal'}>{s.store}</span>
                 {s.best && s.note && (
-                  <span className="ms-2 text-[10px] bg-verdict-good-border/15 text-verdict-good-text px-2 py-[1px] rounded-full">{s.note}</span>
+                  <span className="ms-2 text-[11px] bg-verdict-good-border/15 text-verdict-good-text px-2 py-[1px] rounded-full">{s.note}</span>
                 )}
                 <span className={`ms-auto ${s.best ? 'text-verdict-good-text' : 'text-charcoal'}`}>
                   <SarPrice amount={s.price} />
@@ -176,7 +178,7 @@ export default function ProductPage() {
         <SectionHead>بدائل قد تناسبك</SectionHead>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
           {ALTERNATIVES.map((p, i) => (
-            <Link key={i} href="/products/sample" className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-[#fbf9f4] transition-colors">
+            <Link key={i} href="/products/sample" className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-cream-hover transition-colors">
               <ProductImage width={999} height={120} alt={p.name} radius={8} />
               <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">{p.name}</div>
               <div className="flex items-center justify-between mt-3">

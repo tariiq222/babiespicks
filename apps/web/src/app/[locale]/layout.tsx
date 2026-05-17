@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { SiteHeader } from '@/shared/components/site-header';
 import { SiteFooter } from '@/shared/components/site-footer';
+import { GlitchTipInit } from '@/shared/components/glitchtip-init';
 
 export default async function LocaleLayout({
   children,
@@ -39,6 +40,7 @@ export default async function LocaleLayout({
         className={`bg-cream text-charcoal leading-[1.7] ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
         style={{ fontFamily: "'IBM Plex Sans Arabic', 'Inter', system-ui, sans-serif" }}
       >
+        <GlitchTipInit />
         <NextIntlClientProvider messages={messages}>
           <SiteHeader />
           {children}
