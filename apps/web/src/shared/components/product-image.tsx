@@ -33,7 +33,12 @@ export function ProductImage({
   return (
     <div
       className="placeholder-stripe flex items-center justify-center text-[11px] text-stone/50 font-mono"
-      style={{ width, height, borderRadius: radius, aspectRatio: `${width}/${height}` }}
+      style={{
+        width: width >= 500 ? '100%' : width,
+        height,
+        borderRadius: radius,
+        aspectRatio: `${width}/${height}`,
+      }}
     >
       {alt}
     </div>

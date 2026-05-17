@@ -23,6 +23,15 @@ export interface Product {
   } | null;
   prices: { price: number; originalPrice: number | null; currency: string; store: { name: string; slug: string } | null }[];
   category: { name: string; slug: string } | null;
+  specs: { key: string; value: string; locale: string }[];
+  reviewSummary: {
+    averageRating: number;
+    totalReviews: number;
+    prosAr: string[] | null;
+    prosEn: string[] | null;
+    consAr: string[] | null;
+    consEn: string[] | null;
+  } | null;
 }
 
 export async function getProducts(locale = 'ar', limit = 20): Promise<{ data: Product[]; nextCursor: string | null }> {
@@ -67,4 +76,13 @@ export function getLocalizedName(product: Product, locale: string): string {
 export function getLocalizedDesc(product: Product, locale: string): string | null {
   const t = product.translations.find((t) => t.locale === locale);
   return t?.description || null;
+}
+
+export async function searchProducts(query: string, locale = 'ar'): Promise<{ data: Product[]; query: string; total: number }> {
+  if (!query || query.length < 2) return { data: [], query, total: 0 };
+  const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}&locale=${locale}&limit=20`, {
+    next: { revalidate: 0 },
+  });
+  if (!res.ok) return { data: [], query, total: 0 };
+  return res.json();
 }

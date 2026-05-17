@@ -1,4 +1,13 @@
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import {
+  getProduct,
+  getProductsByCategory,
+  getVerdictVariant,
+  getLocalizedName,
+  getLocalizedDesc,
+} from '@/shared/lib/api';
+import type { Product } from '@/shared/lib/api';
 import { VerdictPill, VerdictCard } from '@/shared/components/verdict-pill';
 import { CategoryTag, DiscountTag } from '@/shared/components/tags';
 import { PrimaryButton, SecondaryButton } from '@/shared/components/buttons';
@@ -6,40 +15,91 @@ import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
 
-const SCORES = [
-  { ar: 'الأمان', icon: 'ti-shield-check', val: 92 },
-  { ar: 'الجودة', icon: 'ti-award', val: 88 },
-  { ar: 'التقييمات', icon: 'ti-star', val: 85 },
-  { ar: 'السعر', icon: 'ti-tag', val: 80 },
-  { ar: 'القيمة طويلة المدى', icon: 'ti-infinity', val: 85 },
-];
+interface Props {
+  params: Promise<{ locale: string; slug: string }>;
+}
 
-const STORES = [
-  { store: 'نون', price: 89, best: true, note: 'الأفضل' },
-  { store: 'أمازون السعودية', price: 94 },
-  { store: 'ممزورلد', price: 99 },
-  { store: 'صيدلية النهدي', price: 105 },
-];
+export async function generateMetadata({ params }: Props) {
+  const { locale, slug } = await params;
+  const product = await getProduct(slug, locale);
+  if (!product) return {};
+  const name = getLocalizedName(product, locale);
+  return {
+    title: name,
+    description: getLocalizedDesc(product, locale) || `مراجعة ${name} - BabiesPicks`,
+  };
+}
 
-const ALTERNATIVES = [
-  { name: 'حفاضات بامبرز برميوم مقاس 4', variant: 'good' as const, score: 84, price: 115 },
-  { name: 'كرسي سيارة شيكو نكست فيت', variant: 'cond' as const, score: 72, price: 899 },
-  { name: 'رضّاعة فيليبس أفنت الزجاج', variant: 'good' as const, score: 81, price: 55 },
-  { name: 'مرطّب جونسون بزيت اللوز', variant: 'wait' as const, score: 58, price: 32 },
-];
+export default async function ProductPage({ params }: Props) {
+  const { locale, slug } = await params;
+  const product = await getProduct(slug, locale);
+  if (!product) notFound();
 
-export default function ProductPage() {
+  const name = getLocalizedName(product, locale);
+  const description = getLocalizedDesc(product, locale);
+  const variant = product.verdict ? getVerdictVariant(product.verdict.type) : null;
+
+  const sortedPrices = [...product.prices].sort((a, b) => a.price - b.price);
+  const cheapestPrice = sortedPrices[0];
+  const originalPrice = cheapestPrice?.originalPrice;
+  const discountPercent = originalPrice
+    ? Math.round(((originalPrice - cheapestPrice.price) / originalPrice) * 100)
+    : 0;
+
+  const specs = product.specs?.filter((s) => s.locale === locale) || [];
+
+  const scores = product.verdict
+    ? [
+        { ar: 'الأمان', icon: 'ti-shield-check', val: product.verdict.safetyScore },
+        { ar: 'الجودة', icon: 'ti-award', val: product.verdict.qualityScore },
+        { ar: 'التقييمات', icon: 'ti-star', val: product.verdict.reviewsScore },
+        { ar: 'السعر', icon: 'ti-tag', val: product.verdict.priceScore },
+        { ar: 'القيمة طويلة المدى', icon: 'ti-infinity', val: product.verdict.longTermScore },
+      ]
+    : [];
+
+  const conditions = locale === 'ar' ? product.verdict?.conditionsAr : product.verdict?.conditionsEn;
+  const hasConditions = conditions && conditions.length > 0;
+  const reviewPros = locale === 'ar' ? product.reviewSummary?.prosAr : product.reviewSummary?.prosEn;
+  const reviewCons = locale === 'ar' ? product.reviewSummary?.consAr : product.reviewSummary?.consEn;
+  const hasReviewPros = reviewPros && reviewPros.length > 0;
+  const hasReviewCons = reviewCons && reviewCons.length > 0;
+
+  const related = product.category?.slug
+    ? (await getProductsByCategory(product.category.slug, locale))
+        .filter((p: Product) => p.slug !== product.slug)
+        .slice(0, 4)
+    : [];
+
   return (
     <main>
       {/* Breadcrumbs */}
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pt-6">
         <nav aria-label="مسار التنقل" className="text-[12px] text-stone">
           <ol className="flex items-center gap-1">
-            <li><Link href="/" className="hover:text-charcoal">الرئيسية</Link></li>
-            <li aria-hidden="true" className="opacity-50">←</li>
-            <li><Link href="/categories/formula" className="hover:text-charcoal">حليب الأطفال</Link></li>
-            <li aria-hidden="true" className="opacity-50">←</li>
-            <li aria-current="page" className="text-charcoal">حليب أبتاميل المرحلة الأولى</li>
+            <li>
+              <Link href="/" className="hover:text-charcoal">
+                الرئيسية
+              </Link>
+            </li>
+            <li aria-hidden="true" className="opacity-50">
+              ←
+            </li>
+            {product.category && (
+              <>
+                <li>
+                  <Link href={`/categories/${product.category.slug}`} className="hover:text-charcoal">
+                    {product.category.name}
+                  </Link>
+                </li>
+                <li aria-hidden="true" className="opacity-50">
+                  ←
+                </li>
+              </>
+            )}
+            <li aria-current="page" className="text-charcoal">
+              {name}
+            </li>
           </ol>
         </nav>
       </div>
@@ -48,7 +108,13 @@ export default function ProductPage() {
         {/* IMAGE COLUMN */}
         <div>
           <div className="bg-linen rounded-2xl p-8 md:p-12 grid place-items-center">
-            <ProductImage width={360} height={400} alt="صورة المنتج الرئيسية" radius={16} />
+            <ProductImage
+              src={product.imageUrl || undefined}
+              width={360}
+              height={400}
+              alt={name}
+              radius={16}
+            />
           </div>
           <div className="grid grid-cols-4 gap-3 mt-4">
             {[0, 1, 2, 3].map((i) => (
@@ -62,46 +128,65 @@ export default function ProductPage() {
         {/* INFO COLUMN */}
         <div>
           <div className="flex items-center gap-2">
-            <CategoryTag>حليب أطفال · مرحلة أولى</CategoryTag>
-            <span className="text-[11px] text-stone">العلامة: أبتاميل</span>
+            <CategoryTag>{product.category?.name || 'منتج'}</CategoryTag>
+            <span className="text-[11px] text-stone">العلامة: {product.brand || '-'}</span>
           </div>
-          <h1 className="text-[24px] md:text-[30px] text-charcoal leading-[1.3] mt-4">
-            حليب أبتاميل المرحلة الأولى 900 جرام
-          </h1>
-          <p className="text-[13px] md:text-[14px] text-stone mt-2">للرضع من الولادة حتى 6 شهور</p>
+          <h1 className="text-[24px] md:text-[30px] text-charcoal leading-[1.3] mt-4">{name}</h1>
+          {description && <p className="text-[13px] md:text-[14px] text-stone mt-2">{description}</p>}
 
           <div className="mt-6">
-            <VerdictCard
-              variant="good"
-              score={87}
-              reason="منتج موثوق بسجل سلامة ممتاز، شهادات أوروبية كاملة، وتقييمات إيجابية من 234 أم سعودية."
-            />
+            {product.verdict && variant ? (
+              <VerdictCard
+                variant={variant}
+                score={product.verdict.overallScore}
+                reason={locale === 'ar' ? product.verdict.reasoningAr : product.verdict.reasoningEn}
+              />
+            ) : (
+              <div className="bg-stone/10 rounded-xl p-5 text-center text-stone">
+                <i className="ti ti-clock-hour-4 text-[22px] mb-2 block"></i>
+                <span className="text-[14px]">لم يُراجع بعد</span>
+              </div>
+            )}
           </div>
 
           {/* PRICE BLOCK */}
-          <div className="mt-6 bg-cream hairline rounded-xl p-5">
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-[28px] md:text-[32px] text-charcoal"><SarPrice amount={89} /></span>
-              <span className="text-[14px] text-stone line-through"><SarPrice amount={125} /></span>
-              <DiscountTag>وفّر 29٪</DiscountTag>
+          {cheapestPrice && (
+            <div className="mt-6 bg-cream hairline rounded-xl p-5">
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className="text-[28px] md:text-[32px] text-charcoal">
+                  <SarPrice amount={cheapestPrice.price} />
+                </span>
+                {originalPrice && originalPrice > cheapestPrice.price && (
+                  <span className="text-[14px] text-stone line-through">
+                    <SarPrice amount={originalPrice} />
+                  </span>
+                )}
+                {discountPercent > 0 && <DiscountTag>وفّر {discountPercent}٪</DiscountTag>}
+              </div>
+              <div className="text-[12px] text-stone mt-1">شامل الضريبة</div>
+              <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3">
+                <PrimaryButton full icon="ti-arrow-left" size="lg">
+                  اشتري من {cheapestPrice.store?.name || 'المتجر'}
+                </PrimaryButton>
+                <SecondaryButton>قارني الأسعار</SecondaryButton>
+              </div>
+              <p className="text-[11px] text-stone text-center mt-3">
+                إفصاح: نحصل على عمولة بسيطة عند الشراء
+              </p>
             </div>
-            <div className="text-[12px] text-stone mt-1">شامل الضريبة · أسعار 25 مايو 2026</div>
-            <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3">
-              <PrimaryButton full icon="ti-arrow-left" size="lg">اشتري من نون</PrimaryButton>
-              <SecondaryButton>قارني الأسعار</SecondaryButton>
-            </div>
-            <p className="text-[11px] text-stone text-center mt-3">إفصاح: نحصل على عمولة بسيطة عند الشراء</p>
-          </div>
+          )}
 
           {/* Short bullets */}
-          <ul className="mt-6 grid sm:grid-cols-2 gap-2 text-[13px] text-charcoal">
-            {['شهادات أوروبية كاملة', 'غني بـ DHA و ARA', 'تركيبة قريبة من حليب الأم', 'بريبيوتيكس لصحة الأمعاء'].map((b, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <i className="ti ti-circle-check text-sage text-[16px] mt-[2px]"></i>
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
+          {specs.length > 0 && (
+            <ul className="mt-6 grid sm:grid-cols-2 gap-2 text-[13px] text-charcoal">
+              {specs.map((s, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <i className="ti ti-circle-check text-sage text-[16px] mt-[2px]"></i>
+                  <span>{s.value}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -110,85 +195,156 @@ export default function ProductPage() {
         <div>
           <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">التقييم بالتفصيل</h2>
           <div className="bg-cream hairline rounded-xl p-5 md:p-6 space-y-5">
-            {SCORES.map((s, i) => (
-              <div key={i}>
-                <div className="flex items-center text-[14px]">
-                  <i className={`ti ${s.icon} text-sage text-[18px] me-2`}></i>
-                  <span className="text-charcoal">{s.ar}</span>
-                  <span className="ms-auto text-charcoal">{s.val}</span>
+            {scores.length > 0 ? (
+              scores.map((s, i) => (
+                <div key={i}>
+                  <div className="flex items-center text-[14px]">
+                    <i className={`ti ${s.icon} text-sage text-[18px] me-2`}></i>
+                    <span className="text-charcoal">{s.ar}</span>
+                    <span className="ms-auto text-charcoal">{s.val}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-beige overflow-hidden">
+                    <div className="h-full bg-sage rounded-full" style={{ width: `${s.val}%` }}></div>
+                  </div>
                 </div>
-                <div className="mt-2 h-1.5 rounded-full bg-beige overflow-hidden">
-                  <div className="h-full bg-sage rounded-full" style={{ width: `${s.val}%` }}></div>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-[13px] text-stone text-center py-4">لا يوجد تقييم مفصل بعد</p>
+            )}
           </div>
         </div>
 
         <div>
           <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">مقارنة الأسعار</h2>
-          <div className="hairline rounded-xl overflow-hidden">
-            {STORES.map((s, i) => (
-              <div
-                key={i}
-                className={`flex items-center px-4 md:px-5 py-4 text-[14px] ${s.best ? 'bg-verdict-good-bg' : 'bg-cream'} ${i < STORES.length - 1 ? 'hairline-b' : ''}`}
-              >
-                <span className={s.best ? 'text-verdict-good-text' : 'text-charcoal'}>{s.store}</span>
-                {s.best && s.note && (
-                  <span className="ms-2 text-[11px] bg-verdict-good-border/15 text-verdict-good-text px-2 py-[1px] rounded-full">{s.note}</span>
-                )}
-                <span className={`ms-auto ${s.best ? 'text-verdict-good-text' : 'text-charcoal'}`}>
-                  <SarPrice amount={s.price} />
-                </span>
+          {sortedPrices.length > 0 ? (
+            <>
+              <div className="hairline rounded-xl overflow-hidden">
+                {sortedPrices.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center px-4 md:px-5 py-4 text-[14px] ${
+                      i === 0 ? 'bg-verdict-good-bg' : 'bg-cream'
+                    } ${i < sortedPrices.length - 1 ? 'hairline-b' : ''}`}
+                  >
+                    <span className={i === 0 ? 'text-verdict-good-text' : 'text-charcoal'}>
+                      {s.store?.name || 'متجر'}
+                    </span>
+                    {i === 0 && (
+                      <span className="ms-2 text-[11px] bg-verdict-good-border/15 text-verdict-good-text px-2 py-[1px] rounded-full">
+                        الأفضل
+                      </span>
+                    )}
+                    <span className={`ms-auto ${i === 0 ? 'text-verdict-good-text' : 'text-charcoal'}`}>
+                      <SarPrice amount={s.price} />
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <p className="text-[11px] text-stone mt-3">آخر تحديث: قبل 4 ساعات. الأسعار قد تتغير.</p>
+              <p className="text-[11px] text-stone mt-3">الأسعار قد تتغير.</p>
+            </>
+          ) : (
+            <p className="text-[13px] text-stone text-center py-4 bg-cream hairline rounded-xl">
+              لا توجد أسعار متاحة
+            </p>
+          )}
         </div>
       </section>
 
       {/* PROS / CONS */}
-      <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12 grid md:grid-cols-2 gap-5">
-        <div className="bg-verdict-good-bg rounded-xl p-5 md:p-6">
-          <div className="flex items-center gap-2 text-verdict-good-text text-[14px] mb-3">
-            <i className="ti ti-plus text-[18px]"></i>
-            <span>المميزات</span>
+      {hasConditions || hasReviewPros || hasReviewCons ? (
+        <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12 grid md:grid-cols-2 gap-5">
+          <div className="bg-verdict-good-bg rounded-xl p-5 md:p-6">
+            <div className="flex items-center gap-2 text-verdict-good-text text-[14px] mb-3">
+              <i className="ti ti-plus text-[18px]"></i>
+              <span>المميزات</span>
+            </div>
+            <ul className="space-y-2 text-[13px] text-verdict-good-text/95">
+              {(hasConditions
+                ? conditions
+                : reviewPros || []
+              )?.map((t, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-verdict-good-border mt-[2px]">•</span>
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="space-y-2 text-[13px] text-verdict-good-text/95">
-            {['غني بـ DHA لتطور المخ', 'شهادات أوروبية ممتازة', 'تركيبة قريبة من حليب الأم'].map((t, i) => (
-              <li key={i} className="flex gap-2"><span className="text-verdict-good-border mt-[2px]">•</span><span>{t}</span></li>
-            ))}
-          </ul>
-        </div>
-        <div className="bg-verdict-bad-bg rounded-xl p-5 md:p-6">
-          <div className="flex items-center gap-2 text-verdict-bad-text text-[14px] mb-3">
-            <i className="ti ti-alert-triangle text-[18px]"></i>
-            <span>انتبهي</span>
+          <div className="bg-verdict-bad-bg rounded-xl p-5 md:p-6">
+            <div className="flex items-center gap-2 text-verdict-bad-text text-[14px] mb-3">
+              <i className="ti ti-alert-triangle text-[18px]"></i>
+              <span>انتبهي</span>
+            </div>
+            <ul className="space-y-2 text-[13px] text-verdict-bad-text/95">
+              {(hasReviewCons ? reviewCons : [])?.map((t, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="text-verdict-bad-border mt-[2px]">•</span>
+                  <span>{t}</span>
+                </li>
+              )) || (
+                <li className="flex gap-2">
+                  <span className="text-verdict-bad-border mt-[2px]">•</span>
+                  <span>لا توجد ملاحظات سلبية مسجلة</span>
+                </li>
+              )}
+            </ul>
           </div>
-          <ul className="space-y-2 text-[13px] text-verdict-bad-text/95">
-            {['قد لا يناسب الأطفال أصحاب الكوليك أو الحساسية من بروتين الحليب', 'السعر تذبذب 20٪ آخر 30 يوم'].map((t, i) => (
-              <li key={i} className="flex gap-2"><span className="text-verdict-bad-border mt-[2px]">•</span><span>{t}</span></li>
-            ))}
-          </ul>
-        </div>
-      </section>
+        </section>
+      ) : product.verdict ? (
+        <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12">
+          <div className="bg-cream hairline rounded-xl p-5 md:p-6 text-center">
+            <p className="text-[13px] text-charcoal leading-[1.8]">
+              {locale === 'ar' ? product.verdict.reasoningAr : product.verdict.reasoningEn}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {/* ALTERNATIVES */}
-      <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-16">
-        <SectionHead>بدائل قد تناسبك</SectionHead>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
-          {ALTERNATIVES.map((p, i) => (
-            <Link key={i} href="/products/sample" className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-cream-hover transition-colors">
-              <ProductImage width={999} height={120} alt={p.name} radius={8} />
-              <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">{p.name}</div>
-              <div className="flex items-center justify-between mt-3">
-                <VerdictPill variant={p.variant} score={p.score} />
-                <SarPrice amount={p.price} className="text-[12px] text-charcoal" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {related.length > 0 && (
+        <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-16">
+          <SectionHead>بدائل قد تناسبك</SectionHead>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
+            {related.map((p: Product) => {
+              const pName = getLocalizedName(p, locale);
+              const pVariant = p.verdict ? getVerdictVariant(p.verdict.type) : null;
+              const pCheapest = p.prices?.length
+                ? [...p.prices].sort((a, b) => a.price - b.price)[0]
+                : null;
+              return (
+                <Link
+                  key={p.id}
+                  href={`/products/${p.slug}`}
+                  className="bg-cream hairline rounded-xl p-3 md:p-4 text-right hover:bg-cream-hover transition-colors"
+                >
+                  <ProductImage
+                    src={p.imageUrl || undefined}
+                    width={999}
+                    height={120}
+                    alt={pName}
+                    radius={8}
+                  />
+                  <div className="text-[12px] md:text-[13px] text-charcoal mt-3 leading-tight line-clamp-2 min-h-[32px]">
+                    {pName}
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    {pVariant ? (
+                      <VerdictPill variant={pVariant} score={p.verdict?.overallScore} />
+                    ) : (
+                      <span className="text-[11px] text-stone">—</span>
+                    )}
+                    {pCheapest ? (
+                      <SarPrice amount={pCheapest.price} className="text-[12px] text-charcoal" />
+                    ) : (
+                      <span />
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

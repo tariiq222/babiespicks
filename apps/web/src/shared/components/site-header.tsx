@@ -6,6 +6,15 @@ import Link from 'next/link';
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
+  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const q = (form.elements.namedItem('q') as HTMLInputElement)?.value;
+    if (q && q.length >= 2) {
+      window.location.href = `/ar/search?q=${encodeURIComponent(q)}`;
+    }
+  };
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -36,15 +45,15 @@ export function SiteHeader() {
         {/* End cluster */}
         <div className="ms-auto flex items-center gap-2">
           {/* Search (lg+) */}
-          <div className="hidden lg:flex items-center gap-2 bg-linen hairline rounded-full px-4 py-[7px] w-[200px]">
+          <form onSubmit={handleSearch} className="hidden lg:flex items-center gap-2 bg-linen hairline rounded-full px-4 py-[7px] w-[200px]">
             <i className="ti ti-search text-stone text-[15px]"></i>
-            <input className="bg-transparent flex-1 text-[12px] outline-none text-right" placeholder="ابحثي عن منتج..." aria-label="ابحثي عن منتج" />
-          </div>
+            <input name="q" className="bg-transparent flex-1 text-[12px] outline-none text-right" placeholder="ابحثي عن منتج..." aria-label="ابحثي عن منتج" />
+          </form>
 
           {/* Search icon (mobile) */}
-          <button className="lg:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone" aria-label="بحث">
+          <Link href="/search" className="lg:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone" aria-label="بحث">
             <i className="ti ti-search text-[18px]"></i>
-          </button>
+          </Link>
 
           {/* Language toggle */}
           <Link
