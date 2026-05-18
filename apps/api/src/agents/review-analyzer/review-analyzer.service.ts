@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat } from '../../infrastructure/openrouter';
+import { chat, AIModel } from '../../infrastructure/openrouter';
+import { SettingsService } from '../../features/settings/settings.service';
 
 export interface ReviewData {
   text: string;
@@ -24,10 +25,22 @@ export interface ReviewAnalysis {
 export class ReviewAnalyzerService {
   private readonly logger = new Logger(ReviewAnalyzerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async analyzeReviews(productId: string, reviews: ReviewData[]): Promise<ReviewAnalysis> {
     this.logger.log(`Analyzing ${reviews.length} reviews for product ${productId}`);
+
+    const agentConfig = this.settingsService.getConfig('review-analyzer');
+    if (agentConfig && !agentConfig.enabled) {
+      this.logger.warn('Review analyzer is disabled via settings');
+      throw new Error('Agent disabled');
+    }
+    const model = (agentConfig?.model ?? 'google/gemini-2.5-flash') as AIModel;
+    const temperature = agentConfig?.temperature ?? 0.2;
+    const maxTokens = agentConfig?.maxTokens ?? 1500;
 
     if (reviews.length === 0) {
       return this.emptyAnalysis();
@@ -40,10 +53,10 @@ export class ReviewAnalyzerService {
       .join('\n');
 
     const result = await chat({
-      model: 'google/gemini-2.5-flash',
+      model,
       jsonMode: true,
-      maxTokens: 1500,
-      temperature: 0.2,
+      maxTokens,
+      temperature,
       messages: [
         {
           role: 'system',

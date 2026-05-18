@@ -3,7 +3,11 @@ import OpenAI from 'openai';
 export type AIModel =
   | 'anthropic/claude-sonnet-4'
   | 'google/gemini-2.5-flash'
-  | 'zhipu/glm-4.5-air';
+  | 'zhipu/glm-4.5-air'
+  | 'openai/gpt-4o'
+  | 'openai/gpt-4o-mini'
+  | 'anthropic/claude-haiku-3.5'
+  | 'google/gemini-2.5-pro';
 
 interface ChatOptions {
   model: AIModel;
@@ -25,6 +29,10 @@ const COST_PER_1K: Record<string, { input: number; output: number }> = {
   'anthropic/claude-sonnet-4': { input: 0.003, output: 0.015 },
   'google/gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
   'zhipu/glm-4.5-air': { input: 0.0001, output: 0.0004 },
+  'openai/gpt-4o': { input: 0.0025, output: 0.01 },
+  'openai/gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+  'anthropic/claude-haiku-3.5': { input: 0.0008, output: 0.004 },
+  'google/gemini-2.5-pro': { input: 0.00125, output: 0.005 },
 };
 
 let client: OpenAI | null = null;

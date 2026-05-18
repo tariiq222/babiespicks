@@ -315,3 +315,17 @@ model FeatureFlag {
 
   @@map("feature_flags")
 }
+
+model AgentConfig {
+  id          String   @id @default(cuid())
+  agentName   String   @unique
+  model       String   @default("google/gemini-2.5-flash")
+  temperature Float    @default(0.3)
+  maxTokens   Int      @default(2000)
+  enabled     Boolean  @default(true)
+  description String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("agent_configs")
+}

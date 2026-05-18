@@ -34,6 +34,7 @@ export default function AdminLayout({
           <NavItem href="/admin/analytics" icon="ti-chart-dots-3" label="التحليلات" pathname={pathname} />
           <NavItem href="/admin/costs" icon="ti-chart-bar" label="التكاليف" pathname={pathname} />
           <NavItem href="/admin/affiliate" icon="ti-link" label="الأفلييت" pathname={pathname} />
+          <NavItem href="/admin/settings" icon="ti-settings" label="الإعدادات" pathname={pathname} />
           <div className="h-px bg-beige my-3" />
           <NavItem
             href="/"

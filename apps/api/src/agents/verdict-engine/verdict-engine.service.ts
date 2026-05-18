@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat } from '../../infrastructure/openrouter';
+import { chat, AIModel } from '../../infrastructure/openrouter';
+import { SettingsService } from '../../features/settings/settings.service';
 
 export interface VerdictResult {
   type: 'WORTH_IT' | 'WORTH_IT_WITH' | 'WAIT' | 'NOT_WORTH_IT';
@@ -20,10 +21,22 @@ export interface VerdictResult {
 export class VerdictEngineService {
   private readonly logger = new Logger(VerdictEngineService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async generateVerdict(productId: string): Promise<VerdictResult> {
     this.logger.log(`Generating verdict for product ${productId}`);
+
+    const agentConfig = this.settingsService.getConfig('verdict-engine');
+    if (agentConfig && !agentConfig.enabled) {
+      this.logger.warn('Verdict engine is disabled via settings');
+      throw new Error('Agent disabled');
+    }
+    const model = (agentConfig?.model ?? 'anthropic/claude-sonnet-4') as AIModel;
+    const temperature = agentConfig?.temperature ?? 0.3;
+    const maxTokens = agentConfig?.maxTokens ?? 2000;
 
     // Check for cached verdict (within 24 hours)
     const cached = await this.prisma.verdict.findUnique({
@@ -82,10 +95,10 @@ Specs: ${product.specs.map((s) => `${s.key}: ${s.value}`).join(', ') || 'None'}
 `;
 
     const result = await chat({
-      model: 'anthropic/claude-sonnet-4',
+      model,
       jsonMode: true,
-      maxTokens: 2000,
-      temperature: 0.3,
+      maxTokens,
+      temperature,
       messages: [
         {
           role: 'system',

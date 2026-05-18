@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat } from '../../infrastructure/openrouter';
+import { chat, AIModel } from '../../infrastructure/openrouter';
+import { SettingsService } from '../../features/settings/settings.service';
 
 export interface QualityCheckResult {
   passed: boolean;
@@ -20,7 +21,10 @@ export interface QualityIssue {
 export class QualityGuardService {
   private readonly logger = new Logger(QualityGuardService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async checkContent(content: {
     titleAr: string;
@@ -30,11 +34,20 @@ export class QualityGuardService {
   }): Promise<QualityCheckResult> {
     this.logger.log(`Quality check: "${content.titleEn}"`);
 
+    const agentConfig = this.settingsService.getConfig('quality-guard');
+    if (agentConfig && !agentConfig.enabled) {
+      this.logger.warn('Quality guard is disabled via settings');
+      throw new Error('Agent disabled');
+    }
+    const model = (agentConfig?.model ?? 'google/gemini-2.5-flash') as AIModel;
+    const temperature = agentConfig?.temperature ?? 0.1;
+    const maxTokens = agentConfig?.maxTokens ?? 1000;
+
     const result = await chat({
-      model: 'google/gemini-2.5-flash',
+      model,
       jsonMode: true,
-      maxTokens: 1000,
-      temperature: 0.1,
+      maxTokens,
+      temperature,
       messages: [
         {
           role: 'system',

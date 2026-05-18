@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat } from '../../infrastructure/openrouter';
+import { chat, AIModel } from '../../infrastructure/openrouter';
+import { SettingsService } from '../../features/settings/settings.service';
 
 export type ContentPageType = 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE';
 
@@ -21,7 +22,10 @@ export interface ContentResult {
 export class ContentWriterService {
   private readonly logger = new Logger(ContentWriterService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   async writeContent(
     type: ContentPageType,
@@ -29,6 +33,15 @@ export class ContentWriterService {
     productIds: string[],
   ): Promise<ContentResult> {
     this.logger.log(`Writing ${type} content: "${topic}"`);
+
+    const agentConfig = this.settingsService.getConfig('content-writer');
+    if (agentConfig && !agentConfig.enabled) {
+      this.logger.warn('Content writer is disabled via settings');
+      throw new Error('Agent disabled');
+    }
+    const model = (agentConfig?.model ?? 'anthropic/claude-sonnet-4') as AIModel;
+    const temperature = agentConfig?.temperature ?? 0.7;
+    const maxTokens = agentConfig?.maxTokens ?? 4000;
 
     // Get products data
     const products = await this.prisma.product.findMany({
@@ -50,10 +63,10 @@ export class ContentWriterService {
       .join('\n');
 
     const result = await chat({
-      model: 'anthropic/claude-sonnet-4',
+      model,
       jsonMode: true,
-      maxTokens: 4000,
-      temperature: 0.7,
+      maxTokens,
+      temperature,
       messages: [
         {
           role: 'system',
