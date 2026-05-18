@@ -90,7 +90,7 @@ model Product {
   store        Store?     @relation(fields: [storeId], references: [id])
   categoryId   String?
   category     Category?  @relation(fields: [categoryId], references: [id])
-  sourceUrl    String?
+  sourceUrl    String?    @unique
   dataSource   DataSource @default(MANUAL)
   confidence   Float?
   isActive     Boolean    @default(true)

@@ -15,15 +15,21 @@ export interface AIExtractionResult {
  * Layer 2 of the DataAcquisition cascade - fallback when Schema.org fails
  */
 export async function extractWithAI(html: string, url: string): Promise<AIExtractionResult> {
+  // Extract image URLs from raw HTML before cleaning
+  const imageUrls = extractImageUrls(html, url);
+
   // Clean HTML: remove scripts, styles, comments, keep text structure
   const cleaned = cleanHtml(html);
 
   // Truncate to ~8000 tokens worth of text
   const truncated = cleaned.substring(0, 12000);
 
+  // Append image URLs to help AI identify the main product image
+  const contentWithImages = truncated + '\n\n[IMAGE_URLS]:\n' + imageUrls.join('\n');
+
   try {
     const result = await chat({
-      model: 'zhipu/glm-4.5-air',
+      model: 'google/gemini-2.5-flash',
       jsonMode: true,
       maxTokens: 1000,
       messages: [
@@ -45,7 +51,7 @@ If you cannot find a field, set it to null. Extract from the text, not from code
         },
         {
           role: 'user',
-          content: `Extract product data from this page (${url}):\n\n${truncated}`,
+          content: `Extract product data from this page (${url}):\n\n${contentWithImages}`,
         },
       ],
     });
@@ -60,7 +66,7 @@ If you cannot find a field, set it to null. Extract from the text, not from code
       url,
       price: parsed.price ? parseFloat(parsed.price) : undefined,
       originalPrice: parsed.originalPrice ? parseFloat(parsed.originalPrice) : undefined,
-      currency: parsed.currency || 'SAR',
+      currency: normalizeCurrency(parsed.currency),
       rating: parsed.rating ? parseFloat(parsed.rating) : undefined,
       reviewCount: parsed.reviewCount ? parseInt(parsed.reviewCount) : undefined,
     };
@@ -97,6 +103,45 @@ function cleanHtml(html: string): string {
   return text;
 }
 
+function extractImageUrls(html: string, url: string): string[] {
+  const $ = cheerio.load(html);
+  const urls: string[] = [];
+
+  // 1. Open Graph image
+  const ogImage = $('meta[property="og:image"]').attr('content');
+  if (ogImage) urls.push(ogImage);
+
+  // 2. Twitter image
+  const twitterImage = $('meta[name="twitter:image"]').attr('content');
+  if (twitterImage) urls.push(twitterImage);
+
+  // 3. Product images from known patterns
+  const productPatterns = [
+    'images-na.ssl-images-amazon.com',
+    'm.media-amazon.com',
+    'f.nooncdn.com',
+  ];
+
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+    if (src && productPatterns.some((p) => src.includes(p)) && !urls.includes(src)) {
+      urls.push(src);
+    }
+  });
+
+  // 4. Large images
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+    const width = parseInt($(el).attr('width') || '0', 10);
+    const height = parseInt($(el).attr('height') || '0', 10);
+    if (src && (width > 200 || height > 200) && !urls.includes(src)) {
+      urls.push(src);
+    }
+  });
+
+  return urls.slice(0, 10); // Limit to 10 URLs
+}
+
 function calculateConfidence(product: SchemaOrgProduct): number {
   let score = 0;
   const fields = ['name', 'brand', 'description', 'image', 'price', 'currency'];
@@ -104,4 +149,13 @@ function calculateConfidence(product: SchemaOrgProduct): number {
     if (product[field as keyof SchemaOrgProduct]) score++;
   }
   return Math.min(score / fields.length, 1);
+}
+
+function normalizeCurrency(currency: string | null | undefined): string {
+  if (!currency) return 'SAR';
+  const upper = currency.toUpperCase();
+  if (upper.includes('SAR') || upper.includes('ريال') || upper.includes('Riyal')) return 'SAR';
+  if (upper.includes('USD') || upper.includes('Dollar')) return 'USD';
+  if (upper.includes('EUR') || upper.includes('Euro')) return 'EUR';
+  return upper;
 }

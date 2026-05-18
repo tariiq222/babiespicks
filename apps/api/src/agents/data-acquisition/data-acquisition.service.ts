@@ -114,8 +114,9 @@ export class DataAcquisitionService {
       ? await this.prisma.store.findUnique({ where: { slug: storeSlug } })
       : null;
 
-    const product = await this.prisma.product.create({
-      data: {
+    const product = await this.prisma.product.upsert({
+      where: { sourceUrl: url },
+      create: {
         name: data.name || 'Unknown Product',
         slug,
         brand: data.brand,
@@ -154,6 +155,15 @@ export class DataAcquisitionService {
               },
             }
           : {}),
+      },
+      update: {
+        name: data.name || undefined,
+        brand: data.brand,
+        imageUrl: data.image,
+        dataSource: 'SCHEMA_ORG',
+        confidence: result.confidence,
+        ...(store ? { storeId: store.id } : {}),
+        updatedAt: new Date(),
       },
       include: {
         translations: true,

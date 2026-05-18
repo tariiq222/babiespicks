@@ -9,6 +9,7 @@ import { SearchModule } from './features/search/search.module';
 import { CoordinatorModule } from './agents/coordinator/coordinator.module';
 import { CronModule } from './features/cron/cron.module';
 import { NewsletterModule } from './features/newsletter/newsletter.module';
+import { AdminModule } from './features/admin/admin.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NewsletterModule } from './features/newsletter/newsletter.module';
     SearchModule,
     CronModule,
     NewsletterModule,
+    AdminModule,
     CoordinatorModule,
   ],
   controllers: [AppController],

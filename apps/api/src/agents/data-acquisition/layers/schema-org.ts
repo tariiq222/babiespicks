@@ -62,7 +62,7 @@ export async function extractFromSchemaOrg(html: string, url: string): Promise<E
     name: schema.name || undefined,
     brand: extractBrand(schema),
     description: schema.description || undefined,
-    image: extractImage(schema),
+    image: extractImage(schema) || extractImageFallback($),
     sku: schema.sku || schema.mpn || undefined,
     url: url,
     price: offer.price,
@@ -95,6 +95,47 @@ function extractImage(schema: any): string | undefined {
   if (typeof schema.image === 'string') return schema.image;
   if (Array.isArray(schema.image)) return schema.image[0];
   return schema.image.url || schema.image.contentUrl || undefined;
+}
+
+function extractImageFallback($: cheerio.CheerioAPI): string | undefined {
+  // 1. Open Graph image
+  const ogImage = $('meta[property="og:image"]').attr('content');
+  if (ogImage) return ogImage;
+
+  // 2. Twitter image
+  const twitterImage = $('meta[name="twitter:image"]').attr('content');
+  if (twitterImage) return twitterImage;
+
+  // 3. Known product image patterns (Amazon SA, Noon)
+  const productPatterns = [
+    'images-na.ssl-images-amazon.com',
+    'm.media-amazon.com',
+    'f.nooncdn.com',
+  ];
+
+  let productImg: string | undefined;
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+    if (src && productPatterns.some((p) => src.includes(p))) {
+      productImg = src;
+      return false;
+    }
+  });
+  if (productImg) return productImg;
+
+  // 4. Any large image (>200px)
+  let largeImg: string | undefined;
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+    const width = parseInt($(el).attr('width') || '0', 10);
+    const height = parseInt($(el).attr('height') || '0', 10);
+    if (src && (width > 200 || height > 200)) {
+      largeImg = src;
+      return false;
+    }
+  });
+
+  return largeImg;
 }
 
 function extractOffer(schema: any): {

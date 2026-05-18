@@ -1,64 +1,84 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
 
 @Injectable()
 export class CronService {
   private readonly logger = new Logger(CronService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly coordinator: CoordinatorService,
+  ) {}
 
-  /**
-   * Price check every 6 hours
-   * In production: scrape prices from stores
-   */
-  @Cron('0 */6 * * *')
+  // Re-scrape prices and data for products with sourceUrl every 6 hours
+  @Cron(CronExpression.EVERY_6_HOURS)
   async checkPrices() {
-    this.logger.log('Cron: Price check started');
+    this.logger.log('Starting scheduled price check...');
+    
     const products = await this.prisma.product.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, sourceUrl: true },
+      where: { 
+        isActive: true,
+        sourceUrl: { not: null },
+      },
+      include: { 
+        verdict: true,
+        prices: { orderBy: { scrapedAt: 'desc' }, take: 1 },
+      },
     });
-    this.logger.log(`Cron: ${products.length} products to check`);
-    // TODO: Run DataAcquisitionService for each product
+
+    this.logger.log(`Found ${products.length} products with sourceUrl to check`);
+
+    for (const product of products) {
+      try {
+        // Re-run pipeline to update prices/data
+        await this.coordinator.runProductPipeline(
+          product.sourceUrl!,
+          undefined,
+        );
+        this.logger.log(`Updated: ${product.name}`);
+      } catch (error) {
+        this.logger.error(`Failed to update ${product.name}: ${(error as Error).message}`);
+      }
+      
+      // Rate limit: wait 5 seconds between products
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    this.logger.log('Price check completed');
   }
 
-  /**
-   * Daily sitemap regeneration at 5 AM
-   */
-  @Cron('0 5 * * *')
+  // Regenerate sitemap daily
+  @Cron(CronExpression.EVERY_DAY_AT_5AM)
   async regenerateSitemap() {
-    this.logger.log('Cron: Sitemap regeneration triggered');
-    // Next.js ISR handles this via revalidation
-    // This cron just logs for monitoring
+    this.logger.log('Regenerating sitemap...');
+    // TODO: Implement sitemap regeneration
   }
 
-  /**
-   * Weekly cleanup of old affiliate clicks (>90 days)
-   */
-  @Cron('0 3 * * 1') // Monday 3 AM
+  // Clean up old affiliate clicks (>90 days)
+  @Cron(CronExpression.EVERY_WEEK)
   async cleanupOldClicks() {
-    this.logger.log('Cron: Cleaning old affiliate clicks');
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
     const result = await this.prisma.affiliateClick.deleteMany({
-      where: { createdAt: { lt: cutoff } },
+      where: { createdAt: { lt: ninetyDaysAgo } },
     });
-    this.logger.log(`Cron: Deleted ${result.count} old clicks`);
+
+    this.logger.log(`Cleaned up ${result.count} old affiliate clicks`);
   }
 
-  /**
-   * Daily stats log at midnight
-   */
+  // Daily stats at midnight
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async dailyStats() {
     const [products, verdicts, clicks, jobs] = await Promise.all([
-      this.prisma.product.count({ where: { isActive: true } }),
-      this.prisma.verdict.count({ where: { isPublished: true } }),
-      this.prisma.affiliateClick.count({ where: { createdAt: { gte: new Date(Date.now() - 86400000) } } }),
-      this.prisma.agentJob.count({ where: { createdAt: { gte: new Date(Date.now() - 86400000) } } }),
+      this.prisma.product.count(),
+      this.prisma.verdict.count(),
+      this.prisma.affiliateClick.count(),
+      this.prisma.agentJob.count(),
     ]);
-    this.logger.log(`Daily Stats: ${products} products, ${verdicts} verdicts, ${clicks} clicks today, ${jobs} agent jobs today`);
+
+    this.logger.log(`📊 Daily Stats — Products: ${products}, Verdicts: ${verdicts}, Clicks: ${clicks}, Agent Jobs: ${jobs}`);
   }
 }

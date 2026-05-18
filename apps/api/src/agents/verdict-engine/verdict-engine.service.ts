@@ -100,7 +100,11 @@ Return JSON:
       ],
     });
 
-    const parsed = JSON.parse(result.content);
+    const cleanedContent = result.content
+      .replace(/^```json\s*/, '')
+      .replace(/\s*```$/, '')
+      .trim();
+    const parsed = JSON.parse(cleanedContent);
 
     const verdict: VerdictResult = {
       type: parsed.type,
