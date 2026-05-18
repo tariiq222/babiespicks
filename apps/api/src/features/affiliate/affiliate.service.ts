@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { ArabClicksService } from './networks/arabclicks.service';
 
 export interface ClickStatsDto {
   totalClicks: number;
@@ -10,7 +11,10 @@ export interface ClickStatsDto {
 
 @Injectable()
 export class AffiliateService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly arabClicks: ArabClicksService,
+  ) {}
 
   async getBestPrice(
     productId: string,
@@ -54,11 +58,15 @@ export class AffiliateService {
       const price = await this.prisma.productPrice.findFirst({
         where: { productId, storeId, url: { not: null } },
         orderBy: { scrapedAt: 'desc' },
+        include: { store: { select: { affiliateNetwork: true } } },
       });
 
       if (price?.url) {
+        const resolvedUrl = this.arabClicks.isArabClicksStore(price.store)
+          ? this.arabClicks.generateDeepLink(price.url)
+          : price.url;
         return {
-          url: price.url,
+          url: resolvedUrl,
           storeId: price.storeId,
           price: price.price.toNumber(),
           currency: price.currency,
@@ -68,6 +76,14 @@ export class AffiliateService {
 
     const best = await this.getBestPrice(productId);
     if (best) {
+      // Re-fetch store network for best-price result to apply ArabClicks if needed
+      const store = await this.prisma.store.findUnique({
+        where: { id: best.storeId },
+        select: { affiliateNetwork: true },
+      });
+      if (store && this.arabClicks.isArabClicksStore(store)) {
+        best.url = this.arabClicks.generateDeepLink(best.url);
+      }
       return best;
     }
 
