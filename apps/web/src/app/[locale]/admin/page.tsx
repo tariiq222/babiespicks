@@ -130,13 +130,6 @@ export default function AdminDashboard() {
   }, [fetchStats, fetchCosts, fetchBreakers, fetchApprovals]);
 
   useEffect(() => {
-    (async () => {
-      await Promise.all([fetchStats(), fetchCosts(), fetchBreakers()]);
-    })().finally(() => {
-        setStatsLoading(false);
-        setCostsLoading(false);
-        setBreakersLoading(false);
-      });
     const interval = setInterval(() => {
       void fetchStats();
       void fetchCosts();

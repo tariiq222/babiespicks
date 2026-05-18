@@ -9,6 +9,8 @@ const WEB_REVALIDATE_URL =
   process.env.WEB_REVALIDATE_URL ||
   `http://localhost:3000/api/revalidate`;
 
+const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET;
+
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
 export class AdminController {
@@ -286,17 +288,38 @@ export class AdminController {
     // Invalidate in-memory API cache so homepage reflects empty DB
     this.cache.invalidate();
 
-    // Purge stale Next.js Data Cache entries for public product surfaces
+    // Purge stale Next.js Data Cache entries for public product surfaces.
+    // Uses bearer-token auth (REVALIDATE_SECRET). Fails silently — stale
+    // entries will expire naturally via revalidate time-to-live.
     try {
-      await fetch(WEB_REVALIDATE_URL, {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch(WEB_REVALIDATE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(REVALIDATE_SECRET ? { Authorization: `Bearer ${REVALIDATE_SECRET}` } : {}),
+        },
         body: JSON.stringify({
-          paths: ['/[locale]', '/[locale]/categories'],
+          // Revalidate actual locale root paths so the homepage refreshes
+          paths: ['/ar', '/en', '/ar/categories', '/en/categories'],
+          // Revalidate by tag — more reliable than path-based revalidation for
+          // data caches; covers all product and content-page fetches
+          tags: ['products', 'content-pages'],
         }),
+        signal: controller.signal,
       });
-    } catch {
-      // Non-fatal: revalidation is best-effort; stale entries will expire naturally
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        console.error(`[admin] revalidate failed (${res.status}): ${await res.text()}`);
+      }
+    } catch (err) {
+      // Non-fatal: stale entries will expire naturally via TTL
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[admin] revalidate error: ${msg}`);
     }
 
     return { success: true, message: 'All product data cleared' };
