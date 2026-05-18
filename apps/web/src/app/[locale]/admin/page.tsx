@@ -78,35 +78,26 @@ export default function AdminDashboard() {
   // ── Fetchers ──────────────────────────────────────────────────────────────
 
   const fetchStats = useCallback(async () => {
-    setStatsLoading(true);
-    setStatsError(null);
     try {
       const res = await adminFetch(`${API_BASE}/admin/stats`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStats(await res.json());
     } catch (err) {
       setStatsError(err instanceof Error ? err.message : 'فشل');
-    } finally {
-      setStatsLoading(false);
     }
   }, []);
 
   const fetchCosts = useCallback(async () => {
-    setCostsLoading(true);
-    setCostsError(null);
     try {
       const res = await adminFetch(`${API_BASE}/admin/costs`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCosts(await res.json());
     } catch (err) {
       setCostsError(err instanceof Error ? err.message : 'فشل');
-    } finally {
-      setCostsLoading(false);
     }
   }, []);
 
   const fetchBreakers = useCallback(async () => {
-    setBreakersLoading(true);
     try {
       const res = await adminFetch(`${API_BASE}/admin/circuit-breakers`);
       if (res.ok) {
@@ -115,8 +106,6 @@ export default function AdminDashboard() {
       }
     } catch {
       // non-critical
-    } finally {
-      setBreakersLoading(false);
     }
   }, []);
 
@@ -141,10 +130,21 @@ export default function AdminDashboard() {
   }, [fetchStats, fetchCosts, fetchBreakers, fetchApprovals]);
 
   useEffect(() => {
-    fetchAll();
-    const interval = setInterval(fetchAll, 30_000);
+    (async () => {
+      await Promise.all([fetchStats(), fetchCosts(), fetchBreakers()]);
+    })().finally(() => {
+        setStatsLoading(false);
+        setCostsLoading(false);
+        setBreakersLoading(false);
+      });
+    const interval = setInterval(() => {
+      void fetchStats();
+      void fetchCosts();
+      void fetchBreakers();
+      void fetchApprovals();
+    }, 30_000);
     return () => clearInterval(interval);
-  }, [fetchAll]);
+  }, [fetchStats, fetchCosts, fetchBreakers, fetchApprovals]);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
 

@@ -9,13 +9,24 @@ interface Props {
   params: Promise<{ locale: string }>;
 }
 
-// Static popular comparison pairs — replace with dynamic data later
-const POPULAR_COMPARISONS = [
-  { slug1: 'aptamil-1', slug2: 'nanny-1', labelAr: 'حليب أبتاميل vs ناني', labelEn: 'Aptamil vs Nanny' },
-  { slug1: 'pampers-premium-care', slug2: 'huggies-special-delivery', labelAr: 'بامبيرس vs هاجيز', labelEn: 'Pampers vs Huggies' },
-  { slug1: 'chicco-nextfit', slug2: 'cybex-cloud', labelAr: 'شيكو vs سيبكوس', labelEn: 'Chicco vs Cybex' },
-  { slug1: 'tommee-tippee', slug2: 'dr-brown', labelAr: 'تومي تيبّي vs دكتور براون', labelEn: 'Tommee Tippee vs Dr. Brown' },
-];
+// Popular comparisons built dynamically from first 4 products
+function buildPopularComparisons(prods: Product[], locale: string) {
+  const pairs: Array<{ slug1: string; slug2: string; labelAr: string; labelEn: string }> = [];
+  for (let i = 0; i < prods.length - 1 && pairs.length < 4; i += 2) {
+    const a = prods[i];
+    const b = prods[i + 1];
+    if (!a || !b) continue;
+    const nameAr = (n: Product) => n.translations.find(t => t.locale === 'ar')?.name ?? n.translations[0]?.name ?? '';
+    const nameEn = (n: Product) => n.translations.find(t => t.locale === 'en')?.name ?? n.translations[0]?.name ?? '';
+    pairs.push({
+      slug1: a.slug,
+      slug2: b.slug,
+      labelAr: `${nameAr(a)} vs ${nameAr(b)}`,
+      labelEn: `${nameEn(a)} vs ${nameEn(b)}`,
+    });
+  }
+  return pairs;
+}
 
 export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
   const { locale } = await params;
@@ -37,6 +48,8 @@ export default async function CompareSelectorPage({ params }: Props) {
     slug: p.slug,
     name: getLocalizedName(p, locale),
   }));
+
+  const popularComparisons = buildPopularComparisons(products, locale);
 
   return (
     <main className="max-w-4xl mx-auto px-5 md:px-8 lg:px-12 py-10">
@@ -73,26 +86,28 @@ export default async function CompareSelectorPage({ params }: Props) {
       </div>
 
       {/* Popular Comparisons */}
-      <div>
-        <h2 className="text-[18px] text-charcoal mb-4">{t('popularComparisons')}</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {POPULAR_COMPARISONS.map((comp, i) => (
-            <Link
-              key={i}
-              href={`/compare/${comp.slug1}/vs/${comp.slug2}`}
-              className="bg-cream hairline rounded-xl p-4 flex items-center gap-4 hover:bg-cream-hover transition-colors"
-            >
-              <div className="flex-1">
-                <div className="text-[14px] text-charcoal font-medium">
-                  {locale === 'ar' ? comp.labelAr : comp.labelEn}
+      {popularComparisons.length > 0 && (
+        <div>
+          <h2 className="text-[18px] text-charcoal mb-4">{t('popularComparisons')}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {popularComparisons.map((comp, i) => (
+              <Link
+                key={i}
+                href={`/compare/${comp.slug1}/vs/${comp.slug2}`}
+                className="bg-cream hairline rounded-xl p-4 flex items-center gap-4 hover:bg-cream-hover transition-colors"
+              >
+                <div className="flex-1">
+                  <div className="text-[14px] text-charcoal font-medium">
+                    {locale === 'ar' ? comp.labelAr : comp.labelEn}
+                  </div>
+                  <div className="text-[12px] text-stone mt-1">{t('popularComparisonsHint')}</div>
                 </div>
-                <div className="text-[12px] text-stone mt-1">{t('popularComparisonsHint')}</div>
-              </div>
-              <i className="ti ti-arrows-shuffle text-sage text-[20px]"></i>
-            </Link>
-          ))}
+                <i className="ti ti-arrows-shuffle text-sage text-[20px]"></i>
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }

@@ -5,6 +5,10 @@ import { AdminApiKeyGuard } from './admin-api-key.guard';
 import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
 import { CacheService } from '../../infrastructure/cache/cache.service';
 
+const WEB_REVALIDATE_URL =
+  process.env.WEB_REVALIDATE_URL ||
+  `http://localhost:3000/api/revalidate`;
+
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
 export class AdminController {
@@ -281,6 +285,19 @@ export class AdminController {
 
     // Invalidate in-memory API cache so homepage reflects empty DB
     this.cache.invalidate();
+
+    // Purge stale Next.js Data Cache entries for public product surfaces
+    try {
+      await fetch(WEB_REVALIDATE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paths: ['/[locale]', '/[locale]/categories'],
+        }),
+      });
+    } catch {
+      // Non-fatal: revalidation is best-effort; stale entries will expire naturally
+    }
 
     return { success: true, message: 'All product data cleared' };
   }

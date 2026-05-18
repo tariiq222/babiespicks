@@ -336,8 +336,6 @@ export default function ApprovalsPage() {
   // ── Fetch: website ─────────────────────────────────────────────────────────
 
   const fetchWebItems = useCallback(async () => {
-    setWebLoading(true);
-    setWebError(null);
     try {
       const res = await adminFetch(`${API_BASE}/admin/approvals`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -346,16 +344,12 @@ export default function ApprovalsPage() {
       setWebItems(items);
     } catch (err) {
       setWebError(err instanceof Error ? err.message : 'فشل تحميل البيانات');
-    } finally {
-      setWebLoading(false);
     }
   }, []);
 
   // ── Fetch: social ──────────────────────────────────────────────────────────
 
   const fetchSocialItems = useCallback(async () => {
-    setSocialLoading(true);
-    setSocialError(null);
     try {
       const [pendingRes, approvedRes, scheduledRes] = await Promise.all([
         adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`),
@@ -383,21 +377,19 @@ export default function ApprovalsPage() {
       );
     } catch (err) {
       setSocialError(err instanceof Error ? err.message : 'فشل تحميل البيانات');
-    } finally {
-      setSocialLoading(false);
     }
   }, []);
 
   // ── Load on mount ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    fetchWebItems();
+    (async () => { await fetchWebItems(); })();
   }, [fetchWebItems]);
 
   // Load social only when that tab is active
   useEffect(() => {
     if (mainTab === 'social' && socialItems.length === 0 && !socialLoading && !socialError) {
-      fetchSocialItems();
+      (async () => { await fetchSocialItems(); })();
     }
   }, [mainTab, socialItems.length, socialLoading, socialError, fetchSocialItems]);
 

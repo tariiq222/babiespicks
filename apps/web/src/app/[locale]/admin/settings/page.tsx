@@ -882,12 +882,10 @@ function AgentsTab() {
       setLocalEdits({});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load settings');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchSettings(); }, [fetchSettings]);
+  useEffect(() => { (async () => { await fetchSettings(); })(); }, [fetchSettings]);
 
   const getEffective = (agentName: string): AgentConfig | undefined => {
     const base = data?.configs.find((c) => c.agentName === agentName);
@@ -1454,12 +1452,10 @@ function CostsTab() {
       setCosts(await res.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load costs');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchCosts(); }, [fetchCosts]);
+  useEffect(() => { (async () => { await fetchCosts(); })(); }, [fetchCosts]);
 
   const handleSort = (key: typeof sortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -1645,12 +1641,10 @@ function AffiliateTab() {
       setTopProducts(Array.isArray(topData) ? topData : topData.products ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load affiliate data');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(days); }, [fetchData, days]);
+  useEffect(() => { (async () => { await fetchData(days); })(); }, [fetchData, days]);
 
   const maxDailyClicks = stats?.daily?.length
     ? Math.max(...stats.daily.map((d) => d.clicks), 1)

@@ -15,13 +15,6 @@ export function WhatsAppButton() {
   );
 
   useEffect(() => {
-    // Check session storage for dismissal
-    const wasDismissed = sessionStorage.getItem(STORAGE_KEY) === '1';
-    if (wasDismissed) {
-      setDismissed(true);
-      return;
-    }
-
     // Show button after 3-second delay
     const timer = setTimeout(() => setVisible(true), 3000);
     return () => clearTimeout(timer);
