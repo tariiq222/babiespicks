@@ -5,6 +5,7 @@ import { ReviewAnalyzerModule } from '../review-analyzer/review-analyzer.module'
 import { VerdictEngineModule } from '../verdict-engine/verdict-engine.module';
 import { ContentWriterModule } from '../content-writer/content-writer.module';
 import { PublisherModule } from '../publisher/publisher.module';
+import { DiscoveryModule } from '../discovery/discovery.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { PublisherModule } from '../publisher/publisher.module';
     VerdictEngineModule,
     ContentWriterModule,
     PublisherModule,
+    DiscoveryModule,
   ],
   providers: [CoordinatorService],
   exports: [CoordinatorService],

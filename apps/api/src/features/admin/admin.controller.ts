@@ -59,6 +59,16 @@ export class AdminController {
     return result;
   }
 
+  // Trigger product discovery manually
+  @Post('pipeline/discover')
+  @HttpCode(200)
+  async runDiscoveryPipeline(
+    @Body() body: { maxProducts?: number },
+  ) {
+    const result = await this.coordinator.runDiscoveryPipeline(body.maxProducts ?? 10);
+    return result;
+  }
+
   // Run content sprint — auto-generate best lists, reviews, buying guides
   @Post('pipeline/content-sprint')
   @HttpCode(200)

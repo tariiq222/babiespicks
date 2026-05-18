@@ -5,6 +5,7 @@ import { ReviewAnalyzerService, type ReviewData } from '../review-analyzer/revie
 import { VerdictEngineService } from '../verdict-engine/verdict-engine.service';
 import { ContentWriterService } from '../content-writer/content-writer.service';
 import { PublisherService } from '../publisher/publisher.service';
+import { DiscoveryService } from '../discovery/discovery.service';
 import { scrapeReviews } from '../data-acquisition/layers/review-scraper';
 
 export interface PipelineResult {
@@ -19,6 +20,14 @@ export interface PipelineResult {
   totalTimeMs: number;
 }
 
+export interface DiscoveryPipelineResult {
+  discovered: number;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: Array<{ url: string; name: string; success: boolean; error?: string }>;
+}
+
 @Injectable()
 export class CoordinatorService {
   private readonly logger = new Logger(CoordinatorService.name);
@@ -30,6 +39,7 @@ export class CoordinatorService {
     private readonly verdictEngine: VerdictEngineService,
     private readonly contentWriter: ContentWriterService,
     private readonly publisher: PublisherService,
+    private readonly discovery: DiscoveryService,
   ) {}
 
   /**
@@ -122,6 +132,55 @@ export class CoordinatorService {
     result.totalTimeMs = Date.now() - start;
     this.logger.log(`=== Pipeline END: ${result.productName} (${result.totalTimeMs}ms) ===`);
     return result;
+  }
+
+  /**
+   * Discovery pipeline: Find new products → run full product pipeline for each
+   */
+  async runDiscoveryPipeline(maxProducts = 10): Promise<DiscoveryPipelineResult> {
+    this.logger.log('=== Discovery Pipeline START ===');
+
+    const { discovered, newCandidates, candidates } =
+      await this.discovery.discoverProducts(maxProducts);
+
+    const results: DiscoveryPipelineResult['results'] = [];
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      this.logger.log(
+        `Processing candidate ${i + 1}/${candidates.length}: ${candidate.name} (${candidate.url})`,
+      );
+
+      try {
+        await this.runProductPipeline(candidate.url);
+        results.push({ url: candidate.url, name: candidate.name, success: true });
+        succeeded++;
+      } catch (error) {
+        const message = (error as Error).message;
+        this.logger.error(`Failed to process ${candidate.url}: ${message}`);
+        results.push({ url: candidate.url, name: candidate.name, success: false, error: message });
+        failed++;
+      }
+
+      // Rate-limit between products
+      if (i < candidates.length - 1) {
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    }
+
+    this.logger.log(
+      `=== Discovery Pipeline END: ${succeeded}/${candidates.length} succeeded ===`,
+    );
+
+    return {
+      discovered,
+      total: newCandidates,
+      succeeded,
+      failed,
+      results,
+    };
   }
 
   /**
