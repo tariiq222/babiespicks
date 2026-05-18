@@ -153,7 +153,13 @@
     "worthIt": "Worth It",
     "worthItWith": "Worth It (Conditional)",
     "notWorthIt": "Not Worth It",
-    "wait": "Wait"
+    "wait": "Wait",
+    "verdict": {
+      "WORTH_IT": "Worth It",
+      "WORTH_IT_WITH": "Conditional",
+      "WAIT": "Wait",
+      "NOT_WORTH_IT": "Not Worth It"
+    }
   },
   "product": {
     "metaFallback": "Review of {name} - BabiesPicks",
