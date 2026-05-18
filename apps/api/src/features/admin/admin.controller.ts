@@ -59,6 +59,179 @@ export class AdminController {
     return result;
   }
 
+  // Run content sprint — auto-generate best lists, reviews, buying guides
+  @Post('pipeline/content-sprint')
+  @HttpCode(200)
+  async runContentSprint(
+    @Body()
+    body: {
+      type?: 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE' | 'ALL';
+      categorySlug?: string;
+      dryRun?: boolean;
+    },
+  ) {
+    const CATEGORY_LABELS: Record<string, { ar: string; en: string }> = {
+      formula:  { ar: 'حليب الأطفال',     en: 'Baby Formula' },
+      diapers:  { ar: 'الحفاضات',         en: 'Diapers' },
+      carseats: { ar: 'كراسي السيارة',    en: 'Car Seats' },
+      bottles:  { ar: 'الرضاعات',         en: 'Bottles' },
+      toys:     { ar: 'الألعاب التعليمية', en: 'Educational Toys' },
+      care:     { ar: 'العناية بالطفل',   en: 'Baby Care' },
+    };
+    const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS);
+
+    const requestedType = body.type ?? 'ALL';
+    const requestedCategory = body.categorySlug ?? 'all';
+    const dryRun = body.dryRun ?? false;
+
+    const wantedTypes: Array<'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE'> =
+      requestedType === 'ALL'
+        ? ['BEST_LIST', 'PRODUCT_REVIEW', 'BUYING_GUIDE']
+        : [requestedType as 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE'];
+
+    const categories =
+      requestedCategory === 'all' ? ALL_CATEGORIES : [requestedCategory];
+
+    // Load products grouped by category
+    const products = await this.prisma.product.findMany({
+      where: { category: { slug: { in: categories } } },
+      include: {
+        category: true,
+        translations: { where: { locale: 'en' }, take: 1 },
+      },
+    });
+
+    const byCategory: Record<string, typeof products> = {};
+    for (const p of products) {
+      const s = p.category?.slug;
+      if (!s) continue;
+      if (!byCategory[s]) byCategory[s] = [];
+      byCategory[s].push(p);
+    }
+
+    // Load existing slugs
+    const existingPages = await this.prisma.contentPage.findMany({ select: { slug: true } });
+    const existingSlugs = new Set(existingPages.map((p) => p.slug));
+
+    const slugify = (name: string) =>
+      name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 60);
+
+    // Build plan
+    const plan: Array<{
+      type: 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE';
+      slug: string;
+      topic: string;
+      productIds: string[];
+      categoryId: string | null;
+      skip: boolean;
+      skipReason: string | null;
+    }> = [];
+
+    for (const catSlug of categories) {
+      const catProducts = byCategory[catSlug] ?? [];
+      const catLabel = CATEGORY_LABELS[catSlug] ?? { ar: catSlug, en: catSlug };
+      const catId = catProducts[0]?.categoryId ?? null;
+
+      if (wantedTypes.includes('BEST_LIST')) {
+        const slug = `best-${catSlug}-2026`;
+        const skip = catProducts.length < 2 || existingSlugs.has(slug);
+        plan.push({
+          type: 'BEST_LIST',
+          slug,
+          topic: `أفضل ${catLabel.ar} للأطفال في السعودية 2026`,
+          productIds: catProducts.map((p) => p.id),
+          categoryId: catId,
+          skip,
+          skipReason: skip
+            ? existingSlugs.has(slug)
+              ? 'slug already exists'
+              : `only ${catProducts.length} product(s) — need 2+`
+            : null,
+        });
+      }
+
+      if (wantedTypes.includes('PRODUCT_REVIEW')) {
+        for (const product of catProducts) {
+          const enName = product.translations?.[0]?.name ?? product.name ?? `product-${product.id}`;
+          const slug = `review-${slugify(enName)}`;
+          const skip = existingSlugs.has(slug);
+          plan.push({
+            type: 'PRODUCT_REVIEW',
+            slug,
+            topic: `مراجعة ${product.name ?? enName}`,
+            productIds: [product.id],
+            categoryId: catId,
+            skip,
+            skipReason: skip ? 'slug already exists' : null,
+          });
+        }
+      }
+
+      if (wantedTypes.includes('BUYING_GUIDE')) {
+        const slug = `guide-${catSlug}-buying`;
+        const skip = catProducts.length < 1 || existingSlugs.has(slug);
+        plan.push({
+          type: 'BUYING_GUIDE',
+          slug,
+          topic: `دليل شراء ${catLabel.ar} للمواليد`,
+          productIds: catProducts.map((p) => p.id),
+          categoryId: catId,
+          skip,
+          skipReason: skip
+            ? existingSlugs.has(slug)
+              ? 'slug already exists'
+              : 'no products in category'
+            : null,
+        });
+      }
+    }
+
+    const toRun = plan.filter((p) => !p.skip);
+    const skipped = plan.filter((p) => p.skip).map((p) => ({ slug: p.slug, type: p.type, reason: p.skipReason }));
+
+    if (dryRun) {
+      return {
+        dryRun: true,
+        planned: toRun.map((p) => ({ slug: p.slug, type: p.type, topic: p.topic, productCount: p.productIds.length })),
+        skipped,
+        executed: [],
+        errors: [],
+      };
+    }
+
+    // Execute
+    const executed: Array<{ slug: string; type: string; published: boolean }> = [];
+    const errors: Array<{ slug: string; type: string; error: string }> = [];
+
+    for (let i = 0; i < toRun.length; i++) {
+      const item = toRun[i];
+      try {
+        const result = await this.coordinator.runContentPipeline(
+          item.type,
+          item.topic,
+          item.slug,
+          item.productIds,
+          item.categoryId ?? undefined,
+        );
+        executed.push({ slug: item.slug, type: item.type, published: result?.published?.published ?? false });
+      } catch (error) {
+        errors.push({ slug: item.slug, type: item.type, error: (error as Error).message });
+      }
+      // Delay between calls to avoid rate limits
+      if (i < toRun.length - 1) {
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    }
+
+    return {
+      dryRun: false,
+      planned: toRun.map((p) => ({ slug: p.slug, type: p.type, topic: p.topic, productCount: p.productIds.length })),
+      executed,
+      skipped,
+      errors,
+    };
+  }
+
   // Clear all mock/seed data
   @Delete('data/reset')
   async resetData() {

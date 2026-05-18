@@ -10,7 +10,32 @@ interface ApiResponse {
   [key: string]: unknown;
 }
 
+interface SprintResult {
+  dryRun: boolean;
+  planned: Array<{ slug: string; type: string; topic: string; productCount: number }>;
+  executed: Array<{ slug: string; type: string; published: boolean }>;
+  skipped: Array<{ slug: string; type: string; reason: string | null }>;
+  errors: Array<{ slug: string; type: string; error: string }>;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
+const CATEGORY_OPTIONS = [
+  { value: 'all', label: 'جميع الفئات' },
+  { value: 'formula', label: 'حليب الأطفال' },
+  { value: 'diapers', label: 'الحفاضات' },
+  { value: 'carseats', label: 'كراسي السيارة' },
+  { value: 'bottles', label: 'الرضاعات' },
+  { value: 'toys', label: 'الألعاب التعليمية' },
+  { value: 'care', label: 'العناية بالطفل' },
+];
+
+const SPRINT_TYPE_OPTIONS = [
+  { value: 'ALL', label: 'الكل (قوائم + مراجعات + أدلة)' },
+  { value: 'BEST_LIST', label: 'قوائم أفضل' },
+  { value: 'PRODUCT_REVIEW', label: 'مراجعات منتجات' },
+  { value: 'BUYING_GUIDE', label: 'أدلة الشراء' },
+];
 
 export default function PipelinePage() {
   // Single product
@@ -29,6 +54,13 @@ export default function PipelinePage() {
   const [productIds, setProductIds] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [contentLoading, setContentLoading] = useState(false);
+
+  // Content Sprint
+  const [sprintType, setSprintType] = useState<'ALL' | 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE'>('ALL');
+  const [sprintCategory, setSprintCategory] = useState('all');
+  const [sprintDryRun, setSprintDryRun] = useState(true);
+  const [sprintLoading, setSprintLoading] = useState(false);
+  const [sprintResult, setSprintResult] = useState<SprintResult | null>(null);
 
   // Result
   const [result, setResult] = useState<ApiResponse | null>(null);
@@ -122,6 +154,31 @@ export default function PipelinePage() {
       setError(err instanceof Error ? err.message : 'Failed to run content pipeline');
     } finally {
       setContentLoading(false);
+    }
+  };
+
+  const handleSprintSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSprintLoading(true);
+    setSprintResult(null);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/pipeline/content-sprint`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: sprintType,
+          categorySlug: sprintCategory,
+          dryRun: sprintDryRun,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      setSprintResult(data as SprintResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run content sprint');
+    } finally {
+      setSprintLoading(false);
     }
   };
 
@@ -301,6 +358,157 @@ export default function PipelinePage() {
             </form>
           </section>
         </div>
+
+        {/* Content Sprint */}
+        <section className="bg-white rounded-xl border border-beige p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <span className="ti ti-bolt text-sage text-lg" />
+            <h2 className="text-sm font-medium text-charcoal">Content Sprint — توليد المحتوى التلقائي</h2>
+          </div>
+          <p className="text-xs text-stone mb-5 leading-relaxed">
+            يولّد قوائم الأفضل ومراجعات المنتجات وأدلة الشراء تلقائياً من المنتجات الموجودة في قاعدة البيانات.
+            استخدم &quot;تجربة&quot; أولاً لعرض ما سيُولَّد دون استدعاء الذكاء الاصطناعي.
+          </p>
+          <form onSubmit={handleSprintSubmit} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+              <label htmlFor="sprint-type" className="block text-xs text-stone mb-1.5">النوع</label>
+              <select
+                id="sprint-type"
+                value={sprintType}
+                onChange={(e) => setSprintType(e.target.value as typeof sprintType)}
+                className="w-full rounded-lg border border-beige bg-linen px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 transition-shadow"
+              >
+                {SPRINT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="sprint-category" className="block text-xs text-stone mb-1.5">الفئة</label>
+              <select
+                id="sprint-category"
+                value={sprintCategory}
+                onChange={(e) => setSprintCategory(e.target.value)}
+                className="w-full rounded-lg border border-beige bg-linen px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 transition-shadow"
+              >
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 pb-0.5">
+              <input
+                id="sprint-dry-run"
+                type="checkbox"
+                checked={sprintDryRun}
+                onChange={(e) => setSprintDryRun(e.target.checked)}
+                className="h-4 w-4 rounded border-beige text-sage focus:ring-sage/30"
+              />
+              <label htmlFor="sprint-dry-run" className="text-sm text-charcoal select-none cursor-pointer">
+                تجربة فقط (Dry Run)
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={sprintLoading}
+              className="rounded-lg bg-sage hover:bg-sage-deep text-cream text-sm font-medium py-2.5 px-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sprintLoading ? 'جارٍ التشغيل...' : sprintDryRun ? 'معاينة الخطة' : 'تشغيل Sprint'}
+            </button>
+          </form>
+
+          {/* Sprint result display */}
+          {sprintResult && (
+            <div className="mt-6 space-y-4">
+              {/* Summary bar */}
+              <div className="flex flex-wrap gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sage/10 text-sage text-xs font-medium px-3 py-1">
+                  <span className="ti ti-check text-[11px]" />
+                  {sprintResult.executed.length} مُنجَز
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-medium px-3 py-1">
+                  <span className="ti ti-clock text-[11px]" />
+                  {sprintResult.skipped.length} متجاوَز
+                </span>
+                {sprintResult.errors.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 text-red-600 text-xs font-medium px-3 py-1">
+                    <span className="ti ti-alert-triangle text-[11px]" />
+                    {sprintResult.errors.length} خطأ
+                  </span>
+                )}
+                {sprintResult.dryRun && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-lavender/20 text-lavender text-xs font-medium px-3 py-1">
+                    تجربة — لم يُستدعَ الذكاء الاصطناعي
+                  </span>
+                )}
+              </div>
+
+              {/* Planned / executed items */}
+              {sprintResult.planned.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-charcoal mb-2">
+                    {sprintResult.dryRun ? 'سيُولَّد:' : 'خطة التنفيذ:'}
+                  </p>
+                  <div className="rounded-lg border border-beige overflow-hidden divide-y divide-beige">
+                    {sprintResult.planned.map((item) => {
+                      const exec = sprintResult.executed.find((e) => e.slug === item.slug);
+                      const err = sprintResult.errors.find((e) => e.slug === item.slug);
+                      return (
+                        <div key={item.slug} className="flex items-center gap-3 px-4 py-2.5 bg-linen/40">
+                          <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${
+                            item.type === 'BEST_LIST' ? 'bg-sage/15 text-sage-deep' :
+                            item.type === 'PRODUCT_REVIEW' ? 'bg-lavender/20 text-lavender' :
+                            'bg-terracotta/10 text-terracotta'
+                          }`}>
+                            {item.type === 'BEST_LIST' ? 'أفضل' : item.type === 'PRODUCT_REVIEW' ? 'مراجعة' : 'دليل'}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-charcoal truncate">{item.topic}</p>
+                            <p className="text-[10px] text-stone font-mono">{item.slug}</p>
+                          </div>
+                          <span className="text-[10px] text-stone whitespace-nowrap">{item.productCount} منتج</span>
+                          {exec && (
+                            <span className="ti ti-check text-sage text-sm" title="تم النشر" />
+                          )}
+                          {err && (
+                            <span className="ti ti-x text-red-500 text-sm" title={err.error} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Errors */}
+              {sprintResult.errors.length > 0 && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 space-y-1">
+                  {sprintResult.errors.map((e) => (
+                    <p key={e.slug} className="text-xs text-red-600">
+                      <span className="font-mono">{e.slug}</span>: {e.error}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {/* Skipped (collapsed) */}
+              {sprintResult.skipped.length > 0 && (
+                <details className="text-xs text-stone">
+                  <summary className="cursor-pointer select-none hover:text-charcoal transition-colors">
+                    {sprintResult.skipped.length} عنصر متجاوَز ←
+                  </summary>
+                  <div className="mt-2 space-y-1 ps-3 border-s border-beige">
+                    {sprintResult.skipped.map((s) => (
+                      <p key={s.slug} className="font-mono">
+                        {s.slug} — {s.reason}
+                      </p>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* Result */}
         {error && (
