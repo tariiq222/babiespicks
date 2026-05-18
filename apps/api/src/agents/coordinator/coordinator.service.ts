@@ -7,6 +7,10 @@ import { ContentWriterService } from '../content-writer/content-writer.service';
 import { PublisherService } from '../publisher/publisher.service';
 import { DiscoveryService, type DiscoverySource } from '../discovery/discovery.service';
 import { scrapeReviews } from '../data-acquisition/layers/review-scraper';
+import { SEOPlannerService } from '../seo-planner/seo-planner.service';
+import { SEOAuditorService } from '../seo-auditor/seo-auditor.service';
+import { QualityGuardService } from '../quality-guard/quality-guard.service';
+import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
 
 export interface PipelineResult {
   productId: string;
@@ -40,6 +44,10 @@ export class CoordinatorService {
     private readonly contentWriter: ContentWriterService,
     private readonly publisher: PublisherService,
     private readonly discovery: DiscoveryService,
+    private readonly seoPlanner: SEOPlannerService,
+    private readonly seoAuditor: SEOAuditorService,
+    private readonly qualityGuard: QualityGuardService,
+    private readonly circuitBreaker: CircuitBreakerService,
   ) {}
 
   /**
@@ -48,6 +56,9 @@ export class CoordinatorService {
   async runProductPipeline(url: string, storeSlug?: string, reviews?: ReviewData[]): Promise<PipelineResult> {
     const start = Date.now();
     this.logger.log(`=== Pipeline START: ${url} ===`);
+
+    // Pre-flight: check all circuit breakers before proceeding
+    await this.circuitBreaker.checkAll();
 
     const result: PipelineResult = {
       productId: '',
@@ -140,6 +151,9 @@ export class CoordinatorService {
   async runDiscoveryPipeline(maxProducts = 10, source: DiscoverySource = 'all'): Promise<DiscoveryPipelineResult> {
     this.logger.log(`=== Discovery Pipeline START (source: ${source}) ===`);
 
+    // Pre-flight: check all circuit breakers before proceeding
+    await this.circuitBreaker.checkAll();
+
     const { discovered, newCandidates, candidates } =
       await this.discovery.discoverProducts(maxProducts, source);
 
@@ -184,7 +198,7 @@ export class CoordinatorService {
   }
 
   /**
-   * Content pipeline: Write + Quality Check + Publish
+   * Content pipeline: SEOPlanner → ContentWriter → SEOAuditor (retry ≤2) → QualityGuard → PENDING_APPROVAL
    */
   async runContentPipeline(
     type: 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE',
@@ -195,11 +209,96 @@ export class CoordinatorService {
   ) {
     this.logger.log(`=== Content Pipeline: ${topic} ===`);
 
-    const content = await this.contentWriter.writeContent(type, topic, productIds);
-    const page = await this.contentWriter.saveContentPage(type, slug, content, categoryId);
-    const published = await this.publisher.publishContentPage(page.id);
+    // Pre-flight: check all circuit breakers before proceeding
+    await this.circuitBreaker.checkAll();
 
-    this.logger.log(`Content pipeline: ${published.published ? 'PUBLISHED' : `FAILED: ${published.reason}`}`);
-    return { page, published };
+    // Step 1: SEO Planning
+    this.logger.log('Step 1: SEO Planning...');
+    const seoBrief = await this.seoPlanner.planContent(type, topic, productIds);
+    this.logger.log(`SEO Brief ready: keyword="${seoBrief.primaryKeyword}"`);
+
+    // Step 2: Content Writing (with SEO brief)
+    this.logger.log('Step 2: Content Writing...');
+    let content = await this.contentWriter.writeContent(type, topic, productIds, seoBrief);
+    const page = await this.contentWriter.saveContentPage(type, slug, content, categoryId);
+
+    // Step 3: SEO Audit with retry loop (max 2 retries)
+    const MAX_SEO_RETRIES = 2;
+    let seoResult = null;
+    for (let attempt = 0; attempt <= MAX_SEO_RETRIES; attempt++) {
+      this.logger.log(`Step 3: SEO Audit (attempt ${attempt + 1}/${MAX_SEO_RETRIES + 1})...`);
+      seoResult = await this.seoAuditor.auditContent({
+        titleAr: content.titleAr,
+        titleEn: content.titleEn,
+        contentAr: content.contentAr,
+        contentEn: content.contentEn,
+        metaTitleAr: content.metaTitleAr,
+        metaTitleEn: content.metaTitleEn,
+        metaDescAr: content.metaDescAr,
+        metaDescEn: content.metaDescEn,
+        slug,
+      });
+
+      if (seoResult.passed) {
+        this.logger.log(`SEO Audit PASSED: ${seoResult.overallScore}/100`);
+        break;
+      }
+
+      if (attempt < MAX_SEO_RETRIES) {
+        this.logger.warn(`SEO Audit FAILED (${seoResult.overallScore}/100), rewriting content...`);
+        // Rewrite with SEO feedback
+        content = await this.contentWriter.writeContent(type, topic, productIds, seoBrief, seoResult.suggestions);
+        // Update the saved page translations
+        await this.prisma.contentPageTranslation.updateMany({
+          where: { contentPageId: page.id, locale: 'ar' },
+          data: { title: content.titleAr, content: content.contentAr, metaTitle: content.metaTitleAr, metaDescription: content.metaDescAr, excerpt: content.excerptAr },
+        });
+        await this.prisma.contentPageTranslation.updateMany({
+          where: { contentPageId: page.id, locale: 'en' },
+          data: { title: content.titleEn, content: content.contentEn, metaTitle: content.metaTitleEn, metaDescription: content.metaDescEn, excerpt: content.excerptEn },
+        });
+      } else {
+        this.logger.warn(`SEO Audit FAILED after ${MAX_SEO_RETRIES + 1} attempts (${seoResult.overallScore}/100)`);
+      }
+    }
+
+    // Update ContentPage with SEO scores and status
+    await this.prisma.contentPage.update({
+      where: { id: page.id },
+      data: {
+        seoScore: seoResult?.overallScore ?? null,
+        seoScoreAr: seoResult?.scoreAr ?? null,
+        seoScoreEn: seoResult?.scoreEn ?? null,
+        status: 'SEO_CHECK',
+      },
+    });
+
+    // Step 4: Quality Guard
+    this.logger.log('Step 4: Quality Guard...');
+    const quality = await this.qualityGuard.checkContent({
+      titleAr: content.titleAr,
+      titleEn: content.titleEn,
+      contentAr: content.contentAr,
+      contentEn: content.contentEn,
+    });
+
+    // Update status based on quality result
+    const finalStatus = quality.passed ? 'PENDING_APPROVAL' : 'QUALITY_CHECK';
+    await this.prisma.contentPage.update({
+      where: { id: page.id },
+      data: {
+        qualityScore: quality.score,
+        status: finalStatus,
+      },
+    });
+
+    this.logger.log(`Content pipeline: status=${finalStatus}, SEO=${seoResult?.overallScore}/100, Quality=${quality.score}/100`);
+    return {
+      page,
+      seoBrief,
+      seoAudit: seoResult,
+      qualityCheck: quality,
+      status: finalStatus,
+    };
   }
 }

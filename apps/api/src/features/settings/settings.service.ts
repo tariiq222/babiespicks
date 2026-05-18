@@ -58,6 +58,41 @@ const DEFAULT_CONFIGS = [
     maxTokens: 2000,
     description: 'تحليل فجوات المنافسين',
   },
+  {
+    agentName: 'seo-planner',
+    model: 'anthropic/claude-haiku-3.5',
+    temperature: 0.3,
+    maxTokens: 2000,
+    description: 'تخطيط SEO وبحث الكلمات المفتاحية',
+  },
+  {
+    agentName: 'seo-auditor',
+    model: 'anthropic/claude-haiku-3.5',
+    temperature: 0.1,
+    maxTokens: 1500,
+    description: 'تدقيق SEO وتقييم المحتوى',
+  },
+  {
+    agentName: 'tweet-crafter',
+    model: 'anthropic/claude-sonnet-4',
+    temperature: 0.7,
+    maxTokens: 2000,
+    description: 'كتابة تغريدات وثريدات',
+  },
+  {
+    agentName: 'hashtag-miner',
+    model: 'anthropic/claude-haiku-3.5',
+    temperature: 0.3,
+    maxTokens: 500,
+    description: 'تحسين الهاشتاقات',
+  },
+  {
+    agentName: 'social-guard',
+    model: 'anthropic/claude-haiku-3.5',
+    temperature: 0.1,
+    maxTokens: 800,
+    description: 'فحص امتثال المحتوى الاجتماعي',
+  },
 ];
 
 export const AVAILABLE_MODELS = [

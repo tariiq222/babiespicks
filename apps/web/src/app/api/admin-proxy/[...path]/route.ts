@@ -1,0 +1,115 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+const BACKEND_BASE =
+  process.env.API_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:3001';
+
+const ADMIN_KEY =
+  process.env.ADMIN_API_KEY ||
+  process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
+  '';
+
+const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'HEAD'];
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, 'GET', params);
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, 'POST', params);
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, 'PATCH', params);
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, 'PUT', params);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, 'DELETE', params);
+}
+
+export async function HEAD(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxy(request, 'HEAD', params);
+}
+
+async function proxy(
+  request: NextRequest,
+  method: string,
+  params: Promise<{ path: string[] }>,
+) {
+  const { path } = await params;
+  const search = request.nextUrl.search;
+  const backendUrl = `${BACKEND_BASE}/${path.join('/')}${search}`;
+
+  const headers: Record<string, string> = {};
+
+  const contentType = request.headers.get('content-type');
+  if (contentType) headers['Content-Type'] = contentType;
+
+  const accept = request.headers.get('accept');
+  if (accept) headers['Accept'] = accept;
+
+  if (ADMIN_KEY) headers['x-admin-key'] = ADMIN_KEY;
+
+  let body: BodyInit | undefined;
+  if (method !== 'GET' && method !== 'HEAD') {
+    body = await request.clone().arrayBuffer();
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(backendUrl, {
+      method,
+      headers,
+      body,
+      cache: 'no-store',
+    });
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return NextResponse.json(
+      { message: 'Backend unavailable', detail: error.message },
+      { status: 502 },
+    );
+  }
+
+  const responseHeaders = new Headers();
+  res.headers.forEach((value, key) => {
+    if (
+      key === 'content-type' ||
+      key === 'content-length' ||
+      key === 'content-encoding' ||
+      key === 'transfer-encoding'
+    ) {
+      responseHeaders.set(key, value);
+    }
+  });
+
+  const data = await res.arrayBuffer();
+
+  return new Response(data, {
+    status: res.status,
+    headers: responseHeaders,
+  });
+}

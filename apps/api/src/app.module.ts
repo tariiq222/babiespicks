@@ -19,6 +19,11 @@ import { FeatureFlagsModule } from './infrastructure/feature-flags/feature-flags
 import { HealthModule } from './features/health/health.module';
 import { ContentModule } from './features/content/content.module';
 import { SettingsModule } from './features/settings/settings.module';
+import { StoresModule } from './features/stores/stores.module';
+import { AuthModule } from './features/auth/auth.module';
+import { CircuitBreakerModule } from './infrastructure/circuit-breaker/circuit-breaker.module';
+import { NotificationsModule } from './infrastructure/notifications/notifications.module';
+import { SocialModule } from './agents/social/social.module';
 
 @Module({
   imports: [
@@ -44,6 +49,11 @@ import { SettingsModule } from './features/settings/settings.module';
     HealthModule,
     ContentModule,
     SettingsModule,
+    StoresModule,
+    AuthModule,
+    CircuitBreakerModule,
+    NotificationsModule,
+    SocialModule,
   ],
   controllers: [AppController],
   providers: [

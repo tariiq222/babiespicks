@@ -43,6 +43,38 @@ enum JobStatus {
   FAILED
 }
 
+enum ContentStatus {
+  DRAFT
+  SEO_CHECK
+  QUALITY_CHECK
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REVISION_REQUESTED
+  REJECTED
+}
+
+enum ProductStatus {
+  DISCOVERED
+  DATA_ACQUIRED
+  REVIEWS_ANALYZED
+  VERDICT_GENERATED
+  READY
+  ACTIVE
+  INACTIVE
+  REJECTED
+}
+
+enum SocialPostStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REJECTED
+}
+
 // ==================== MODELS ====================
 
 model Store {
@@ -95,9 +127,10 @@ model Product {
   sourceUrl    String?    @unique
   dataSource   DataSource @default(MANUAL)
   confidence   Float?
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  isActive     Boolean       @default(true)
+  status       ProductStatus @default(DISCOVERED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   translations  ProductTranslation[]
   prices        ProductPrice[]
@@ -106,10 +139,12 @@ model Product {
   verdict       Verdict?
   affiliateClicks AffiliateClick[]
   agentJobs     AgentJob[]
+  socialPosts   SocialPost[]
 
   @@index([categoryId])
   @@index([storeId])
   @@index([slug])
+  @@index([status])
   @@map("products")
 }
 
@@ -139,6 +174,7 @@ model ProductPrice {
   originalPrice Decimal? @db.Decimal(10, 2)
   currency      String   @default("SAR")
   url           String?
+  inStock       Boolean  @default(true)
   scrapedAt     DateTime @default(now())
 
   @@index([productId, scrapedAt])
@@ -203,16 +239,28 @@ model ContentPage {
   slug        String      @unique
   categoryId  String?
   category    Category?   @relation(fields: [categoryId], references: [id])
-  isPublished Boolean     @default(false)
-  publishedAt DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  isPublished     Boolean       @default(false)
+  publishedAt     DateTime?
+  status          ContentStatus @default(DRAFT)
+  seoScore        Float?
+  seoScoreAr      Float?
+  seoScoreEn      Float?
+  qualityScore    Float?
+  approvedAt      DateTime?
+  approvedBy      String?
+  scheduledAt     DateTime?
+  revisionNotes   String?       @db.Text
+  rejectionReason String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   translations  ContentPageTranslation[]
   publishedPosts PublishedPost[]
+  socialPosts   SocialPost[]
 
   @@index([type])
   @@index([categoryId])
+  @@index([status])
   @@map("content_pages")
 }
 
@@ -304,6 +352,34 @@ model PublishedPost {
   @@map("published_posts")
 }
 
+model SocialPost {
+  id              String           @id @default(cuid())
+  contentPageId   String?
+  contentPage     ContentPage?     @relation(fields: [contentPageId], references: [id])
+  productId       String?
+  product         Product?         @relation(fields: [productId], references: [id])
+  status          SocialPostStatus @default(DRAFT)
+  platform        String           @default("twitter") // "twitter", "instagram", etc.
+  format          String           // "thread_ar", "thread_en", "single_ar", "single_en"
+  content         Json             // Array of tweet objects: [{text, mediaUrl?}]
+  hashtags        String[]
+  visualUrl       String?          // URL to generated verdict card image
+  complianceScore Float?
+  complianceNotes String?          @db.Text
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  externalId      String?          // Twitter post ID after publishing
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([contentPageId])
+  @@index([productId])
+  @@index([status])
+  @@index([platform, status])
+  @@map("social_posts")
+}
+
 model FeatureFlag {
   id          String   @id @default(cuid())
   key         String   @unique
@@ -328,4 +404,77 @@ model AgentConfig {
   createdAt   DateTime @default(now())
 
   @@map("agent_configs")
+}
+
+model CircuitBreakerState {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  isTripped     Boolean   @default(false)
+  tripCount     Int       @default(0)
+  lastTrippedAt DateTime?
+  resetAt       DateTime?
+  metadata      Json?
+  updatedAt     DateTime  @updatedAt
+
+  @@map("circuit_breaker_states")
+}
+
+// ==================== AUTH (better-auth) ====================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("accounts")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verifications")
 }

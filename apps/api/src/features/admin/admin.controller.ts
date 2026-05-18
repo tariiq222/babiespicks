@@ -1,7 +1,8 @@
-import { Controller, Post, Body, Delete, Get, UseGuards, HttpCode } from '@nestjs/common';
+import { Controller, Post, Body, Delete, Get, UseGuards, HttpCode, Param } from '@nestjs/common';
 import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
+import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
 
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
@@ -9,6 +10,7 @@ export class AdminController {
   constructor(
     private readonly coordinator: CoordinatorService,
     private readonly prisma: PrismaService,
+    private readonly circuitBreaker: CircuitBreakerService,
   ) {}
 
   // Run product pipeline for a single URL
@@ -213,7 +215,7 @@ export class AdminController {
     }
 
     // Execute
-    const executed: Array<{ slug: string; type: string; published: boolean }> = [];
+    const executed: Array<{ slug: string; type: string; status: string }> = [];
     const errors: Array<{ slug: string; type: string; error: string }> = [];
 
     for (let i = 0; i < toRun.length; i++) {
@@ -226,7 +228,7 @@ export class AdminController {
           item.productIds,
           item.categoryId ?? undefined,
         );
-        executed.push({ slug: item.slug, type: item.type, published: result?.published?.published ?? false });
+        executed.push({ slug: item.slug, type: item.type, status: result?.status ?? 'unknown' });
       } catch (error) {
         errors.push({ slug: item.slug, type: item.type, error: (error as Error).message });
       }
@@ -243,6 +245,20 @@ export class AdminController {
       skipped,
       errors,
     };
+  }
+
+  // Get circuit breaker status for all breakers
+  @Get('circuit-breakers')
+  async getCircuitBreakers() {
+    return this.circuitBreaker.getStatus();
+  }
+
+  // Reset a specific circuit breaker by name
+  @Post('circuit-breakers/:name/reset')
+  @HttpCode(200)
+  async resetCircuitBreaker(@Param('name') name: string) {
+    await this.circuitBreaker.resetBreaker(name);
+    return { success: true, breaker: name, action: 'reset' };
   }
 
   // Clear all mock/seed data

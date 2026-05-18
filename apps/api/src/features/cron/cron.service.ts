@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { SocialPostStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
 import { CouponsService } from '../coupons/coupons.service';
+import { SitemapService } from '../../infrastructure/publishing/sitemap.service';
+import { PublisherService } from '../../agents/publisher/publisher.service';
+import { TwitterPublisherService, TweetContent } from '../../infrastructure/publishing/twitter-publisher.service';
 
 @Injectable()
 export class CronService {
@@ -12,6 +16,9 @@ export class CronService {
     private readonly prisma: PrismaService,
     private readonly coordinator: CoordinatorService,
     private readonly couponsService: CouponsService,
+    private readonly sitemapService: SitemapService,
+    private readonly publisher: PublisherService,
+    private readonly twitter: TwitterPublisherService,
   ) {}
 
   // Re-scrape prices and data for products with sourceUrl every 6 hours
@@ -51,11 +58,109 @@ export class CronService {
     this.logger.log('Price check completed');
   }
 
-  // Regenerate sitemap daily
+  // Regenerate sitemap daily at 5 AM
   @Cron(CronExpression.EVERY_DAY_AT_5AM)
   async regenerateSitemap() {
     this.logger.log('Regenerating sitemap...');
-    // TODO: Implement sitemap regeneration
+    try {
+      const xml = await this.sitemapService.regenerate();
+      this.logger.log(`Sitemap regenerated successfully (${xml.length} bytes)`);
+    } catch (error) {
+      this.logger.error(`Sitemap regeneration failed: ${(error as Error).message}`);
+    }
+  }
+
+  // Publish scheduled content — every 15 minutes
+  @Cron('*/15 * * * *')
+  async publishScheduledContent() {
+    const now = new Date();
+
+    const scheduled = await this.prisma.contentPage.findMany({
+      where: {
+        status: 'SCHEDULED',
+        isPublished: false,
+        scheduledAt: { lte: now },
+      },
+      select: { id: true, slug: true },
+    });
+
+    if (scheduled.length === 0) {
+      return;
+    }
+
+    this.logger.log(`Found ${scheduled.length} scheduled content page(s) ready to publish`);
+
+    for (const page of scheduled) {
+      try {
+        const result = await this.publisher.approveAndPublish(page.id);
+        if (result.published) {
+          this.logger.log(`Scheduled publish succeeded: ${page.slug}`);
+        } else {
+          this.logger.warn(`Scheduled publish skipped for ${page.slug}: ${result.reason}`);
+        }
+      } catch (error) {
+        this.logger.error(`Scheduled publish failed for ${page.slug}: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  // Publish approved social posts — every 30 minutes
+  @Cron('*/30 * * * *')
+  async publishApprovedSocialPosts() {
+    const approved = await this.prisma.socialPost.findMany({
+      where: { status: SocialPostStatus.APPROVED },
+    });
+
+    if (approved.length === 0) {
+      return;
+    }
+
+    this.logger.log(`Found ${approved.length} approved social post(s) to publish`);
+
+    let published = 0;
+    let failed = 0;
+
+    for (const post of approved) {
+      const tweets = (post.content ?? []) as unknown as TweetContent[];
+
+      if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
+        this.logger.warn(`SocialPost ${post.id} has no tweets — skipping`);
+        continue;
+      }
+
+      try {
+        const result = await this.twitter.postThread(tweets);
+
+        if (result.success) {
+          await this.prisma.socialPost.update({
+            where: { id: post.id },
+            data: {
+              status: SocialPostStatus.PUBLISHED,
+              publishedAt: new Date(),
+              externalId: result.tweetIds?.[0] ?? null,
+              metadata: { tweetIds: result.tweetIds } as any,
+            },
+          });
+          published++;
+          this.logger.log(`SocialPost ${post.id} published — tweetId: ${result.tweetIds?.[0]}`);
+        } else {
+          await this.prisma.socialPost.update({
+            where: { id: post.id },
+            data: {
+              status: SocialPostStatus.REJECTED,
+              metadata: { error: result.error } as any,
+            },
+          });
+          failed++;
+          this.logger.warn(`SocialPost ${post.id} failed to publish: ${result.error}`);
+        }
+      } catch (error) {
+        failed++;
+        this.logger.error(`SocialPost ${post.id} publish error: ${(error as Error).message}`);
+      }
+    }
+
+    this.logger.log(`publishApprovedSocialPosts: ${published} published, ${failed} failed`);
   }
 
   // Clean up old affiliate clicks (>90 days)

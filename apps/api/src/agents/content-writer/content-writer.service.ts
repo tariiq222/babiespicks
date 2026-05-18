@@ -31,6 +31,8 @@ export class ContentWriterService {
     type: ContentPageType,
     topic: string,
     productIds: string[],
+    seoBrief?: any,
+    seoFeedback?: string[],
   ): Promise<ContentResult> {
     this.logger.log(`Writing ${type} content: "${topic}"`);
 
@@ -97,7 +99,7 @@ Return JSON:
         },
         {
           role: 'user',
-          content: `Write a ${type.replace('_', ' ').toLowerCase()} about: "${topic}"\n\nProducts:\n${productsContext}`,
+          content: `Write a ${type.replace('_', ' ').toLowerCase()} about: "${topic}"\n\nProducts:\n${productsContext}${seoBrief ? `\n\nSEO BRIEF (follow this outline closely):\nPrimary keyword: ${seoBrief.primaryKeyword}\nLSI keywords: ${seoBrief.lsiKeywords.join(', ')}\nTarget word count AR: ${seoBrief.targetWordCount.ar}, EN: ${seoBrief.targetWordCount.en}\nH1: ${seoBrief.outline.h1}\nSections:\n${seoBrief.outline.sections.map((s: any) => `## ${s.heading}\n${s.keyPoints.join('\n')}`).join('\n')}\nFAQs to include:\n${seoBrief.faqSuggestions.map((f: any) => `Q: ${f.question}`).join('\n')}` : ''}${seoFeedback ? `\n\nSEO IMPROVEMENT FEEDBACK (address these issues):\n${seoFeedback.join('\n')}` : ''}`,
         },
       ],
     });

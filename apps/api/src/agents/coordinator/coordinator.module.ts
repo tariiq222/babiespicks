@@ -6,6 +6,9 @@ import { VerdictEngineModule } from '../verdict-engine/verdict-engine.module';
 import { ContentWriterModule } from '../content-writer/content-writer.module';
 import { PublisherModule } from '../publisher/publisher.module';
 import { DiscoveryModule } from '../discovery/discovery.module';
+import { SEOPlannerModule } from '../seo-planner/seo-planner.module';
+import { SEOAuditorModule } from '../seo-auditor/seo-auditor.module';
+import { QualityGuardModule } from '../quality-guard/quality-guard.module';
 
 @Module({
   imports: [
@@ -15,6 +18,9 @@ import { DiscoveryModule } from '../discovery/discovery.module';
     ContentWriterModule,
     PublisherModule,
     DiscoveryModule,
+    SEOPlannerModule,
+    SEOAuditorModule,
+    QualityGuardModule,
   ],
   providers: [CoordinatorService],
   exports: [CoordinatorService],
