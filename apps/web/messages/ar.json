@@ -6,14 +6,67 @@
   "nav": {
     "home": "الرئيسية",
     "categories": "الفئات",
-    "bestLists": "أفضل المنتجات",
+    "bestLists": "أفضل القوائم",
+    "howWeReview": "كيف نراجع",
     "about": "عن BabiesPicks",
     "search": "ابحثي عن منتج..."
+  },
+  "header": {
+    "logoAr": "بيبيز بيكس",
+    "searchPlaceholder": "ابحثي عن منتج...",
+    "searchLabel": "ابحثي عن منتج",
+    "searchAriaLabel": "بحث",
+    "langToggleLabel": "English",
+    "langToggleAriaLabel": "Switch to English",
+    "menuAriaLabel": "القائمة",
+    "newsletter": "عروض حصرية",
+    "newsletterMobile": "عروض حصرية · اشتركي"
+  },
+  "footer": {
+    "tagline": "مراجعات صادقة لمنتجات الأطفال، مبنية على بيانات وذكاء اصطناعي وآراء أمهات حقيقيات.",
+    "platform": "المنصة",
+    "howWeReview": "كيف نراجع",
+    "categories": "الفئات",
+    "bestLists": "أفضل القوائم",
+    "contact": "تواصل معنا",
+    "legal": "قانوني",
+    "privacy": "الخصوصية",
+    "terms": "الشروط",
+    "disclosure": "إفصاح العمولات",
+    "faq": "الأسئلة الشائعة",
+    "followUs": "تابعينا",
+    "instagram": "إنستغرام",
+    "tiktok": "تيك توك",
+    "snapchat": "سناب شات",
+    "newsletter": "النشرة البريدية",
+    "copyright": "© 2026 بيبيز بيكس · صُنع بحب في الرياض",
+    "region": "المملكة العربية السعودية · العربية",
+    "affiliateDisclosure": "BabiesPicks قد يحصل على عمولة من الروابط في هذا الموقع. هذا لا يؤثر على آرائنا.",
+    "privacyPolicy": "سياسة الخصوصية",
+    "termsOfService": "الشروط والأحكام",
+    "about": "عن المنصة"
   },
   "home": {
     "heroTitle": "رأينا الصادق قبل ما تشترين",
     "heroSubtitle": "نراجع منتجات الأمومة والطفل بـ 5 معايير ذكية عشان نساعدك تاخذين القرار الصح",
     "comingSoon": "قريبًا..."
+  },
+  "search": {
+    "placeholder": "ابحثي عن منتج...",
+    "placeholderHero": "ابحثي عن منتج لطفلكِ...",
+    "ariaLabel": "ابحثي عن منتج لطفلكِ",
+    "button": "ابحثي",
+    "title": "بحث",
+    "hint": "ابحثي عن اسم المنتج، العلامة التجارية، أو الفئة",
+    "results": "{count} نتيجة لـ \"{query}\"",
+    "noResults": "لا توجد نتائج لـ \"{query}\"",
+    "noResultsHint": "جربي كلمات مختلفة أو تصفحي"
+  },
+  "notFound": {
+    "title": "الصفحة غير موجودة",
+    "description": "عذراً، لم نجد الصفحة التي تبحثين عنها. ربما تم نقلها أو حذفها.",
+    "home": "العودة للرئيسية",
+    "categories": "تصفّحي الفئات"
   },
   "verdict": {
     "worthIt": "يستاهل",
@@ -36,11 +89,5 @@
     "loading": "جاري التحميل...",
     "error": "حدث خطأ",
     "retry": "حاولي مرة أخرى"
-  },
-  "footer": {
-    "disclosure": "BabiesPicks قد يحصل على عمولة من الروابط في هذا الموقع. هذا لا يؤثر على آرائنا.",
-    "privacy": "سياسة الخصوصية",
-    "terms": "الشروط والأحكام",
-    "about": "عن المنصة"
   }
 }

@@ -1,6 +1,9 @@
-import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
+import { Link } from '@/i18n/navigation';
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const t = await getTranslations('footer');
+
   return (
     <footer className="bg-linen hairline-t mt-16">
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 py-12 grid grid-cols-2 md:grid-cols-4 gap-8 text-[13px]">
@@ -10,40 +13,40 @@ export function SiteFooter() {
             <span className="text-[14px] text-charcoal">بيبيز بيكس</span>
           </div>
           <p className="text-stone leading-[1.8] max-w-[260px]">
-            مراجعات صادقة لمنتجات الأطفال، مبنية على بيانات وذكاء اصطناعي وآراء أمهات حقيقيات.
+            {t('tagline')}
           </p>
         </div>
         <div>
-          <div className="text-charcoal mb-3">المنصة</div>
+          <div className="text-charcoal mb-3">{t('platform')}</div>
           <ul className="space-y-2 text-stone">
-            <li><Link className="hover:text-charcoal" href="/about">كيف نراجع</Link></li>
-            <li><Link className="hover:text-charcoal" href="/categories">الفئات</Link></li>
-            <li><Link className="hover:text-charcoal" href="/best">أفضل القوائم</Link></li>
-            <li><Link className="hover:text-charcoal" href="/contact">تواصل معنا</Link></li>
+            <li><Link className="hover:text-charcoal" href="/about">{t('howWeReview')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/categories">{t('categories')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/best">{t('bestLists')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/contact">{t('contact')}</Link></li>
           </ul>
         </div>
         <div>
-          <div className="text-charcoal mb-3">قانوني</div>
+          <div className="text-charcoal mb-3">{t('legal')}</div>
           <ul className="space-y-2 text-stone">
-            <li><Link className="hover:text-charcoal" href="/privacy">الخصوصية</Link></li>
-            <li><Link className="hover:text-charcoal" href="/terms">الشروط</Link></li>
-            <li><Link className="hover:text-charcoal" href="/disclosure">إفصاح العمولات</Link></li>
-            <li><Link className="hover:text-charcoal" href="/faq">الأسئلة الشائعة</Link></li>
+            <li><Link className="hover:text-charcoal" href="/privacy">{t('privacy')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/terms">{t('terms')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/disclosure">{t('disclosure')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/faq">{t('faq')}</Link></li>
           </ul>
         </div>
         <div>
-          <div className="text-charcoal mb-3">تابعينا</div>
+          <div className="text-charcoal mb-3">{t('followUs')}</div>
           <ul className="space-y-2 text-stone">
-            <li><a href="#" className="hover:text-charcoal">إنستغرام</a></li>
-            <li><a href="#" className="hover:text-charcoal">تيك توك</a></li>
-            <li><a href="#" className="hover:text-charcoal">سناب شات</a></li>
-            <li><Link href="#newsletter" className="hover:text-charcoal">النشرة البريدية</Link></li>
+            <li><a href="#" className="hover:text-charcoal">{t('instagram')}</a></li>
+            <li><a href="#" className="hover:text-charcoal">{t('tiktok')}</a></li>
+            <li><a href="#" className="hover:text-charcoal">{t('snapchat')}</a></li>
+            <li><Link href="#newsletter" className="hover:text-charcoal">{t('newsletter')}</Link></li>
           </ul>
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pb-8 pt-2 hairline-t mt-2 flex flex-col md:flex-row items-center gap-2 text-[11px] text-stone">
-        <span>© 2026 بيبيز بيكس · صُنع بحب في الرياض</span>
-        <span className="md:ms-auto">المملكة العربية السعودية · العربية</span>
+        <span>{t('copyright')}</span>
+        <span className="md:ms-auto">{t('region')}</span>
       </div>
     </footer>
   );

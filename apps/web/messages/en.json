@@ -6,14 +6,67 @@
   "nav": {
     "home": "Home",
     "categories": "Categories",
-    "bestLists": "Best Products",
+    "bestLists": "Best Lists",
+    "howWeReview": "How We Review",
     "about": "About BabiesPicks",
     "search": "Search for a product..."
+  },
+  "header": {
+    "logoAr": "BabiesPicks",
+    "searchPlaceholder": "Search for a product...",
+    "searchLabel": "Search for a product",
+    "searchAriaLabel": "Search",
+    "langToggleLabel": "العربية",
+    "langToggleAriaLabel": "التبديل للعربية",
+    "menuAriaLabel": "Menu",
+    "newsletter": "Exclusive Offers",
+    "newsletterMobile": "Exclusive Offers · Subscribe"
+  },
+  "footer": {
+    "tagline": "Honest baby product reviews, built on data, AI, and real moms' opinions.",
+    "platform": "Platform",
+    "howWeReview": "How We Review",
+    "categories": "Categories",
+    "bestLists": "Best Lists",
+    "contact": "Contact Us",
+    "legal": "Legal",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "disclosure": "Affiliate Disclosure",
+    "faq": "FAQ",
+    "followUs": "Follow Us",
+    "instagram": "Instagram",
+    "tiktok": "TikTok",
+    "snapchat": "Snapchat",
+    "newsletter": "Newsletter",
+    "copyright": "© 2026 BabiesPicks · Made with love in Riyadh",
+    "region": "Saudi Arabia · English",
+    "affiliateDisclosure": "BabiesPicks may earn a commission from links on this site. This does not affect our opinions.",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "about": "About Us"
   },
   "home": {
     "heroTitle": "Our Honest Verdict Before You Buy",
     "heroSubtitle": "We review baby & maternity products using 5 smart criteria to help you make the right decision",
     "comingSoon": "Coming soon..."
+  },
+  "search": {
+    "placeholder": "Search for a product...",
+    "placeholderHero": "Search for a baby product...",
+    "ariaLabel": "Search for a baby product",
+    "button": "Search",
+    "title": "Search",
+    "hint": "Search by product name, brand, or category",
+    "results": "{count} results for \"{query}\"",
+    "noResults": "No results for \"{query}\"",
+    "noResultsHint": "Try different keywords or browse"
+  },
+  "notFound": {
+    "title": "Page Not Found",
+    "description": "Sorry, we couldn't find the page you're looking for. It may have been moved or deleted.",
+    "home": "Back to Home",
+    "categories": "Browse Categories"
   },
   "verdict": {
     "worthIt": "Worth It",
@@ -36,11 +89,5 @@
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Try again"
-  },
-  "footer": {
-    "disclosure": "BabiesPicks may earn a commission from links on this site. This does not affect our opinions.",
-    "privacy": "Privacy Policy",
-    "terms": "Terms of Service",
-    "about": "About Us"
   }
 }

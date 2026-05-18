@@ -1,18 +1,18 @@
 'use client';
 
-import { useRouter, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/navigation';
 import { useState } from 'react';
 
 export function SearchInput({ defaultValue = '' }: { defaultValue?: string }) {
   const [query, setQuery] = useState(defaultValue);
   const router = useRouter();
-  const pathname = usePathname();
+  const t = useTranslations('search');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim().length >= 2) {
-      const locale = pathname.split('/')[1] || 'ar';
-      router.push(`/${locale}/search?q=${encodeURIComponent(query.trim())}`);
+      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
     }
   };
 
@@ -24,12 +24,12 @@ export function SearchInput({ defaultValue = '' }: { defaultValue?: string }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         className="bg-transparent flex-1 text-[14px] outline-none text-right placeholder:text-stone/70"
-        placeholder="ابحثي عن منتج..."
-        aria-label="ابحثي عن منتج"
+        placeholder={t('placeholder')}
+        aria-label={t('placeholder')}
         autoFocus
       />
       <button type="submit" className="bg-sage text-cream rounded-full px-5 py-[7px] text-[12px] hover:bg-sage-hover">
-        ابحثي
+        {t('button')}
       </button>
     </form>
   );
