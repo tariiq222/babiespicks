@@ -30,6 +30,7 @@ export default function AdminLayout({
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavItem href="/admin" icon="ti-dashboard" label="لوحة التحكم" pathname={pathname} />
           <NavItem href="/admin/pipeline" icon="ti-robot" label="خط الإنتاج" pathname={pathname} />
+          <NavItem href="/admin/discovery" icon="ti-radar-2" label="الاكتشاف" pathname={pathname} />
           <NavItem href="/admin/analytics" icon="ti-chart-dots-3" label="التحليلات" pathname={pathname} />
           <NavItem href="/admin/costs" icon="ti-chart-bar" label="التكاليف" pathname={pathname} />
           <NavItem href="/admin/affiliate" icon="ti-link" label="الأفلييت" pathname={pathname} />
