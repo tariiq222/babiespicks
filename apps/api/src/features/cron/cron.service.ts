@@ -83,17 +83,27 @@ export class CronService {
     }
   }
 
-  // Discover new products daily at 6 AM (Saudi time — UTC+3, so 03:00 UTC)
+  // Discover Amazon SA products daily at 6 AM Saudi time (03:00 UTC)
   @Cron('0 3 * * *')
-  async discoverNewProducts() {
-    this.logger.log('Running daily product discovery...');
+  async discoverAmazonProducts() {
+    this.logger.log('Running Amazon SA product discovery...');
     try {
-      const result = await this.coordinator.runDiscoveryPipeline();
-      this.logger.log(
-        `Discovery complete: ${result.succeeded}/${result.total} products processed`,
-      );
+      const result = await this.coordinator.runDiscoveryPipeline(10, 'amazon');
+      this.logger.log(`Amazon discovery: ${result.succeeded}/${result.total} processed`);
     } catch (error) {
-      this.logger.error(`Discovery failed: ${(error as Error).message}`);
+      this.logger.error(`Amazon discovery failed: ${(error as Error).message}`);
+    }
+  }
+
+  // Discover Noon SA products daily at 1 PM Saudi time (10:00 UTC)
+  @Cron('0 10 * * *')
+  async discoverNoonProducts() {
+    this.logger.log('Running Noon SA product discovery...');
+    try {
+      const result = await this.coordinator.runDiscoveryPipeline(10, 'noon');
+      this.logger.log(`Noon discovery: ${result.succeeded}/${result.total} processed`);
+    } catch (error) {
+      this.logger.error(`Noon discovery failed: ${(error as Error).message}`);
     }
   }
 

@@ -5,7 +5,7 @@ import { ReviewAnalyzerService, type ReviewData } from '../review-analyzer/revie
 import { VerdictEngineService } from '../verdict-engine/verdict-engine.service';
 import { ContentWriterService } from '../content-writer/content-writer.service';
 import { PublisherService } from '../publisher/publisher.service';
-import { DiscoveryService } from '../discovery/discovery.service';
+import { DiscoveryService, type DiscoverySource } from '../discovery/discovery.service';
 import { scrapeReviews } from '../data-acquisition/layers/review-scraper';
 
 export interface PipelineResult {
@@ -137,11 +137,11 @@ export class CoordinatorService {
   /**
    * Discovery pipeline: Find new products → run full product pipeline for each
    */
-  async runDiscoveryPipeline(maxProducts = 10): Promise<DiscoveryPipelineResult> {
-    this.logger.log('=== Discovery Pipeline START ===');
+  async runDiscoveryPipeline(maxProducts = 10, source: DiscoverySource = 'all'): Promise<DiscoveryPipelineResult> {
+    this.logger.log(`=== Discovery Pipeline START (source: ${source}) ===`);
 
     const { discovered, newCandidates, candidates } =
-      await this.discovery.discoverProducts(maxProducts);
+      await this.discovery.discoverProducts(maxProducts, source);
 
     const results: DiscoveryPipelineResult['results'] = [];
     let succeeded = 0;

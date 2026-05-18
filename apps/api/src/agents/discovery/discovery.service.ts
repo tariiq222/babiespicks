@@ -3,6 +3,10 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { scrapeAmazonBestsellers } from './strategies/amazon-bestsellers';
 import { findTrendingProducts } from './strategies/google-trends';
 import { findCompetitorGaps } from './strategies/competitor-scan';
+import { scrapeNoonBestsellers } from './strategies/noon-bestsellers';
+import { smartScoreCandidates } from './scoring/smart-scorer';
+
+export type DiscoverySource = 'amazon' | 'noon' | 'all';
 
 export interface DiscoveryCandidate {
   url: string;
@@ -10,7 +14,7 @@ export interface DiscoveryCandidate {
   price?: number;
   rating?: number;
   category?: string;
-  source: 'amazon_bestseller' | 'trending' | 'competitor_gap';
+  source: 'amazon_bestseller' | 'trending' | 'competitor_gap' | 'noon_bestseller';
   score: number;
   trendReason?: string;
   competitorReason?: string;
@@ -29,39 +33,43 @@ export class DiscoveryService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Run all discovery strategies, deduplicate, filter against DB, score and return top N.
+   * Run discovery strategies based on source, deduplicate, filter against DB,
+   * score with AI (with fallback to heuristic), and return top N.
    */
-  async discoverProducts(maxProducts = 10): Promise<DiscoveryResult> {
-    this.logger.log('=== Discovery Agent START ===');
+  async discoverProducts(maxProducts = 10, source: DiscoverySource = 'all'): Promise<DiscoveryResult> {
+    this.logger.log(`=== Discovery Agent START (source: ${source}) ===`);
 
-    // Run all 3 strategies in parallel — failures are isolated
-    const [bestsellersResult, trendingResult, gapsResult] = await Promise.allSettled([
-      scrapeAmazonBestsellers(),
-      findTrendingProducts(),
-      findCompetitorGaps(),
-    ]);
+    const strategyPromises: Promise<DiscoveryCandidate[]>[] = [];
+    const strategyNames: string[] = [];
+
+    // Amazon strategies
+    if (source === 'amazon' || source === 'all') {
+      strategyPromises.push(scrapeAmazonBestsellers());
+      strategyPromises.push(findTrendingProducts());
+      strategyPromises.push(findCompetitorGaps());
+      strategyNames.push('amazon_bestsellers', 'trending', 'competitor_gaps');
+    }
+
+    // Noon strategies
+    if (source === 'noon' || source === 'all') {
+      strategyPromises.push(scrapeNoonBestsellers());
+      strategyNames.push('noon_bestsellers');
+    }
+
+    // Run all selected strategies in parallel — failures are isolated
+    const settledResults = await Promise.allSettled(strategyPromises);
 
     let candidates: DiscoveryCandidate[] = [];
 
-    if (bestsellersResult.status === 'fulfilled') {
-      candidates.push(...bestsellersResult.value);
-      this.logger.log(`Bestsellers: ${bestsellersResult.value.length} found`);
-    } else {
-      this.logger.warn(`Bestsellers strategy failed: ${String(bestsellersResult.reason)}`);
-    }
-
-    if (trendingResult.status === 'fulfilled') {
-      candidates.push(...trendingResult.value);
-      this.logger.log(`Trending: ${trendingResult.value.length} found`);
-    } else {
-      this.logger.warn(`Trending strategy failed: ${String(trendingResult.reason)}`);
-    }
-
-    if (gapsResult.status === 'fulfilled') {
-      candidates.push(...gapsResult.value);
-      this.logger.log(`Competitor gaps: ${gapsResult.value.length} found`);
-    } else {
-      this.logger.warn(`Competitor gap strategy failed: ${String(gapsResult.reason)}`);
+    for (let i = 0; i < settledResults.length; i++) {
+      const result = settledResults[i];
+      const name = strategyNames[i] ?? `strategy_${i}`;
+      if (result.status === 'fulfilled') {
+        candidates.push(...(result.value as DiscoveryCandidate[]));
+        this.logger.log(`${name}: ${result.value.length} found`);
+      } else {
+        this.logger.warn(`${name} strategy failed: ${String(result.reason)}`);
+      }
     }
 
     const totalDiscovered = candidates.length;
@@ -89,8 +97,25 @@ export class DiscoveryService {
     candidates = candidates.filter((c) => !existingSet.has(this.normaliseUrl(c.url)));
     this.logger.log(`After DB filter: ${candidates.length} new candidates`);
 
-    // Score every candidate
-    candidates = candidates.map((c) => ({ ...c, score: this.scoreCandidate(c) }));
+    // AI smart scoring — enriches scores; falls back to heuristic if unavailable
+    this.logger.log('Running AI smart scoring...');
+    const aiScores = await smartScoreCandidates(
+      candidates.map((c) => ({
+        name: c.name,
+        price: c.price,
+        category: c.category,
+        source: c.source,
+      })),
+    );
+
+    // Apply scores: use AI score if available, else fall back to heuristic
+    candidates = candidates.map((c) => {
+      const aiScore = aiScores.get(c.name);
+      return {
+        ...c,
+        score: aiScore ? aiScore.totalScore : this.scoreCandidate(c),
+      };
+    });
 
     // Sort descending by score, take top N
     candidates.sort((a, b) => b.score - a.score);
@@ -102,10 +127,15 @@ export class DiscoveryService {
         data: {
           agentName: 'discovery',
           status: 'COMPLETED',
-          input: { strategies: ['amazon_bestsellers', 'trending', 'competitor_gaps'] },
+          input: {
+            source,
+            strategies: strategyNames,
+            aiScoringEnabled: aiScores.size > 0,
+          },
           output: {
             totalDiscovered,
             newCandidates: candidates.length,
+            aiScoredCount: aiScores.size,
             candidates: candidates.map((c) => ({
               name: c.name,
               url: c.url,
@@ -124,7 +154,7 @@ export class DiscoveryService {
     }
 
     this.logger.log(
-      `=== Discovery Agent DONE: ${totalDiscovered} found → ${candidates.length} new candidates ===`,
+      `=== Discovery Agent DONE: ${totalDiscovered} found → ${candidates.length} new candidates (source: ${source}) ===`,
     );
 
     return { discovered: totalDiscovered, newCandidates: candidates.length, candidates };
@@ -136,11 +166,13 @@ export class DiscoveryService {
     return url.replace(/[?#].*$/, '').toLowerCase().trim();
   }
 
+  /** Heuristic fallback scorer used when AI scoring is unavailable */
   private scoreCandidate(c: DiscoveryCandidate): number {
     let score = 0;
 
     // Source bonus
     if (c.source === 'amazon_bestseller') score += 3;
+    else if (c.source === 'noon_bestseller') score += 3;
     else if (c.source === 'trending') score += 2;
     else if (c.source === 'competitor_gap') score += 1;
 

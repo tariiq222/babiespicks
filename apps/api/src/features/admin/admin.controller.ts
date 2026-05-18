@@ -63,9 +63,12 @@ export class AdminController {
   @Post('pipeline/discover')
   @HttpCode(200)
   async runDiscoveryPipeline(
-    @Body() body: { maxProducts?: number },
+    @Body() body: { maxProducts?: number; source?: 'amazon' | 'noon' | 'all' },
   ) {
-    const result = await this.coordinator.runDiscoveryPipeline(body.maxProducts ?? 10);
+    const result = await this.coordinator.runDiscoveryPipeline(
+      body.maxProducts ?? 10,
+      body.source ?? 'all',
+    );
     return result;
   }
 
