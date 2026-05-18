@@ -100,15 +100,15 @@ export class AdminController {
         _sum: { tokensUsed: true, costUsd: true },
       }),
       this.prisma.agentJob.groupBy({ by: ['status'], _count: true }),
-      this.prisma.$queryRaw<{ agentType: string; tokens: bigint; cost: string; jobCount: bigint }[]>`
+      this.prisma.$queryRaw<{ agentName: string; tokens: bigint; cost: string; jobCount: bigint }[]>`
         SELECT
-          "agentType",
+          "agentName",
           COALESCE(SUM("tokensUsed"), 0)::bigint AS tokens,
           COALESCE(SUM("costUsd"), 0)::text AS cost,
           COUNT(*)::bigint AS "jobCount"
-        FROM "AgentJob"
+        FROM "agent_jobs"
         WHERE status = 'COMPLETED'
-        GROUP BY "agentType"
+        GROUP BY "agentName"
         ORDER BY tokens DESC
       `,
       this.prisma.$queryRaw<{ date: string; tokens: bigint; cost: string }[]>`
@@ -116,7 +116,7 @@ export class AdminController {
           DATE_TRUNC('day', "createdAt")::date AS date,
           COALESCE(SUM("tokensUsed"), 0)::bigint AS tokens,
           COALESCE(SUM("costUsd"), 0)::text AS cost
-        FROM "AgentJob"
+        FROM "agent_jobs"
         WHERE "createdAt" >= ${sevenDaysAgo}
         GROUP BY DATE_TRUNC('day', "createdAt")::date
         ORDER BY date ASC
@@ -131,7 +131,7 @@ export class AdminController {
     const failedJobs = statusCounts.find((s) => s.status === 'FAILED')?._count ?? 0;
 
     const byAgent = byAgentRaw.map((row) => ({
-      agentType: row.agentType,
+      agentName: row.agentName,
       tokens: Number(row.tokens),
       costUsd: parseFloat(row.cost),
       jobCount: Number(row.jobCount),
