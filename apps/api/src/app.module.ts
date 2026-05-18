@@ -10,6 +10,7 @@ import { CoordinatorModule } from './agents/coordinator/coordinator.module';
 import { CronModule } from './features/cron/cron.module';
 import { NewsletterModule } from './features/newsletter/newsletter.module';
 import { AdminModule } from './features/admin/admin.module';
+import { CouponsModule } from './features/coupons/coupons.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AdminModule } from './features/admin/admin.module';
     CronModule,
     NewsletterModule,
     AdminModule,
+    CouponsModule,
     CoordinatorModule,
   ],
   controllers: [AppController],

@@ -11,7 +11,11 @@ import { CategoryTag } from '@/shared/components/tags';
 import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
+import { ShareButtons } from '@/shared/components/share-buttons';
 import { FaqSection } from './faq-section';
+import { JsonLd } from '@/shared/components/json-ld';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
 interface Props {
   params: Promise<{ locale: string; slug: string }>;
@@ -131,10 +135,60 @@ export default async function BestListPage({ params }: Props) {
             ? `راجعنا ${products.length} منتج، اخترنا الأفضل بناءً على الأمان والجودة والتقييمات. كل النتائج مدعومة بمصادر مفتوحة وتقييمات أمهات حقيقيات.`
             : `دليل شامل لأفضل ${categoryName} - مراجعات مستقلة وأسعار محدّثة من BabiesPicks.`}
         </p>
+
+        <ShareButtons url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com'}/${locale}/best/${slug}`} title={`أفضل ${categoryName} في السعودية 2026`} />
+
         <div className="mt-6 max-w-3xl bg-lavender rounded-lg px-4 py-3 flex items-center gap-2 text-[12px] text-lavender-text">
           <i className="ti ti-info-circle text-[16px]"></i>
           <span>إفصاح: قد نحصل على عمولة عند الشراء من الروابط أدناه. هذا لا يؤثر على آرائنا.</span>
         </div>
+        <JsonLd
+          data={[
+            {
+              '@context': 'https://schema.org',
+              '@type': 'ItemList',
+              name: `أفضل ${categoryName} في السعودية 2026`,
+              itemListElement: sorted.map((p, i) => ({
+                '@type': 'ListItem',
+                position: i + 1,
+                name: getLocalizedName(p, locale),
+                url: `${BASE_URL}/${locale}/products/${p.slug}`,
+              })),
+            },
+            {
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'الرئيسية',
+                  item: BASE_URL,
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: categoryName,
+                  item: `${BASE_URL}/${locale}/categories/${slug}`,
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 3,
+                  name: 'أفضل الاختيارات',
+                  item: `${BASE_URL}/${locale}/best/${slug}`,
+                },
+              ],
+            },
+            {
+              '@context': 'https://schema.org',
+              '@type': 'Article',
+              headline: `دليل شراء ${categoryName} في السعودية 2026`,
+              author: { '@type': 'Organization', name: 'BabiesPicks' },
+              datePublished: '2026-01-01',
+              publisher: { '@type': 'Organization', name: 'BabiesPicks', url: BASE_URL },
+            },
+          ]}
+        />
       </section>
 
       {sorted.length === 0 ? (

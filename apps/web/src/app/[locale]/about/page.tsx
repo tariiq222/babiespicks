@@ -1,4 +1,7 @@
 import { CategoryTag } from '@/shared/components/tags';
+import { JsonLd } from '@/shared/components/json-ld';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
 export default function AboutPage() {
   return (
@@ -75,6 +78,18 @@ export default function AboutPage() {
             بيبيز بيكس قد يحصل على عمولة بسيطة عند شرائك من الروابط في موقعنا. هذا يساعدنا في تغطية تكاليف التشغيل والاستمرار بتقديم مراجعات مستقلة. العمولة لا تؤثر أبداً على آرائنا أو تقييماتنا.
           </p>
         </div>
+
+        {/* Structured Data */}
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            name: 'BabiesPicks',
+            url: BASE_URL,
+            logo: `${BASE_URL}/logo.png`,
+            sameAs: ['https://twitter.com/babiespicks', 'https://t.me/babiespicks'],
+          }}
+        />
       </section>
     </main>
   );

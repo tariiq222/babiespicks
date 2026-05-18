@@ -1,11 +1,17 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { getProductsByCategory, type Product } from '@/shared/lib/api';
 import { CategoryProducts } from './category-client';
+import { JsonLd } from '@/shared/components/json-ld';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   const products = await getProductsByCategory(slug, locale);
+  const t = await getTranslations('category');
+  const tc = await getTranslations('common');
 
   // Category info from first product (or slug)
   const categoryName = products[0]?.category?.name || slug;
@@ -24,6 +30,40 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
               <li aria-current="page" className="text-sage-deep">{categoryName}</li>
             </ol>
           </nav>
+          <JsonLd
+            data={[
+              {
+                '@context': 'https://schema.org',
+                '@type': 'CollectionPage',
+                name: categoryName,
+                description: `أفضل ${categoryName} في السعودية - مراجعات مستقلة`,
+              },
+              {
+                '@context': 'https://schema.org',
+                '@type': 'BreadcrumbList',
+                itemListElement: [
+                  {
+                    '@type': 'ListItem',
+                    position: 1,
+                    name: 'الرئيسية',
+                    item: BASE_URL,
+                  },
+                  {
+                    '@type': 'ListItem',
+                    position: 2,
+                    name: 'الفئات',
+                    item: `${BASE_URL}/${locale}/categories`,
+                  },
+                  {
+                    '@type': 'ListItem',
+                    position: 3,
+                    name: categoryName,
+                    item: `${BASE_URL}/${locale}/categories/${slug}`,
+                  },
+                ],
+              },
+            ]}
+          />
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-cream grid place-items-center shrink-0">
               <i className="ti ti-bottle text-sage text-[28px] md:text-[32px]"></i>

@@ -87,4 +87,62 @@ export class AdminController {
     ]);
     return { products, verdicts, contentPages, agentJobs };
   }
+
+  // Cost aggregation stats
+  @Get('costs')
+  async getCosts() {
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Totals across all jobs + status breakdown
+    const [totalAgg, statusCounts, byAgentRaw, last7DaysRaw] = await Promise.all([
+      this.prisma.agentJob.aggregate({
+        _sum: { tokensUsed: true, costUsd: true },
+      }),
+      this.prisma.agentJob.groupBy({ by: ['status'], _count: true }),
+      this.prisma.$queryRaw<{ agentType: string; tokens: bigint; cost: string; jobCount: bigint }[]>`
+        SELECT
+          "agentType",
+          COALESCE(SUM("tokensUsed"), 0)::bigint AS tokens,
+          COALESCE(SUM("costUsd"), 0)::text AS cost,
+          COUNT(*)::bigint AS "jobCount"
+        FROM "AgentJob"
+        WHERE status = 'COMPLETED'
+        GROUP BY "agentType"
+        ORDER BY tokens DESC
+      `,
+      this.prisma.$queryRaw<{ date: string; tokens: bigint; cost: string }[]>`
+        SELECT
+          DATE_TRUNC('day', "createdAt")::date AS date,
+          COALESCE(SUM("tokensUsed"), 0)::bigint AS tokens,
+          COALESCE(SUM("costUsd"), 0)::text AS cost
+        FROM "AgentJob"
+        WHERE "createdAt" >= ${sevenDaysAgo}
+        GROUP BY DATE_TRUNC('day', "createdAt")::date
+        ORDER BY date ASC
+      `,
+    ]);
+
+    const totalTokens = Number(totalAgg._sum.tokensUsed ?? 0);
+    const totalCostUsd = Number(totalAgg._sum.costUsd ?? 0);
+
+    const totalJobs = statusCounts.reduce((sum, s) => sum + s._count, 0);
+    const completedJobs = statusCounts.find((s) => s.status === 'COMPLETED')?._count ?? 0;
+    const failedJobs = statusCounts.find((s) => s.status === 'FAILED')?._count ?? 0;
+
+    const byAgent = byAgentRaw.map((row) => ({
+      agentType: row.agentType,
+      tokens: Number(row.tokens),
+      costUsd: parseFloat(row.cost),
+      jobCount: Number(row.jobCount),
+    }));
+
+    const last7Days = last7DaysRaw.map((row) => ({
+      date: row.date,
+      tokens: Number(row.tokens),
+      costUsd: parseFloat(row.cost),
+    }));
+
+    return { totalTokens, totalCostUsd, byAgent, last7Days, totalJobs, completedJobs, failedJobs };
+  }
 }

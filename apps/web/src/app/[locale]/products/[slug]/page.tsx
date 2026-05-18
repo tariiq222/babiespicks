@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import {
   getProduct,
   getProductsByCategory,
@@ -14,6 +15,10 @@ import { PrimaryButton, SecondaryButton } from '@/shared/components/buttons';
 import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
+import { ShareButtons } from '@/shared/components/share-buttons';
+import { JsonLd } from '@/shared/components/json-ld';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
 interface Props {
   params: Promise<{ locale: string; slug: string }>;
@@ -21,12 +26,13 @@ interface Props {
 
 export async function generateMetadata({ params }: Props) {
   const { locale, slug } = await params;
+  const t = await getTranslations('product');
   const product = await getProduct(slug, locale);
   if (!product) return {};
   const name = getLocalizedName(product, locale);
   return {
     title: name,
-    description: getLocalizedDesc(product, locale) || `مراجعة ${name} - BabiesPicks`,
+    description: getLocalizedDesc(product, locale) || t('metaFallback', { name }),
   };
 }
 
@@ -39,6 +45,10 @@ export default async function ProductPage({ params }: Props) {
   const description = getLocalizedDesc(product, locale);
   const variant = product.verdict ? getVerdictVariant(product.verdict.type) : null;
 
+  const t = await getTranslations('product');
+  const tc = await getTranslations('common');
+  const ta = await getTranslations('axes');
+
   const sortedPrices = [...product.prices].sort((a, b) => a.price - b.price);
   const cheapestPrice = sortedPrices[0];
   const originalPrice = cheapestPrice?.originalPrice;
@@ -50,11 +60,11 @@ export default async function ProductPage({ params }: Props) {
 
   const scores = product.verdict
     ? [
-        { ar: 'الأمان', icon: 'ti-shield-check', val: product.verdict.safetyScore },
-        { ar: 'الجودة', icon: 'ti-award', val: product.verdict.qualityScore },
-        { ar: 'التقييمات', icon: 'ti-star', val: product.verdict.reviewsScore },
-        { ar: 'السعر', icon: 'ti-tag', val: product.verdict.priceScore },
-        { ar: 'القيمة طويلة المدى', icon: 'ti-infinity', val: product.verdict.longTermScore },
+        { label: ta('safety'), icon: 'ti-shield-check', val: product.verdict.safetyScore },
+        { label: ta('quality'), icon: 'ti-award', val: product.verdict.qualityScore },
+        { label: ta('reviews'), icon: 'ti-star', val: product.verdict.reviewsScore },
+        { label: ta('price'), icon: 'ti-tag', val: product.verdict.priceScore },
+        { label: ta('longTerm'), icon: 'ti-infinity', val: product.verdict.longTermScore },
       ]
     : [];
 
@@ -75,11 +85,11 @@ export default async function ProductPage({ params }: Props) {
     <main>
       {/* Breadcrumbs */}
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pt-6">
-        <nav aria-label="مسار التنقل" className="text-[12px] text-stone">
+        <nav aria-label={tc('breadcrumbLabel')} className="text-[12px] text-stone">
           <ol className="flex items-center gap-1">
             <li>
               <Link href="/" className="hover:text-charcoal">
-                الرئيسية
+                {tc('home')}
               </Link>
             </li>
             <li aria-hidden="true" className="opacity-50">
@@ -102,6 +112,68 @@ export default async function ProductPage({ params }: Props) {
             </li>
           </ol>
         </nav>
+
+        {/* Structured Data */}
+        <JsonLd
+          data={[
+            {
+              '@context': 'https://schema.org',
+              '@type': 'Product',
+              name,
+              description: description || undefined,
+              image: product.imageUrl || undefined,
+              brand: product.brand
+                ? { '@type': 'Brand', name: product.brand }
+                : undefined,
+              aggregateRating: product.verdict
+                ? {
+                    '@type': 'AggregateRating',
+                    ratingValue: product.verdict.overallScore,
+                    bestRating: 100,
+                    worstRating: 0,
+                    ratingCount: product.reviewSummary?.totalReviews || 0,
+                  }
+                : undefined,
+              offers: cheapestPrice
+                ? {
+                    '@type': 'Offer',
+                    price: cheapestPrice.price,
+                    priceCurrency: 'SAR',
+                    availability: 'https://schema.org/InStock',
+                    seller: cheapestPrice.store?.name || undefined,
+                  }
+                : undefined,
+            },
+            {
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: tc('home'),
+                  item: BASE_URL,
+                },
+                ...(product.category
+                  ? [
+                      {
+                        '@type': 'ListItem',
+                        position: 2,
+                        name: product.category.name,
+                        item: `${BASE_URL}/categories/${product.category.slug}`,
+                      },
+                    ]
+                  : []),
+                {
+                  '@type': 'ListItem',
+                  position: product.category ? 3 : 2,
+                  name,
+                  item: `${BASE_URL}/${locale}/products/${product.slug}`,
+                },
+              ],
+            },
+          ]}
+        />
       </div>
 
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-6 grid lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-12">
@@ -119,7 +191,7 @@ export default async function ProductPage({ params }: Props) {
           <div className="grid grid-cols-4 gap-3 mt-4">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className={`bg-linen rounded-lg p-3 ${i === 0 ? 'ring-1 ring-sage' : ''}`}>
-                <ProductImage width={100} height={100} alt={`زاوية ${i + 1}`} radius={6} />
+                <ProductImage width={100} height={100} alt={t('angle', { n: i + 1 })} radius={6} />
               </div>
             ))}
           </div>
@@ -128,11 +200,13 @@ export default async function ProductPage({ params }: Props) {
         {/* INFO COLUMN */}
         <div>
           <div className="flex items-center gap-2">
-            <CategoryTag>{product.category?.name || 'منتج'}</CategoryTag>
-            <span className="text-[11px] text-stone">العلامة: {product.brand || '-'}</span>
+            <CategoryTag>{product.category?.name || tc('product')}</CategoryTag>
+            <span className="text-[11px] text-stone">{t('brand')} {product.brand || '-'}</span>
           </div>
           <h1 className="text-[24px] md:text-[30px] text-charcoal leading-[1.3] mt-4">{name}</h1>
           {description && <p className="text-[13px] md:text-[14px] text-stone mt-2">{description}</p>}
+
+          <ShareButtons url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com'}/${locale}/products/${product.slug}`} title={name} />
 
           <div className="mt-6">
             {product.verdict && variant ? (
@@ -144,7 +218,7 @@ export default async function ProductPage({ params }: Props) {
             ) : (
               <div className="bg-stone/10 rounded-xl p-5 text-center text-stone">
                 <i className="ti ti-clock-hour-4 text-[22px] mb-2 block"></i>
-                <span className="text-[14px]">لم يُراجع بعد</span>
+                <span className="text-[14px]">{t('notReviewed')}</span>
               </div>
             )}
           </div>
@@ -161,17 +235,17 @@ export default async function ProductPage({ params }: Props) {
                     <SarPrice amount={originalPrice} />
                   </span>
                 )}
-                {discountPercent > 0 && <DiscountTag>وفّر {discountPercent}٪</DiscountTag>}
+                {discountPercent > 0 && <DiscountTag>{t('save', { percent: discountPercent })}</DiscountTag>}
               </div>
-              <div className="text-[12px] text-stone mt-1">شامل الضريبة</div>
+              <div className="text-[12px] text-stone mt-1">{t('taxIncluded')}</div>
               <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3">
                 <PrimaryButton full icon="ti-arrow-left" size="lg">
-                  اشتري من {cheapestPrice.store?.name || 'المتجر'}
+                  {t('buyFrom', { store: cheapestPrice.store?.name || tc('store') })}
                 </PrimaryButton>
-                <SecondaryButton>قارني الأسعار</SecondaryButton>
+                <SecondaryButton>{t('comparePrices')}</SecondaryButton>
               </div>
               <p className="text-[11px] text-stone text-center mt-3">
-                إفصاح: نحصل على عمولة بسيطة عند الشراء
+                {t('affiliateDisclosure')}
               </p>
             </div>
           )}
@@ -193,14 +267,14 @@ export default async function ProductPage({ params }: Props) {
       {/* DETAILED RATING + PRICE COMPARISON */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-16 grid md:grid-cols-2 gap-8 md:gap-12">
         <div>
-          <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">التقييم بالتفصيل</h2>
+          <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">{t('detailedRating')}</h2>
           <div className="bg-cream hairline rounded-xl p-5 md:p-6 space-y-5">
             {scores.length > 0 ? (
               scores.map((s, i) => (
                 <div key={i}>
                   <div className="flex items-center text-[14px]">
                     <i className={`ti ${s.icon} text-sage text-[18px] me-2`}></i>
-                    <span className="text-charcoal">{s.ar}</span>
+                    <span className="text-charcoal">{s.label}</span>
                     <span className="ms-auto text-charcoal">{s.val}</span>
                   </div>
                   <div className="mt-2 h-1.5 rounded-full bg-beige overflow-hidden">
@@ -209,13 +283,13 @@ export default async function ProductPage({ params }: Props) {
                 </div>
               ))
             ) : (
-              <p className="text-[13px] text-stone text-center py-4">لا يوجد تقييم مفصل بعد</p>
+              <p className="text-[13px] text-stone text-center py-4">{t('noDetailedRating')}</p>
             )}
           </div>
         </div>
 
         <div>
-          <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">مقارنة الأسعار</h2>
+          <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">{t('priceComparison')}</h2>
           {sortedPrices.length > 0 ? (
             <>
               <div className="hairline rounded-xl overflow-hidden">
@@ -227,11 +301,11 @@ export default async function ProductPage({ params }: Props) {
                     } ${i < sortedPrices.length - 1 ? 'hairline-b' : ''}`}
                   >
                     <span className={i === 0 ? 'text-verdict-good-text' : 'text-charcoal'}>
-                      {s.store?.name || 'متجر'}
+                      {s.store?.name || tc('store')}
                     </span>
                     {i === 0 && (
                       <span className="ms-2 text-[11px] bg-verdict-good-border/15 text-verdict-good-text px-2 py-[1px] rounded-full">
-                        الأفضل
+                        {t('bestPrice')}
                       </span>
                     )}
                     <span className={`ms-auto ${i === 0 ? 'text-verdict-good-text' : 'text-charcoal'}`}>
@@ -240,11 +314,11 @@ export default async function ProductPage({ params }: Props) {
                   </div>
                 ))}
               </div>
-              <p className="text-[11px] text-stone mt-3">الأسعار قد تتغير.</p>
+              <p className="text-[11px] text-stone mt-3">{t('pricesMayChange')}</p>
             </>
           ) : (
             <p className="text-[13px] text-stone text-center py-4 bg-cream hairline rounded-xl">
-              لا توجد أسعار متاحة
+              {t('noPrices')}
             </p>
           )}
         </div>
@@ -256,7 +330,7 @@ export default async function ProductPage({ params }: Props) {
           <div className="bg-verdict-good-bg rounded-xl p-5 md:p-6">
             <div className="flex items-center gap-2 text-verdict-good-text text-[14px] mb-3">
               <i className="ti ti-plus text-[18px]"></i>
-              <span>المميزات</span>
+              <span>{t('pros')}</span>
             </div>
             <ul className="space-y-2 text-[13px] text-verdict-good-text/95">
               {(hasConditions
@@ -273,7 +347,7 @@ export default async function ProductPage({ params }: Props) {
           <div className="bg-verdict-bad-bg rounded-xl p-5 md:p-6">
             <div className="flex items-center gap-2 text-verdict-bad-text text-[14px] mb-3">
               <i className="ti ti-alert-triangle text-[18px]"></i>
-              <span>انتبهي</span>
+              <span>{t('cons')}</span>
             </div>
             <ul className="space-y-2 text-[13px] text-verdict-bad-text/95">
               {(hasReviewCons ? reviewCons : [])?.map((t, i) => (
@@ -284,7 +358,7 @@ export default async function ProductPage({ params }: Props) {
               )) || (
                 <li className="flex gap-2">
                   <span className="text-verdict-bad-border mt-[2px]">•</span>
-                  <span>لا توجد ملاحظات سلبية مسجلة</span>
+                  <span>{t('noCons')}</span>
                 </li>
               )}
             </ul>
@@ -303,7 +377,7 @@ export default async function ProductPage({ params }: Props) {
       {/* ALTERNATIVES */}
       {related.length > 0 && (
         <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-16">
-          <SectionHead>بدائل قد تناسبك</SectionHead>
+          <SectionHead>{t('alternatives')}</SectionHead>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
             {related.map((p: Product) => {
               const pName = getLocalizedName(p, locale);

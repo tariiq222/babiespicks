@@ -37,9 +37,11 @@ export async function SiteFooter() {
         <div>
           <div className="text-charcoal mb-3">{t('followUs')}</div>
           <ul className="space-y-2 text-stone">
-            <li><a href="#" className="hover:text-charcoal">{t('instagram')}</a></li>
-            <li><a href="#" className="hover:text-charcoal">{t('tiktok')}</a></li>
-            <li><a href="#" className="hover:text-charcoal">{t('snapchat')}</a></li>
+            <li><a href="https://instagram.com/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('instagram')}</a></li>
+            <li><a href="https://tiktok.com/@babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('tiktok')}</a></li>
+            <li><a href="https://snapchat.com/add/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('snapchat')}</a></li>
+            <li><a href="https://t.me/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('telegram')}</a></li>
+            <li><a href="https://x.com/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('twitter')}</a></li>
             <li><Link href="#newsletter" className="hover:text-charcoal">{t('newsletter')}</Link></li>
           </ul>
         </div>
