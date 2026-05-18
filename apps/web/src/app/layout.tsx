@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   authors: [{ name: 'BabiesPicks' }],
   creator: 'BabiesPicks',
   publisher: 'BabiesPicks',
+  themeColor: '#6B8E7F',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'BabiesPicks',
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
