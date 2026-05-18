@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ArabClicksService } from './networks/arabclicks.service';
+import { AdmitadService } from './networks/admitad.service';
 
 export interface ClickStatsDto {
   totalClicks: number;
@@ -14,6 +15,7 @@ export class AffiliateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly arabClicks: ArabClicksService,
+    private readonly admitad: AdmitadService,
   ) {}
 
   async getBestPrice(
@@ -62,9 +64,7 @@ export class AffiliateService {
       });
 
       if (price?.url) {
-        const resolvedUrl = this.arabClicks.isArabClicksStore(price.store)
-          ? this.arabClicks.generateDeepLink(price.url)
-          : price.url;
+        const resolvedUrl = this.resolveAffiliateUrl(price.url, price.store);
         return {
           url: resolvedUrl,
           storeId: price.storeId,
@@ -76,13 +76,13 @@ export class AffiliateService {
 
     const best = await this.getBestPrice(productId);
     if (best) {
-      // Re-fetch store network for best-price result to apply ArabClicks if needed
+      // Re-fetch store network for best-price result to apply affiliate wrapping if needed
       const store = await this.prisma.store.findUnique({
         where: { id: best.storeId },
         select: { affiliateNetwork: true },
       });
-      if (store && this.arabClicks.isArabClicksStore(store)) {
-        best.url = this.arabClicks.generateDeepLink(best.url);
+      if (store) {
+        best.url = this.resolveAffiliateUrl(best.url, store);
       }
       return best;
     }
@@ -90,6 +90,23 @@ export class AffiliateService {
     throw new NotFoundException(
       `No affiliate URL found for product ${productId}`,
     );
+  }
+
+  /**
+   * Resolves the final affiliate URL for a given raw product URL and store.
+   * Applies network-specific deep link wrapping based on the store's affiliateNetwork.
+   */
+  private resolveAffiliateUrl(
+    rawUrl: string,
+    store: { affiliateNetwork: string | null },
+  ): string {
+    if (this.arabClicks.isArabClicksStore(store)) {
+      return this.arabClicks.generateDeepLink(rawUrl);
+    }
+    if (this.admitad.isAdmitadStore(store)) {
+      return this.admitad.generateDeepLink(rawUrl);
+    }
+    return rawUrl;
   }
 
   async getClickStats(
