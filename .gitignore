@@ -34,6 +34,9 @@ apps/api/prisma/migrations/*.sql.bak
 # MinIO data
 minio-data/
 
+# Uploaded images
+uploads/
+
 # Sentry
 .sentryclirc
 apps/api/.env

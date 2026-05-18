@@ -1,7 +1,6 @@
-import { Controller, Post, Get, Body, Param, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { Controller, Post, Get, Body, HttpCode } from '@nestjs/common';
+import { NewsletterService } from './newsletter.service';
 import { IsEmail, IsOptional, IsString } from 'class-validator';
-import { randomBytes } from 'crypto';
 
 class SubscribeDto {
   @IsEmail()
@@ -18,25 +17,23 @@ class SubscribeDto {
 
 @Controller('newsletter')
 export class NewsletterController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly newsletterService: NewsletterService) {}
 
   @Post('subscribe')
+  @HttpCode(200)
   async subscribe(@Body() dto: SubscribeDto) {
-    const existing = await this.prisma.$queryRaw`
-      SELECT id FROM product_translations WHERE locale = 'ar' LIMIT 1
-    `;
+    const result = await this.newsletterService.subscribe(dto.email, dto.name, dto.locale);
 
-    // Simple email storage (newsletter_subscribers table not in current schema)
-    // For now, store in agent_jobs as a tracking mechanism
-    await this.prisma.agentJob.create({
-      data: {
-        agentName: 'newsletter-subscribe',
-        status: 'COMPLETED',
-        input: { email: dto.email, name: dto.name, locale: dto.locale },
-        completedAt: new Date(),
-      },
-    });
+    if (result.duplicate) {
+      return { success: true, message: 'already_subscribed', duplicate: true };
+    }
 
-    return { success: true, message: 'تم الاشتراك بنجاح' };
+    return { success: true, message: 'subscribed', duplicate: false };
+  }
+
+  @Get('count')
+  async getCount() {
+    const count = await this.newsletterService.getSubscriberCount();
+    return { count };
   }
 }

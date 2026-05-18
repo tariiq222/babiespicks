@@ -234,7 +234,8 @@
     "faqPrices": "Are prices up to date?",
     "faqPricesA": "We try to update prices regularly, but they may change. We recommend checking the product price at the store before purchasing.",
     "faqSuggest": "Can I suggest a product for review?",
-    "faqSuggestA": "Yes! We welcome your suggestions. You can reach us through the \"Contact Us\" page."
+    "faqSuggestA": "Yes! We welcome your suggestions. You can reach us through the \"Contact Us\" page.",
+    "browseAllProducts": "Browse all {category} products"
   },
   "newsletter": {
     "subscribersOnly": "Subscribers Only",
@@ -248,7 +249,19 @@
     "joinText": "Join <highlight>+1,200 Saudi moms</highlight> to get the best deals and new reviews every week.",
     "emailPlaceholder": "Your email",
     "subscribe": "Subscribe free",
-    "privacyNote": "We respect your privacy. Unsubscribe anytime."
+    "privacyNote": "We respect your privacy. Unsubscribe anytime.",
+    "leadMagnetTitle": "Get our free Top 10 Baby Products Guide 2026!",
+    "leadMagnetSubtitle": "Your complete guide to choosing the best products for your baby — based on safety, quality, and price.",
+    "leadMagnetBenefit1": "Honest reviews from Saudi moms",
+    "leadMagnetBenefit2": "Instant price drop alerts",
+    "leadMagnetBenefit3": "Exclusive offers for subscribers only",
+    "leadMagnetDownload": "Download the free guide",
+    "bannerTitle": "Get our free Top 10 Baby Products Guide 2026!",
+    "bannerEmailPlaceholder": "Your email...",
+    "bannerCta": "Subscribe",
+    "bannerDismiss": "Close",
+    "subscriberCount": "+1,000 moms",
+    "alreadySubscribed": "Already subscribed"
   },
   "about": {
     "tag": "About Us",
@@ -384,6 +397,14 @@
     "faqCta": "Looking for answers?",
     "faqCtaDesc": "Check our FAQ",
     "faqCtaLink": "Browse FAQ"
+  },
+  "related": {
+    "title": "Related Content",
+    "bestList": "Best List",
+    "guide": "Buying Guide",
+    "category": "Category",
+    "product": "Product",
+    "view": "View"
   },
   "faq": {
     "title": "FAQ",

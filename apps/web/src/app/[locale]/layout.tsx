@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { SiteHeader } from '@/shared/components/site-header';
 import { SiteFooter } from '@/shared/components/site-footer';
+import { LeadMagnetBanner } from '@/shared/components/lead-magnet-banner';
 import { GlitchTipInit } from '@/shared/components/glitchtip-init';
 import Script from 'next/script';
 
@@ -58,6 +59,7 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <SiteHeader />
           {children}
+          <LeadMagnetBanner />
           <SiteFooter />
         </NextIntlClientProvider>
       </body>

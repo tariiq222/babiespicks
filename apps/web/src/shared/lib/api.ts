@@ -86,3 +86,36 @@ export async function searchProducts(query: string, locale = 'ar'): Promise<{ da
   if (!res.ok) return { data: [], query, total: 0 };
   return res.json();
 }
+
+export interface ContentPage {
+  id: string;
+  type: 'BEST_LIST' | 'PRODUCT_REVIEW' | 'BUYING_GUIDE';
+  slug: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  categorySlug: string | null;
+  locale: string;
+  publishedAt: string | null;
+}
+
+export async function getContentPages(locale = 'ar'): Promise<ContentPage[]> {
+  const res = await fetch(`${API_URL}/content-pages?locale=${locale}`, {
+    next: { revalidate: 3600 },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getRelatedContentForProduct(productSlug: string, categorySlug: string | null, locale = 'ar'): Promise<{ bestLists: ContentPage[]; guides: ContentPage[] }> {
+  const [allPages] = await Promise.all([getContentPages(locale)]);
+  const pages = allPages.filter((p) => p.locale === locale || p.locale === 'ar');
+  const bestLists = pages.filter((p) => p.type === 'BEST_LIST' && p.categorySlug === categorySlug);
+  const guides = pages.filter((p) => p.type === 'BUYING_GUIDE' && p.categorySlug === categorySlug);
+  return { bestLists, guides };
+}
+
+export async function getRelatedContentForCategory(categorySlug: string, locale = 'ar'): Promise<ContentPage[]> {
+  const pages = await getContentPages(locale);
+  return pages.filter((p) => p.type === 'BEST_LIST' && p.categorySlug === categorySlug);
+}

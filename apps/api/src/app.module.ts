@@ -11,6 +11,7 @@ import { CronModule } from './features/cron/cron.module';
 import { NewsletterModule } from './features/newsletter/newsletter.module';
 import { AdminModule } from './features/admin/admin.module';
 import { CouponsModule } from './features/coupons/coupons.module';
+import { ImagesModule } from './infrastructure/images/images.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { CouponsModule } from './features/coupons/coupons.module';
     NewsletterModule,
     AdminModule,
     CouponsModule,
+    ImagesModule,
     CoordinatorModule,
   ],
   controllers: [AppController],

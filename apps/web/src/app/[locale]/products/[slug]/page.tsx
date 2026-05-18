@@ -7,6 +7,7 @@ import {
   getVerdictVariant,
   getLocalizedName,
   getLocalizedDesc,
+  getRelatedContentForProduct,
 } from '@/shared/lib/api';
 import type { Product } from '@/shared/lib/api';
 import { VerdictPill, VerdictCard } from '@/shared/components/verdict-pill';
@@ -17,6 +18,7 @@ import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
 import { ShareButtons } from '@/shared/components/share-buttons';
 import { JsonLd } from '@/shared/components/json-ld';
+import { RelatedContent } from '@/shared/components/related-content';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
@@ -80,6 +82,27 @@ export default async function ProductPage({ params }: Props) {
         .filter((p: Product) => p.slug !== product.slug)
         .slice(0, 4)
     : [];
+
+  const { bestLists, guides } = await getRelatedContentForProduct(
+    product.slug,
+    product.category?.slug ?? null,
+    locale,
+  );
+
+  const relatedContentItems = [
+    ...bestLists.map((bl) => ({
+      title: bl.title,
+      href: `/best/${bl.slug}`,
+      type: 'best-list' as const,
+      image: bl.imageUrl ?? undefined,
+    })),
+    ...guides.map((g) => ({
+      title: g.title,
+      href: `/best/${g.slug}`,
+      type: 'guide' as const,
+      image: g.imageUrl ?? undefined,
+    })),
+  ];
 
   return (
     <main>
@@ -419,6 +442,9 @@ export default async function ProductPage({ params }: Props) {
           </div>
         </section>
       )}
+
+      {/* RELATED CONTENT */}
+      {relatedContentItems.length > 0 && <RelatedContent items={relatedContentItems} />}
     </main>
   );
 }
