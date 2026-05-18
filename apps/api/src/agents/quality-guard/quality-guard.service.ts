@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { chat } from '../../infrastructure/openrouter';
 
 export interface QualityCheckResult {
@@ -19,6 +20,8 @@ export interface QualityIssue {
 export class QualityGuardService {
   private readonly logger = new Logger(QualityGuardService.name);
 
+  constructor(private readonly prisma: PrismaService) {}
+
   async checkContent(content: {
     titleAr: string;
     titleEn: string;
@@ -31,6 +34,7 @@ export class QualityGuardService {
       model: 'google/gemini-2.5-flash',
       jsonMode: true,
       maxTokens: 1000,
+      temperature: 0.1,
       messages: [
         {
           role: 'system',
@@ -62,6 +66,20 @@ FAIL (passed=false) if any "error" severity issues exist.`,
     });
 
     const parsed: QualityCheckResult = JSON.parse(result.content);
+
+    // Log agent job
+    await this.prisma.agentJob.create({
+      data: {
+        agentName: 'quality-guard',
+        status: 'COMPLETED',
+        output: parsed as any,
+        tokensUsed: result.cost.totalTokens,
+        costUsd: result.cost.costUsd,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      },
+    });
+
     this.logger.log(`Quality: ${parsed.passed ? 'PASS' : 'FAIL'} (${parsed.score}/100, ${parsed.issues.length} issues)`);
     return parsed;
   }

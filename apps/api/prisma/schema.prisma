@@ -32,6 +32,8 @@ enum CouponStatus {
   ACTIVE
   EXPIRED
   NEEDS_REVIEW
+  USED_UP
+  INVALID
 }
 
 enum JobStatus {
@@ -240,7 +242,11 @@ model Coupon {
   status          CouponStatus @default(ACTIVE)
   validFrom       DateTime?
   validUntil      DateTime?
+  expiredReason   String?
+  totalClicks     Int          @default(0)
+  verified        Boolean      @default(false)
   createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([storeId])
   @@index([status])
@@ -296,4 +302,16 @@ model PublishedPost {
 
   @@index([contentPageId])
   @@map("published_posts")
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("feature_flags")
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
+import { CouponsService } from '../coupons/coupons.service';
 
 @Injectable()
 export class CronService {
@@ -10,6 +11,7 @@ export class CronService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly coordinator: CoordinatorService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   // Re-scrape prices and data for products with sourceUrl every 6 hours
@@ -67,6 +69,18 @@ export class CronService {
     });
 
     this.logger.log(`Cleaned up ${result.count} old affiliate clicks`);
+  }
+
+  // Expire coupons whose validUntil has passed — runs daily at 1 AM
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  async expireOldCoupons() {
+    this.logger.log('Running coupon expiration job...');
+    try {
+      const result = await this.couponsService.expireOldCoupons();
+      this.logger.log(`Coupon expiration complete — expired: ${result.expiredCount}`);
+    } catch (error) {
+      this.logger.error(`Coupon expiration job failed: ${(error as Error).message}`);
+    }
   }
 
   // Daily stats at midnight

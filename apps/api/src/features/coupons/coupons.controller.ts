@@ -25,6 +25,11 @@ export class CouponsController {
     return this.couponsService.findAll(storeId, status);
   }
 
+  @Get('stats')
+  getStats() {
+    return this.couponsService.getStats();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.couponsService.findOne(id);

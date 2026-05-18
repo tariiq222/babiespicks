@@ -10,6 +10,7 @@ interface ChatOptions {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
   jsonMode?: boolean;
   maxTokens?: number;
+  temperature?: number;
 }
 
 export interface CostInfo {
@@ -17,7 +18,14 @@ export interface CostInfo {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  costUsd: number;
 }
+
+const COST_PER_1K: Record<string, { input: number; output: number }> = {
+  'anthropic/claude-sonnet-4': { input: 0.003, output: 0.015 },
+  'google/gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
+  'zhipu/glm-4.5-air': { input: 0.0001, output: 0.0004 },
+};
 
 let client: OpenAI | null = null;
 
@@ -50,19 +58,30 @@ export async function chat(opts: ChatOptions): Promise<{
     messages: opts.messages,
     ...(opts.jsonMode && { response_format: { type: 'json_object' } }),
     ...(opts.maxTokens && { max_tokens: opts.maxTokens }),
+    ...(opts.temperature !== undefined && { temperature: opts.temperature }),
   });
 
   const choice = response.choices?.[0];
   const content = choice?.message?.content ?? '';
   const usage = response.usage;
 
+  const promptTokens = usage?.prompt_tokens ?? 0;
+  const completionTokens = usage?.completion_tokens ?? 0;
+  const totalTokens = usage?.total_tokens ?? 0;
+
+  const rate = COST_PER_1K[opts.model] ?? { input: 0, output: 0 };
+  const costUsd =
+    (promptTokens / 1000) * rate.input +
+    (completionTokens / 1000) * rate.output;
+
   return {
     content,
     cost: {
       model: opts.model,
-      promptTokens: usage?.prompt_tokens ?? 0,
-      completionTokens: usage?.completion_tokens ?? 0,
-      totalTokens: usage?.total_tokens ?? 0,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      costUsd,
     },
   };
 }

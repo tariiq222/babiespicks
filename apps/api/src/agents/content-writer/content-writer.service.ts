@@ -53,15 +53,20 @@ export class ContentWriterService {
       model: 'anthropic/claude-sonnet-4',
       jsonMode: true,
       maxTokens: 4000,
+      temperature: 0.7,
       messages: [
         {
           role: 'system',
           content: `You write SEO-optimized bilingual content for BabiesPicks, a Saudi baby product review platform.
-Write content in BOTH Arabic and English in a single response. 
+Write content in BOTH Arabic and English in a single response.
 Arabic should be natural Saudi dialect-friendly (فصحى بسيطة).
 Target: 1500-2500 words per language.
 Include affiliate disclosure at the end.
 Use markdown formatting (##, ###, -, **bold**).
+
+Brand Voice:
+Write in a friendly, knowledgeable mom-to-mom tone. Be direct but warm. Avoid generic filler. Every paragraph should add value.
+Do NOT start with 'في عالم...' or 'مع تزايد...' or generic introductions.
 
 Return JSON:
 {

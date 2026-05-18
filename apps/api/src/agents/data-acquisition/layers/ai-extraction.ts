@@ -32,6 +32,7 @@ export async function extractWithAI(html: string, url: string): Promise<AIExtrac
       model: 'google/gemini-2.5-flash',
       jsonMode: true,
       maxTokens: 1000,
+      temperature: 0.1,
       messages: [
         {
           role: 'system',

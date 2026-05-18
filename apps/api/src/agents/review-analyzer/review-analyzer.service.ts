@@ -43,6 +43,7 @@ export class ReviewAnalyzerService {
       model: 'google/gemini-2.5-flash',
       jsonMode: true,
       maxTokens: 1500,
+      temperature: 0.2,
       messages: [
         {
           role: 'system',
@@ -104,7 +105,7 @@ Red flags: anything about baby safety, choking hazards, toxic materials, allergi
         input: { reviewCount: reviews.length },
         output: analysis as any,
         tokensUsed: result.cost.totalTokens,
-        costUsd: 0, // Gemini Flash is very cheap
+        costUsd: result.cost.costUsd,
         startedAt: new Date(),
         completedAt: new Date(),
       },

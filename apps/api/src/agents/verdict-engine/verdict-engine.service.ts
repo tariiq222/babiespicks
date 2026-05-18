@@ -25,6 +25,32 @@ export class VerdictEngineService {
   async generateVerdict(productId: string): Promise<VerdictResult> {
     this.logger.log(`Generating verdict for product ${productId}`);
 
+    // Check for cached verdict (within 24 hours)
+    const cached = await this.prisma.verdict.findUnique({
+      where: { productId },
+    });
+
+    if (cached) {
+      const hoursSinceUpdate =
+        (Date.now() - cached.updatedAt.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceUpdate < 24) {
+        this.logger.log(`Returning cached verdict for ${productId}`);
+        return {
+          type: cached.type,
+          overallScore: cached.overallScore,
+          safetyScore: cached.safetyScore,
+          qualityScore: cached.qualityScore,
+          reviewsScore: cached.reviewsScore,
+          priceScore: cached.priceScore,
+          longTermScore: cached.longTermScore,
+          reasoningAr: cached.reasoningAr,
+          reasoningEn: cached.reasoningEn,
+          conditionsAr: (cached.conditionsAr as string[] | null) || undefined,
+          conditionsEn: (cached.conditionsEn as string[] | null) || undefined,
+        };
+      }
+    }
+
     // Gather all data
     const product = await this.prisma.product.findUniqueOrThrow({
       where: { id: productId },
@@ -59,11 +85,14 @@ Specs: ${product.specs.map((s) => `${s.key}: ${s.value}`).join(', ') || 'None'}
       model: 'anthropic/claude-sonnet-4',
       jsonMode: true,
       maxTokens: 2000,
+      temperature: 0.3,
       messages: [
         {
           role: 'system',
           content: `You are the verdict engine for BabiesPicks, a Saudi baby product review platform.
 Score each axis 0-10 and provide an overall weighted verdict.
+
+Think step by step before scoring each axis. Consider the evidence carefully and justify your scores.
 
 Axes & Weights:
 - Safety (25%): hazards, certifications, red flags, material safety
@@ -77,6 +106,21 @@ Verdict Types:
 - WORTH_IT_WITH: overall 6.0-7.4 (include conditions)
 - WAIT: overall 4.5-5.9 (price may drop, better alternatives coming)
 - NOT_WORTH_IT: overall < 4.5
+
+Example of good output:
+{
+  "type": "WORTH_IT",
+  "overallScore": 8.2,
+  "safetyScore": 9.0,
+  "qualityScore": 8.5,
+  "reviewsScore": 8.0,
+  "priceScore": 7.5,
+  "longTermScore": 7.0,
+  "reasoningAr": "منتج آمن وموثوق مع تقييمات إيجابية من الأمهات. الجودة ممتازة والسعر مناسب مقارنة بالمنافسين.",
+  "reasoningEn": "A safe and reliable product with positive reviews from mothers. Excellent quality and fairly priced compared to competitors.",
+  "conditionsAr": null,
+  "conditionsEn": null
+}
 
 Return JSON:
 {
@@ -141,7 +185,7 @@ Return JSON:
         status: 'COMPLETED',
         output: verdict as any,
         tokensUsed: result.cost.totalTokens,
-        costUsd: 0,
+        costUsd: result.cost.costUsd,
         startedAt: new Date(),
         completedAt: new Date(),
       },

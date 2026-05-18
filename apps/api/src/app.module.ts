@@ -15,6 +15,7 @@ import { AdminModule } from './features/admin/admin.module';
 import { CouponsModule } from './features/coupons/coupons.module';
 import { ImagesModule } from './infrastructure/images/images.module';
 import { SafetyModule } from './infrastructure/safety/safety.module';
+import { FeatureFlagsModule } from './infrastructure/feature-flags/feature-flags.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SafetyModule } from './infrastructure/safety/safety.module';
     CouponsModule,
     ImagesModule,
     SafetyModule,
+    FeatureFlagsModule,
     CoordinatorModule,
   ],
   controllers: [AppController],

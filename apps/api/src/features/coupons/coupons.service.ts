@@ -72,8 +72,12 @@ export class CouponsService {
   async remove(id: string) {
     await this.findOne(id);
 
-    return this.prisma.coupon.delete({
+    return this.prisma.coupon.update({
       where: { id },
+      data: {
+        status: CouponStatus.EXPIRED,
+        expiredReason: 'manual_removal',
+      },
       include: { store: true },
     });
   }
@@ -84,11 +88,75 @@ export class CouponsService {
     const result = await this.prisma.coupon.updateMany({
       where: {
         validUntil: { lt: now },
-        status: { not: CouponStatus.EXPIRED },
+        status: { notIn: [CouponStatus.EXPIRED, CouponStatus.INVALID, CouponStatus.USED_UP] },
       },
-      data: { status: CouponStatus.EXPIRED },
+      data: {
+        status: CouponStatus.EXPIRED,
+        expiredReason: 'date_passed',
+      },
     });
 
     return { expiredCount: result.count };
+  }
+
+  async getStats() {
+    const [statusGroups, byStore] = await Promise.all([
+      this.prisma.coupon.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      this.prisma.coupon.groupBy({
+        by: ['storeId'],
+        _count: { _all: true },
+        where: { status: CouponStatus.ACTIVE },
+      }),
+    ]);
+
+    const countMap: Record<string, number> = {};
+    let total = 0;
+    for (const group of statusGroups) {
+      countMap[group.status] = group._count._all;
+      total += group._count._all;
+    }
+
+    // Fetch store names for the by-store breakdown
+    const storeIds = byStore.map((g) => g.storeId);
+    const stores = storeIds.length
+      ? await this.prisma.store.findMany({
+          where: { id: { in: storeIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const storeNameMap = Object.fromEntries(stores.map((s) => [s.id, s.name]));
+
+    // Full active count per store (already filtered to ACTIVE above)
+    const byStoreResult = byStore.map((g) => ({
+      storeId: g.storeId,
+      storeName: storeNameMap[g.storeId] ?? g.storeId,
+      activeCount: g._count._all,
+    }));
+
+    // Total per-store count (all statuses) — a second groupBy
+    const byStoreAll = await this.prisma.coupon.groupBy({
+      by: ['storeId'],
+      _count: { _all: true },
+      where: { storeId: { in: storeIds.length ? storeIds : undefined } },
+    });
+    const storeTotalMap: Record<string, number> = Object.fromEntries(
+      byStoreAll.map((g) => [g.storeId, g._count._all]),
+    );
+
+    return {
+      total,
+      active: countMap[CouponStatus.ACTIVE] ?? 0,
+      expired: countMap[CouponStatus.EXPIRED] ?? 0,
+      needsReview: countMap[CouponStatus.NEEDS_REVIEW] ?? 0,
+      usedUp: countMap[CouponStatus.USED_UP] ?? 0,
+      invalid: countMap[CouponStatus.INVALID] ?? 0,
+      byStore: byStoreResult.map((s) => ({
+        ...s,
+        count: storeTotalMap[s.storeId] ?? s.activeCount,
+      })),
+    };
   }
 }
