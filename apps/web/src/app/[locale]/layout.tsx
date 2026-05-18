@@ -3,8 +3,10 @@ import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { PublicShell } from '@/shared/components/public-shell';
+import { SiteHeader } from '@/shared/components/site-header';
+import { SiteFooter } from '@/shared/components/site-footer';
+import { LeadMagnetBanner } from '@/shared/components/lead-magnet-banner';
 import { GlitchTipInit } from '@/shared/components/glitchtip-init';
-import { HtmlLangSetter } from '@/shared/components/html-lang-setter';
 import Script from 'next/script';
 
 export default async function LocaleLayout({
@@ -24,7 +26,6 @@ export default async function LocaleLayout({
 
   return (
     <>
-      <HtmlLangSetter locale={locale} />
       <GlitchTipInit />
       <Script
         src="https://www.googletagmanager.com/gtag/js?id=G-89JKJ8W16L"
@@ -39,7 +40,13 @@ export default async function LocaleLayout({
         `}
       </Script>
       <NextIntlClientProvider messages={messages}>
-        <PublicShell>{children}</PublicShell>
+        <PublicShell
+          header={<SiteHeader />}
+          footer={<SiteFooter />}
+          banner={<LeadMagnetBanner />}
+        >
+          {children}
+        </PublicShell>
       </NextIntlClientProvider>
     </>
   );

@@ -1,10 +1,17 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import { SiteHeader } from './site-header';
-import { SiteFooter } from './site-footer';
-import { LeadMagnetBanner } from './lead-magnet-banner';
 
-export function PublicShell({ children }: { children: React.ReactNode }) {
+export function PublicShell({
+  children,
+  header,
+  footer,
+  banner,
+}: {
+  children: React.ReactNode;
+  header: React.ReactNode;
+  footer: React.ReactNode;
+  banner: React.ReactNode;
+}) {
   const pathname = usePathname();
   const isAdmin = pathname.includes('/admin');
 
@@ -12,10 +19,10 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <SiteHeader />
+      {header}
       {children}
-      <LeadMagnetBanner />
-      <SiteFooter />
+      {banner}
+      {footer}
     </>
   );
 }
