@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
+import { LogoMark } from './logo-mark';
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -27,11 +28,16 @@ export function SiteHeader() {
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 h-16 flex items-center gap-5">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-9 h-9 rounded-full bg-sage text-cream flex items-center justify-center text-[13px] font-medium font-inter tracking-tight">BP</div>
-          <div className="leading-tight text-right">
-            <div className="text-[14px] text-charcoal">{t('header.logoAr')}</div>
-            <div className="text-[11px] text-stone tracking-wider font-inter">BABIESPICKS</div>
-          </div>
+          <LogoMark size={36} />
+          {locale === 'ar' ? (
+            <div className="leading-tight text-right">
+              <div className="text-[14px] text-charcoal">{t('header.logoAr')}</div>
+            </div>
+          ) : (
+            <div className="leading-tight text-right">
+              <div className="text-[11px] text-stone tracking-wider font-inter">BABIESPICKS</div>
+            </div>
+          )}
         </Link>
 
         {/* Nav */}
@@ -73,14 +79,14 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          {/* Newsletter CTA */}
+          {/* Newsletter CTA — bold with terracotta pulse indicator */}
           <Link
             href="#newsletter"
-            className="hidden sm:inline-flex items-center gap-2 bg-sage text-cream rounded-full px-4 py-[8px] text-[12.5px] hover:bg-sage-hover relative"
+            className="hidden sm:inline-flex items-center gap-2 bg-sage text-cream rounded-full px-5 py-[9px] text-[12.5px] hover:bg-sage-hover relative overflow-hidden group"
           >
-            <span className="absolute top-[6px] right-[6px] w-2 h-2 rounded-full bg-terracotta ring-2 ring-cream"></span>
+            <span className="absolute top-[7px] right-[7px] w-2 h-2 rounded-full bg-terracotta ring-2 ring-cream animate-pulse"></span>
             <i className="ti ti-sparkles text-[14px]"></i>
-            <span>{t('header.newsletter')}</span>
+            <span className="font-medium">{t('header.newsletter')}</span>
           </Link>
 
           {/* Mobile menu */}

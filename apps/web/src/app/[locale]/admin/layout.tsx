@@ -81,7 +81,7 @@ export default function AdminLayout({
         <div className="px-4 py-4 border-b border-beige">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-sage flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-sage flex items-center justify-center flex-shrink-0 shadow-sm">
                 <span className="text-cream font-semibold text-sm">ب</span>
               </div>
               <div>

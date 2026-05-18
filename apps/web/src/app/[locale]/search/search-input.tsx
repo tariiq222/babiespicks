@@ -23,7 +23,7 @@ export function SearchInput({ defaultValue = '' }: { defaultValue?: string }) {
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="bg-transparent flex-1 text-[14px] outline-none text-right placeholder:text-stone/70"
+        className="bg-transparent flex-1 text-[14px] outline-none placeholder:text-stone/70"
         placeholder={t('placeholder')}
         aria-label={t('placeholder')}
         autoFocus

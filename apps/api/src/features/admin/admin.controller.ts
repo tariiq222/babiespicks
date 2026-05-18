@@ -3,6 +3,7 @@ import { CoordinatorService } from '../../agents/coordinator/coordinator.service
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
 import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
+import { CacheService } from '../../infrastructure/cache/cache.service';
 
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
@@ -11,6 +12,7 @@ export class AdminController {
     private readonly coordinator: CoordinatorService,
     private readonly prisma: PrismaService,
     private readonly circuitBreaker: CircuitBreakerService,
+    private readonly cache: CacheService,
   ) {}
 
   // Run product pipeline for a single URL
@@ -276,7 +278,10 @@ export class AdminController {
     await this.prisma.productPrice.deleteMany();
     await this.prisma.productTranslation.deleteMany();
     await this.prisma.product.deleteMany();
-    
+
+    // Invalidate in-memory API cache so homepage reflects empty DB
+    this.cache.invalidate();
+
     return { success: true, message: 'All product data cleared' };
   }
 

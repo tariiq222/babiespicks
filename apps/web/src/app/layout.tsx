@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   creator: 'BabiesPicks',
   publisher: 'BabiesPicks',
   themeColor: '#6B8E7F',
+  icons: {
+    icon: '/babiespicks-logo.png?v=1',
+    shortcut: '/babiespicks-logo.png?v=1',
+    apple: '/babiespicks-logo.png?v=1',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getProducts, getLocalizedName } from '@/shared/lib/api';
 import type { Product } from '@/shared/lib/api';
@@ -46,7 +46,7 @@ export default async function CompareSelectorPage({ params }: Props) {
           <li>
             <Link href="/" className="hover:text-charcoal">{tc('home')}</Link>
           </li>
-          <li aria-hidden="true" className="opacity-50">←</li>
+          <li aria-hidden="true" className="opacity-50"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
           <li aria-current="page" className="text-charcoal">{t('title')}</li>
         </ol>
       </nav>
@@ -79,7 +79,7 @@ export default async function CompareSelectorPage({ params }: Props) {
           {POPULAR_COMPARISONS.map((comp, i) => (
             <Link
               key={i}
-              href={`/${locale}/compare/${comp.slug1}/vs/${comp.slug2}`}
+              href={`/compare/${comp.slug1}/vs/${comp.slug2}`}
               className="bg-cream hairline rounded-xl p-4 flex items-center gap-4 hover:bg-cream-hover transition-colors"
             >
               <div className="flex-1">

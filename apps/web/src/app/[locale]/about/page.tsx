@@ -67,7 +67,7 @@ export default async function AboutPage() {
         </div>
 
         {/* 14-day rule */}
-        <div className="mt-12 bg-verdict-cond-bg rounded-xl p-6 md:p-8" style={{ borderRight: '4px solid #C8924A' }}>
+        <div className="mt-12 bg-verdict-cond-bg rounded-xl p-6 md:p-8">
           <h3 className="text-[18px] text-verdict-cond-text mb-3">{t('fourteenDayRule')}</h3>
           <p className="text-[14px] text-verdict-cond-text/90 leading-[1.8]">
             {t('fourteenDayDesc')}

@@ -81,13 +81,13 @@ export function LeadMagnetBanner({
       aria-label={t('bannerTitle')}
     >
       <div
-        className="bg-charcoal text-cream rounded-2xl px-5 py-4 grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto] gap-4 items-center shadow-2xl"
+        className="mx-auto bg-charcoal text-cream rounded-2xl px-5 py-4 flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center shadow-2xl max-w-5xl"
         style={{ animation: 'slideUp 0.3s ease-out' }}
       >
         {/* Content */}
-        <div className="min-w-0">
+        <div className="min-w-0 flex items-start sm:items-center gap-3 sm:gap-4">
           {!done ? (
-            <form onSubmit={handleSubmit} className="flex items-center gap-2 flex-wrap">
+            <form onSubmit={handleSubmit} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-lg" aria-hidden="true">📋</span>
                 <span className="text-[13px] font-medium leading-tight hidden sm:block">
@@ -100,7 +100,7 @@ export function LeadMagnetBanner({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t('bannerEmailPlaceholder')}
-                className="bg-white/15 hairline rounded-lg px-3 py-[8px] text-[13px] outline-none text-cream placeholder:text-cream/60 flex-1 min-w-[140px] max-w-[200px]"
+                className="bg-white/15 hairline rounded-lg px-3 py-[8px] text-[13px] outline-none text-cream placeholder:text-cream/60 w-40 sm:w-44 shrink-0"
               />
               <button
                 type="submit"

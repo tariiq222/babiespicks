@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 
 export interface RelatedItem {
@@ -30,7 +30,7 @@ export async function RelatedContent({ items }: RelatedContentProps) {
         <h2 className="text-[18px] text-charcoal">{t('title')}</h2>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory scrollbar-hide">
+      <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory no-scrollbar">
         {items.map((item, i) => (
           <Link
             key={i}

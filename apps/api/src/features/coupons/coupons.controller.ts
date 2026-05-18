@@ -20,9 +20,10 @@ export class CouponsController {
   @Get()
   findAll(
     @Query('storeId') storeId?: string,
+    @Query('storeSlug') storeSlug?: string,
     @Query('status') status?: CouponStatus,
   ) {
-    return this.couponsService.findAll(storeId, status);
+    return this.couponsService.findAll(storeId, status, storeSlug);
   }
 
   @Get('stats')
@@ -30,14 +31,14 @@ export class CouponsController {
     return this.couponsService.getStats();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.couponsService.findOne(id);
-  }
-
   @Get('code/:code')
   findByCode(@Param('code') code: string) {
     return this.couponsService.findByCode(code);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.couponsService.findOne(id);
   }
 
   @Post()

@@ -8,10 +8,20 @@ import { UpdateCouponDto } from './dto/update-coupon.dto';
 export class CouponsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(storeId?: string, status?: CouponStatus) {
+  async findAll(storeId?: string, status?: CouponStatus, storeSlug?: string) {
     const where: any = {};
 
-    if (storeId) {
+    // Resolve storeSlug → storeId when storeId is not directly provided
+    if (storeSlug && !storeId) {
+      const store = await this.prisma.store.findUnique({
+        where: { slug: storeSlug },
+        select: { id: true },
+      });
+      if (!store) {
+        throw new NotFoundException(`Store with slug "${storeSlug}" not found`);
+      }
+      where.storeId = store.id;
+    } else if (storeId) {
       where.storeId = storeId;
     }
 

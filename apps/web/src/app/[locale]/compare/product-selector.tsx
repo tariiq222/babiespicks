@@ -18,13 +18,8 @@ interface ProductSelectorProps {
 export function ProductSelectorClient({ products, locale, labels }: ProductSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [a, setA] = useState(searchParams.get('a') || '');
+  const [a, setA] = useState(() => searchParams.get('a') || '');
   const [b, setB] = useState('');
-
-  useEffect(() => {
-    const paramA = searchParams.get('a');
-    if (paramA) setA(paramA);
-  }, [searchParams]);
 
   const handleCompare = () => {
     if (a && b && a !== b) {

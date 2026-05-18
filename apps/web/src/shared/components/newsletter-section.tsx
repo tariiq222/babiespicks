@@ -3,16 +3,40 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
 export function NewsletterSection() {
   const [email, setEmail] = useState('');
   const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const t = useTranslations('newsletter');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    // Optimistic UI — in production this would call the API
-    setDone(true);
+    setLoading(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch(`${API_BASE}/newsletter/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          locale: document.documentElement.lang || 'ar',
+        }),
+      });
+      const data: { success: boolean; message: string; duplicate: boolean } = await res.json();
+      if (res.ok && (data.success || data.duplicate)) {
+        setDone(true);
+      } else {
+        setSubmitError(data.message || 'حدث خطأ، حاول مرة أخرى');
+      }
+    } catch {
+      setSubmitError('حدث خطأ، حاول مرة أخرى');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,17 +108,21 @@ export function NewsletterSection() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={t('emailPlaceholder')}
-                    className="bg-transparent flex-1 px-3 py-[12px] text-[13px] outline-none text-right placeholder:text-stone/70"
+                    className="bg-transparent flex-1 px-3 py-[12px] text-[13px] outline-none placeholder:text-stone/70"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="bg-sage text-cream rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover whitespace-nowrap inline-flex items-center justify-center gap-2"
+                  disabled={loading}
+                  className="bg-sage text-cream rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover whitespace-nowrap inline-flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <i className="ti ti-gift text-[14px]"></i>
-                  <span>{t('leadMagnetDownload')}</span>
+                  <i className={`ti ${loading ? 'ti-loader-2 animate-spin' : 'ti-gift'} text-[14px]`}></i>
+                  <span>{loading ? '...' : t('leadMagnetDownload')}</span>
                 </button>
               </form>
+              {submitError && (
+                <p className="text-[12px] text-red-500 mt-2">{submitError}</p>
+              )}
               <p className="text-[11px] text-stone mt-3 flex items-center gap-1">
                 <i className="ti ti-lock text-[12px]"></i>
                 {t('privacyNote')}

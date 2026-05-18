@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getProduct, getVerdictVariant, getLocalizedName } from '@/shared/lib/api';
 import type { Product } from '@/shared/lib/api';
@@ -121,9 +121,9 @@ export default async function ComparePage({ params }: Props) {
         <nav aria-label={tc('breadcrumbLabel')} className="text-[12px] text-stone">
           <ol className="flex items-center gap-1">
             <li><Link href="/" className="hover:text-charcoal">{tc('home')}</Link></li>
-            <li aria-hidden="true" className="opacity-50">←</li>
-            <li><Link href={`/${locale}/compare`} className="hover:text-charcoal">{t('title')}</Link></li>
-            <li aria-hidden="true" className="opacity-50">←</li>
+            <li aria-hidden="true" className="opacity-50"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
+            <li><Link href="/compare" className="hover:text-charcoal">{t('title')}</Link></li>
+            <li aria-hidden="true" className="opacity-50"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
             <li aria-current="page" className="text-charcoal">{name1} vs {name2}</li>
           </ol>
         </nav>
@@ -191,7 +191,7 @@ export default async function ComparePage({ params }: Props) {
                 </div>
               )}
 
-              <Link href={`/${locale}/products/${slug}`} className="block">
+              <Link href={`/products/${slug}`} className="block">
                 <div className="bg-linen rounded-xl p-6 grid place-items-center mb-4">
                   <ProductImage src={product.imageUrl || undefined} width={200} height={220} alt={name} radius={12} />
                 </div>
@@ -259,7 +259,7 @@ export default async function ComparePage({ params }: Props) {
           ].map(({ product, name, slug, sorted }) => (
             <div key={product.id}>
               <div className="text-[14px] text-charcoal font-medium mb-3 flex items-center gap-2">
-                <Link href={`/${locale}/products/${slug}`} className="hover:text-sage">{name}</Link>
+                <Link href={`/products/${slug}`} className="hover:text-sage">{name}</Link>
               </div>
               <div className="hairline rounded-xl overflow-hidden">
                 {sorted.length > 0 ? (
@@ -330,13 +330,19 @@ export default async function ComparePage({ params }: Props) {
             </p>
             <div className="flex gap-3 mt-5 flex-wrap">
               <Link
-                href={`/${locale}/products/${overallWinnerSlug}`}
+                href={`/products/${overallWinnerSlug}`}
                 className="inline-flex items-center gap-2 bg-sage text-cream rounded-lg px-5 py-3 text-[14px] hover:bg-sage-hover transition-colors"
               >
                 {t('viewWinner')} <i className="ti ti-arrow-left flip-x"></i>
               </Link>
               <Link
-                href={`/${locale}/compare`}
+                href="/compare"
+                className="inline-flex items-center gap-2 border border-sage text-sage rounded-lg px-5 py-3 text-[14px] hover:bg-sage-hover-bg transition-colors"
+              >
+                {t('viewWinner')} <i className="ti ti-arrow-left flip-x"></i>
+              </Link>
+              <Link
+                href="/compare"
                 className="inline-flex items-center gap-2 border border-sage text-sage rounded-lg px-5 py-3 text-[14px] hover:bg-sage-hover-bg transition-colors"
               >
                 {t('compareOther')}

@@ -110,7 +110,7 @@ export class DataAcquisitionService {
     const slug = this.generateSlug(data.name || 'product');
 
     // Find or create store
-    let store = storeSlug
+    const store = storeSlug
       ? await this.prisma.store.findUnique({ where: { slug: storeSlug } })
       : null;
 

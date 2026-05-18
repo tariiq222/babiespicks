@@ -54,9 +54,9 @@
     "copied": "تم النسخ!"
   },
   "home": {
-    "heroTitle": "اختياراتنا لطفلكِ،",
-    "heroTitleAccent": "برأي صادق.",
-    "heroSubtitle": "نراجع كل منتج بخمسة معايير، ونعطيكِ رأياً واضحاً في ثوانٍ — كي تختاري بثقة بعدما ينام طفلكِ.",
+    "heroTitle": "رأي صادق في كل منتج لطفلكِ —",
+    "heroTitleAccent": " يستاهل ولا لا؟",
+    "heroSubtitle": "نراجع منتجات الأطفال والأمومة بخمسة معايير واضحة: الأمان، الجودة، تقييم الأمهات، السعر، والقيمة. قراركِ يصير عندكِ من أول نظرة.",
     "badge": "دليل أمهات السعودية · 2026",
     "searchPlaceholder": "ابحثي عن منتج لطفلكِ...",
     "searchAriaLabel": "ابحثي عن منتج لطفلكِ",
@@ -67,7 +67,7 @@
     "telegramSubtitle": "انضمي مع +420 أم سعودية",
     "telegramButton": "انضمي",
     "trustIndependent": "مراجعة مستقلة",
-    "trustMoms": "+1200 أم سعودية",
+    "trustMoms": "آلاف الأمهات السعوديات",
     "trustAI": "مدعوم بالذكاء الاصطناعي",
     "trustLocal": "أسعار محلية",
     "browseByCategory": "تصفّحي حسب الفئة",
@@ -104,7 +104,11 @@
     "telegramJoin": "انضمي",
     "categoryTagFormula": "حليب أطفال · مرحلة أولى",
     "productUpdated": "حُدّث قبل ساعتين",
-    "productScore": "يستاهل · {score}/100"
+    "productScore": "يستاهل · {score}/100",
+    "verdictCalloutLabel": "مثال على رأي",
+    "verdictCalloutProduct": "حليب أبتاميل المرحلة الأولى · يستاهل 87/100",
+    "verdictCalloutProduct2": "بعض المنتجات · يستاهل بشرط 71/100",
+    "verdictConditional": "يستاهل بشرط"
   },
   "compare": {
     "metaTitle": "قارني بين المنتجات - بيبيز بيكس",

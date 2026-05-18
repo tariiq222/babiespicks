@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { useTranslations } from 'next-intl';
 import { VerdictPill } from '@/shared/components/verdict-pill';
-import { SecondaryButton } from '@/shared/components/buttons';
+
 import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import type { Product } from '@/shared/lib/api';
@@ -31,7 +31,7 @@ export function CategoryProducts({ products, locale }: { products: Product[]; lo
             <button
               key={i}
               onClick={() => setFilter(i)}
-              className={`rounded-full px-4 py-[7px] text-[12px] whitespace-nowrap transition-colors ${
+              className={`rounded-pill px-4 py-[7px] text-[12px] whitespace-nowrap transition-colors ${
                 filter === i ? 'bg-charcoal text-cream' : 'bg-linen text-charcoal hairline'
               }`}
             >

@@ -168,12 +168,9 @@ export function CouponsClient() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStore, setActiveStore] = useState('all');
-  const [locale, setLocale] = useState('ar');
-
-  useEffect(() => {
-    // Detect locale from html dir
-    setLocale(document.dir === 'rtl' ? 'ar' : 'en');
-  }, []);
+  const [locale, setLocale] = useState(() =>
+    typeof document !== 'undefined' && document.dir === 'rtl' ? 'ar' : 'en',
+  );
 
   useEffect(() => {
     const fetchCoupons = async () => {
@@ -183,8 +180,10 @@ export function CouponsClient() {
         if (activeStore !== 'all') params.set('storeSlug', activeStore);
         const res = await fetch(`${API_URL}/coupons?${params.toString()}`);
         if (res.ok) {
-          const data = await res.json();
-          setCoupons(data.data || []);
+          const raw = await res.json();
+          // Backend may return {data: [...]} or raw [...] — handle both flexibly
+          const list = Array.isArray(raw) ? raw : raw?.data ?? [];
+          setCoupons(list);
         } else {
           setCoupons([]);
         }
@@ -200,7 +199,7 @@ export function CouponsClient() {
   return (
     <div>
       {/* Store filter tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide mb-8">
+      <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-8">
         {STORES.map((store) => (
           <button
             key={store.id}

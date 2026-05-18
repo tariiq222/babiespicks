@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: '**.babiespicks.com' },
+      { protocol: 'https', hostname: 'm.media-amazon.com' },
     ],
   },
   compress: true,

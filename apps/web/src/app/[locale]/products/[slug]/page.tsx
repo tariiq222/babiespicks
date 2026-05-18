@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import {
   getProduct,
@@ -56,7 +56,7 @@ export default async function ProductPage({ params }: Props) {
   const t = await getTranslations('product');
   const tc = await getTranslations('common');
   const ta = await getTranslations('axes');
-  const tw = await getTranslations('whatsapp');
+  
 
   const sortedPrices = [...product.prices].sort((a, b) => a.price - b.price);
   const cheapestPrice = sortedPrices[0];
@@ -123,7 +123,7 @@ export default async function ProductPage({ params }: Props) {
               </Link>
             </li>
             <li aria-hidden="true" className="opacity-50">
-              ←
+              <i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i>
             </li>
             {product.category && (
               <>
@@ -133,7 +133,7 @@ export default async function ProductPage({ params }: Props) {
                   </Link>
                 </li>
                 <li aria-hidden="true" className="opacity-50">
-                  ←
+                  <i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i>
                 </li>
               </>
             )}
@@ -238,7 +238,7 @@ export default async function ProductPage({ params }: Props) {
 
           {/* CRO: urgency indicator */}
           <div className="flex items-center gap-1.5 mt-3 text-[12px] text-terracotta">
-            <span>🔥</span>
+            <i className="ti ti-flame text-[14px]" aria-hidden="true"></i>
             <span>
               {locale === 'ar'
                 ? `${urgencyCount} شخصًا شاهدوا هذا المنتج اليوم`
@@ -264,35 +264,9 @@ export default async function ProductPage({ params }: Props) {
 
           <ShareButtons url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com'}/${locale}/products/${product.slug}`} title={name} />
 
-          {/* WhatsApp product inquiry CTA */}
-          <div className="mt-3">
-            <a
-              href={`https://wa.me/966XXXXXXXXX?text=${encodeURIComponent(
-                locale === 'ar'
-                  ? `مرحباً، أبي أسأل عن ${name}`
-                  : `Hi, I have a question about ${name}`
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-[13px] text-[#25D366] hover:text-[#20c05c] transition-colors"
-              aria-label={tw('productInquiryAriaLabel', { name })}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className="w-4 h-4 shrink-0"
-                aria-hidden="true"
-              >
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-              {tw('productInquiry')}
-            </a>
-          </div>
-
           <div className="flex items-center gap-3 mt-4">
             <Link
-              href={`/${locale}/compare?a=${product.slug}`}
+              href={`/compare?a=${product.slug}`}
               className="inline-flex items-center gap-2 border border-sage text-sage rounded-lg px-4 py-2 text-[13px] hover:bg-sage-hover-bg transition-colors"
             >
               <i className="ti ti-arrows-shuffle text-[15px]"></i>
@@ -315,34 +289,40 @@ export default async function ProductPage({ params }: Props) {
             )}
           </div>
 
-          {/* PRICE BLOCK */}
+          {/* PRICE BLOCK — Bold editorial treatment */}
           {cheapestPrice && (
-            <div className="mt-6 bg-cream hairline rounded-xl p-5">
-              <div className="flex items-baseline gap-3 flex-wrap">
-                <span className="text-[28px] md:text-[32px] text-charcoal">
+            <div className="mt-6 bg-cream hairline rounded-xl p-6 relative overflow-hidden">
+              {/* Decorative corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 opacity-10 pointer-events-none" aria-hidden="true">
+                <svg viewBox="0 0 96 96" fill="none">
+                  <path d="M96 0 L96 96 L0 96" stroke="#6B8E7F" strokeWidth="2"/>
+                </svg>
+              </div>
+              <div className="flex items-baseline gap-3 flex-wrap relative">
+                <span className="text-[32px] md:text-[36px] text-charcoal font-semibold leading-none">
                   <SarPrice amount={cheapestPrice.price} />
                 </span>
                 {originalPrice && originalPrice > cheapestPrice.price && (
-                  <span className="text-[14px] text-stone line-through">
+                  <span className="text-[15px] text-stone line-through">
                     <SarPrice amount={originalPrice} />
                   </span>
                 )}
                 {discountPercent > 0 && <DiscountTag>{t('save', { percent: discountPercent })}</DiscountTag>}
               </div>
-              <div className="text-[12px] text-stone mt-1">{t('taxIncluded')}</div>
-              <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3">
+              <div className="text-[12px] text-stone mt-1 relative">{t('taxIncluded')}</div>
+              <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3 relative">
                 <a
                   href={`${API_URL}/go/best/${product.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-sage text-cream rounded-lg transition-colors inline-flex items-center justify-center gap-2 hover:bg-sage-hover active:bg-sage-active px-6 py-[14px] text-[15px] w-full"
+                  className="bg-sage text-cream rounded-lg transition-all inline-flex items-center justify-center gap-2 hover:bg-sage-hover active:bg-sage-active px-6 py-[14px] text-[15px] w-full shadow-sm hover:shadow-md"
                 >
                   <span>{t('buyFrom', { store: cheapestPrice.store?.name || tc('store') })}</span>
-                  <i className="ti ti-arrow-left text-[16px]"></i>
+                  <i className="ti ti-arrow-left flip-x text-[16px]"></i>
                 </a>
                 <SecondaryButton>{t('comparePrices')}</SecondaryButton>
               </div>
-              <p className="text-[11px] text-stone text-center mt-3">
+              <p className="text-[11px] text-stone text-center mt-3 relative">
                 {t('affiliateDisclosure')}
               </p>
             </div>
@@ -365,18 +345,18 @@ export default async function ProductPage({ params }: Props) {
       {/* DETAILED RATING + PRICE COMPARISON */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-16 grid md:grid-cols-2 gap-8 md:gap-12">
         <div>
-          <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5">{t('detailedRating')}</h2>
+          <h2 className="text-[20px] md:text-[22px] text-charcoal mb-5 font-medium">{t('detailedRating')}</h2>
           <div className="bg-cream hairline rounded-xl p-5 md:p-6 space-y-5">
             {scores.length > 0 ? (
               scores.map((s, i) => (
                 <div key={i}>
-                  <div className="flex items-center text-[14px]">
+                  <div className="flex items-center text-[14px] mb-2">
                     <i className={`ti ${s.icon} text-sage text-[18px] me-2`}></i>
-                    <span className="text-charcoal">{s.label}</span>
-                    <span className="ms-auto text-charcoal">{s.val}</span>
+                    <span className="text-charcoal font-medium">{s.label}</span>
+                    <span className="ms-auto text-charcoal font-semibold">{s.val}</span>
                   </div>
-                  <div className="mt-2 h-1.5 rounded-full bg-beige overflow-hidden">
-                    <div className="h-full bg-sage rounded-full" style={{ width: `${s.val}%` }}></div>
+                  <div className="h-2 rounded-full bg-beige overflow-hidden">
+                    <div className="h-full bg-sage rounded-full transition-all" style={{ width: `${s.val}%` }}></div>
                   </div>
                 </div>
               ))

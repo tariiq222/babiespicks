@@ -50,8 +50,10 @@ export class SearchService {
       where.prices = { some: { price: priceCondition } };
     }
 
-    // TODO: inStock filter — ProductPrice schema lacks inStock field
-    // if (inStock) { where.prices = { some: { inStock: true } }; }
+    // inStock filter — merges with any existing price condition
+    if (dto.inStock) {
+      where.prices = { some: { ...(where.prices as any)?.some, inStock: true } };
+    }
 
     return where;
   }
@@ -63,11 +65,9 @@ export class SearchService {
       case 'score_desc':
         return { verdict: { overallScore: 'desc' } };
       case 'price_asc':
-        // TODO: price lives in ProductPrice relation; sorting by it requires
-        // a raw query or a denormalized field. Falling back to createdAt.
-        return { createdAt: 'asc' };
+        return { prices: { _min: { price: 'asc' } } } as any;
       case 'price_desc':
-        return { createdAt: 'desc' };
+        return { prices: { _max: { price: 'desc' } } } as any;
       case 'newest':
       default:
         return { createdAt: 'desc' };

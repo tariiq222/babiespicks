@@ -8,13 +8,13 @@ interface ABTestProps {
 }
 
 export function ABTest({ experimentId, variants }: ABTestProps) {
-  const [variant, setVariant] = useState<string | null>(null);
+  const [variant, setVariant] = useState<string | null>(() =>
+    getVariant(experimentId, Object.keys(variants)),
+  );
 
   useEffect(() => {
-    const v = getVariant(experimentId, Object.keys(variants));
-    setVariant(v);
-    trackImpression(experimentId, v);
-  }, [experimentId]);
+    trackImpression(experimentId, variant ?? '');
+  }, [experimentId, variant]);
 
   if (!variant) return null;
   return <>{variants[variant]}</>;

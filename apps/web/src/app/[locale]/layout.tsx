@@ -5,7 +5,6 @@ import { routing } from '@/i18n/routing';
 import { PublicShell } from '@/shared/components/public-shell';
 import { SiteHeader } from '@/shared/components/site-header';
 import { SiteFooter } from '@/shared/components/site-footer';
-import { LeadMagnetBanner } from '@/shared/components/lead-magnet-banner';
 import { GlitchTipInit } from '@/shared/components/glitchtip-init';
 import Script from 'next/script';
 
@@ -43,7 +42,6 @@ export default async function LocaleLayout({
         <PublicShell
           header={<SiteHeader />}
           footer={<SiteFooter />}
-          banner={<LeadMagnetBanner />}
         >
           {children}
         </PublicShell>

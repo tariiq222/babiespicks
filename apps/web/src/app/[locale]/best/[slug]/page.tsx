@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import {
   getProductsByCategory,
@@ -83,13 +83,13 @@ export default async function BestListPage({ params }: Props) {
             <li>
               <Link href="/" className="hover:text-charcoal">{tc('home')}</Link>
             </li>
-            <li aria-hidden="true" className="opacity-50">←</li>
+            <li aria-hidden="true" className="opacity-50"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
             <li>
               <Link href={`/categories/${slug}`} className="hover:text-charcoal">
                 {categoryName}
               </Link>
             </li>
-            <li aria-hidden="true" className="opacity-50">←</li>
+            <li aria-hidden="true" className="opacity-50"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
             <li aria-current="page" className="text-charcoal">{t('bestPicks')}</li>
           </ol>
         </nav>
@@ -178,7 +178,7 @@ export default async function BestListPage({ params }: Props) {
                     href={`/products/${topProduct.slug}`}
                     className="bg-linen rounded-xl p-5 md:p-6 text-right flex items-center gap-4 hover:bg-linen-hover transition-colors"
                   >
-                    <div className="text-[28px]" aria-hidden="true">🏆</div>
+                    <div aria-hidden="true"><i className="ti ti-trophy text-[28px] text-amber-600"></i></div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[12px] text-stone">{t('bestOverall')}</div>
                       <div className="text-[14px] text-charcoal mt-1 leading-tight">
@@ -196,7 +196,7 @@ export default async function BestListPage({ params }: Props) {
                     href={`/products/${cheapestProduct.slug}`}
                     className="bg-linen rounded-xl p-5 md:p-6 text-right flex items-center gap-4 hover:bg-linen-hover transition-colors"
                   >
-                    <div className="text-[28px]" aria-hidden="true">💰</div>
+                    <div aria-hidden="true"><i className="ti ti-coin text-[28px] text-amber-600"></i></div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[12px] text-stone">{t('bestPrice')}</div>
                       <div className="text-[14px] text-charcoal mt-1 leading-tight">
@@ -214,7 +214,7 @@ export default async function BestListPage({ params }: Props) {
                     href={`/products/${safestProduct.slug}`}
                     className="bg-linen rounded-xl p-5 md:p-6 text-right flex items-center gap-4 hover:bg-linen-hover transition-colors"
                   >
-                    <div className="text-[28px]" aria-hidden="true">🛡️</div>
+                    <div aria-hidden="true"><i className="ti ti-shield-check text-[28px] text-sage"></i></div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[12px] text-stone">{t('safest')}</div>
                       <div className="text-[14px] text-charcoal mt-1 leading-tight">
@@ -283,7 +283,7 @@ export default async function BestListPage({ params }: Props) {
                         </div>
                         <div className="mt-5 inline-flex items-center gap-2 bg-sage text-cream rounded-lg px-4 py-3 text-[14px] hover:bg-sage-hover active:bg-sage-active transition-colors">
                           <span>{t('viewFullReview')}</span>
-                          <i className="ti ti-arrow-left text-[16px]"></i>
+                          <i className="ti ti-arrow-left flip-x text-[16px]"></i>
                         </div>
                       </div>
                     </div>
@@ -376,7 +376,7 @@ export default async function BestListPage({ params }: Props) {
                 </ul>
               </div>
               <div className="bg-lavender rounded-xl p-5">
-                <div className="text-[18px] mb-2">💌</div>
+                <div className="mb-2"><i className="ti ti-mail text-[18px]" aria-hidden="true"></i></div>
                 <h3 className="text-[14px] text-lavender-text">{t('stayUpdated')}</h3>
                 <p className="text-[12px] text-lavender-text/80 mt-2 leading-[1.7]">
                   {t('stayUpdatedDesc')}

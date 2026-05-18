@@ -15,7 +15,7 @@ export function ShareButtons({ url, title }: ShareButtonsProps) {
   const encodedUrl = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(title);
 
-  const whatsappUrl = `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`;
+  
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`;
   const telegramUrl = `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`;
 
@@ -41,15 +41,6 @@ export function ShareButtons({ url, title }: ShareButtonsProps) {
           className="w-9 h-9 rounded-full bg-linen hover:bg-linen-hover flex items-center justify-center text-stone hover:text-charcoal transition-colors"
         >
           <i className="ti ti-brand-x text-[16px]"></i>
-        </a>
-        <a
-          href={whatsappUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="شارك على واتساب"
-          className="w-9 h-9 rounded-full bg-linen hover:bg-linen-hover flex items-center justify-center text-stone hover:text-charcoal transition-colors"
-        >
-          <i className="ti ti-brand-whatsapp text-[16px]"></i>
         </a>
         <a
           href={telegramUrl}

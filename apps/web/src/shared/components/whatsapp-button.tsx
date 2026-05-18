@@ -10,7 +10,9 @@ export function WhatsAppButton() {
   const t = useTranslations('whatsapp');
   const locale = useLocale();
   const [visible, setVisible] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() =>
+    sessionStorage.getItem(STORAGE_KEY) === '1',
+  );
 
   useEffect(() => {
     // Check session storage for dismissal

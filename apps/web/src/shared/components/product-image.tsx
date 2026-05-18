@@ -7,6 +7,10 @@ export function ProductImage({
   height = 120,
   radius = 10,
   priority = false,
+  fill = false,
+  className = '',
+  quality = 90,
+  sizes,
 }: {
   src?: string;
   alt?: string;
@@ -14,25 +18,31 @@ export function ProductImage({
   height?: number;
   radius?: number;
   priority?: boolean;
+  fill?: boolean;
+  className?: string;
+  quality?: number;
+  sizes?: string;
 }) {
   if (src) {
     return (
       <Image
         src={src}
         alt={alt}
-        width={width}
-        height={height}
-        className="object-contain"
+        width={fill ? undefined : width}
+        height={fill ? undefined : height}
+        fill={fill}
+        className={className || 'object-contain'}
         style={{ borderRadius: radius }}
         priority={priority}
-        sizes="(max-width: 768px) 50vw, 25vw"
+        quality={quality}
+        sizes={sizes ?? '(max-width: 768px) 50vw, 25vw'}
       />
     );
   }
 
   return (
     <div
-      className="placeholder-stripe flex items-center justify-center text-[11px] text-stone/50 font-mono"
+      className={`placeholder-stripe flex items-center justify-center text-[11px] text-stone/50 font-mono ${className}`}
       style={{
         width: width >= 500 ? '100%' : width,
         height,

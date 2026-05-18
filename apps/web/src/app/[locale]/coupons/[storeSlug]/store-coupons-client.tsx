@@ -132,8 +132,10 @@ export function StoreCouponsClient({ storeSlug, locale }: StoreCouponsClientProp
       try {
         const res = await fetch(`${API_URL}/coupons?storeSlug=${storeSlug}&status=ACTIVE`);
         if (res.ok) {
-          const data = await res.json();
-          setCoupons(data.data || []);
+          const raw = await res.json();
+          // Backend may return {data: [...]} or raw [...] — handle both flexibly
+          const list = Array.isArray(raw) ? raw : raw?.data ?? [];
+          setCoupons(list);
         } else {
           setCoupons([]);
         }

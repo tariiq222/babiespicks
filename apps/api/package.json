@@ -7,7 +7,7 @@
     "build": "nest build",
     "start": "node dist/main",
     "start:prod": "node dist/main",
-    "lint": "echo 'api lint - setup later'",
+    "lint": "eslint . --ext .ts --ignore-pattern '*.js' --config ../../eslint.config.ts",
     "test": "echo 'api test - setup later'",
     "type-check": "tsc --noEmit",
     "prisma:generate": "prisma generate",

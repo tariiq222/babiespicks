@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import type { Metadata } from 'next';
 import { getAlternates } from '@/shared/lib/metadata';
 import { CouponsClient } from './coupons-client';
@@ -28,7 +28,7 @@ export default async function CouponsPage() {
           <nav aria-label="breadcrumb" className="text-[12px] mb-4 flex items-center gap-1" style={{ color: 'var(--color-cat-hero-text)' }}>
             <ol className="flex items-center gap-1">
               <li><Link href="/" className="hover:text-sage-deep">الرئيسية</Link></li>
-              <li aria-hidden="true" className="opacity-60">←</li>
+              <li aria-hidden="true" className="opacity-60"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
               <li aria-current="page" className="text-sage-deep">الكوبونات</li>
             </ol>
           </nav>

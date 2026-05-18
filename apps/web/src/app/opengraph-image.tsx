@@ -28,12 +28,13 @@ export default function Image() {
             justifyContent: 'center',
             width: 120,
             height: 120,
-            borderRadius: '50%',
+            borderRadius: '22%',
             background: '#6B8E7F',
             color: '#FAF8F5',
             fontSize: 52,
             fontWeight: 700,
             marginBottom: 32,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
           }}
         >
           BP

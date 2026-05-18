@@ -874,8 +874,6 @@ function AgentsTab() {
   const [saveResult, setSaveResult] = useState<Record<string, 'ok' | 'error'>>({});
 
   const fetchSettings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await adminFetch(`${API_BASE}/admin/settings/agents`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1450,8 +1448,6 @@ function CostsTab() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const fetchCosts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await adminFetch(`${API_BASE}/admin/costs`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1637,8 +1633,6 @@ function AffiliateTab() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async (period: number) => {
-    setLoading(true);
-    setError(null);
     try {
       const [statsRes, topRes] = await Promise.all([
         adminFetch(`/affiliate/stats?days=${period}`),

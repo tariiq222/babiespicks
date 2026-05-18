@@ -276,7 +276,7 @@ function TweetCard({ tweet, index }: { tweet: TweetContent; index: number }) {
       <p className="text-sm text-charcoal leading-relaxed whitespace-pre-wrap">{tweet.text}</p>
       {tweet.mediaUrl && (
         <div className="rounded-lg overflow-hidden border border-beige bg-linen h-32">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {/* nextjs img - safe in admin context */}
           <img src={tweet.mediaUrl} alt="صورة التغريدة" className="h-full w-full object-cover" />
         </div>
       )}
