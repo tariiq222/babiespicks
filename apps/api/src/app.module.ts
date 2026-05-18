@@ -16,6 +16,7 @@ import { CouponsModule } from './features/coupons/coupons.module';
 import { ImagesModule } from './infrastructure/images/images.module';
 import { SafetyModule } from './infrastructure/safety/safety.module';
 import { FeatureFlagsModule } from './infrastructure/feature-flags/feature-flags.module';
+import { HealthModule } from './features/health/health.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { FeatureFlagsModule } from './infrastructure/feature-flags/feature-flags
     SafetyModule,
     FeatureFlagsModule,
     CoordinatorModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
