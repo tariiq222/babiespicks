@@ -21,7 +21,7 @@ export interface Product {
     conditionsAr: string[] | null;
     conditionsEn: string[] | null;
   } | null;
-  prices: { price: number; originalPrice: number | null; currency: string; store: { name: string; slug: string } | null }[];
+  prices: { price: number; originalPrice: number | null; currency: string; storeId: string; store: { id: string; name: string; slug: string } | null }[];
   category: { name: string; slug: string } | null;
   specs: { key: string; value: string; locale: string }[];
   reviewSummary: {

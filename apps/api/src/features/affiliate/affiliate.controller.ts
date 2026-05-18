@@ -44,14 +44,19 @@ export class AffiliateController {
       })
       .catch(() => {});
 
-    // Find the product price URL for this store
+    // Find the product price URL for this store (include affiliateNetwork for wrapping)
     const price = await this.prisma.productPrice.findFirst({
       where: { productId, storeId },
       orderBy: { scrapedAt: 'desc' },
+      include: { store: { select: { affiliateNetwork: true, url: true } } },
     });
 
     if (price?.url) {
-      return res.redirect(302, price.url);
+      const redirectResult = await this.affiliateService.getSmartRedirectUrl(
+        productId,
+        storeId,
+      );
+      return res.redirect(302, redirectResult.url);
     }
 
     // Fallback: redirect to store homepage

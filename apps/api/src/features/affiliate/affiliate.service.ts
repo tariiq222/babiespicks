@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ArabClicksService } from './networks/arabclicks.service';
 import { AdmitadService } from './networks/admitad.service';
+import { AmazonAssociatesService } from './networks/amazon.service';
 
 export interface ClickStatsDto {
   totalClicks: number;
@@ -16,6 +17,7 @@ export class AffiliateService {
     private readonly prisma: PrismaService,
     private readonly arabClicks: ArabClicksService,
     private readonly admitad: AdmitadService,
+    private readonly amazon: AmazonAssociatesService,
   ) {}
 
   async getBestPrice(
@@ -105,6 +107,10 @@ export class AffiliateService {
     }
     if (this.admitad.isAdmitadStore(store)) {
       return this.admitad.generateDeepLink(rawUrl);
+    }
+    // Amazon Associates: tag by network designation OR by URL pattern
+    if (this.amazon.isAmazonStore(store) || this.amazon.isAmazonUrl(rawUrl)) {
+      return this.amazon.generateAffiliateUrl(rawUrl);
     }
     return rawUrl;
   }

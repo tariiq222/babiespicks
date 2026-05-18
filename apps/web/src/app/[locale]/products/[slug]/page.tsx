@@ -12,7 +12,7 @@ import {
 import type { Product } from '@/shared/lib/api';
 import { VerdictPill, VerdictCard } from '@/shared/components/verdict-pill';
 import { CategoryTag, DiscountTag } from '@/shared/components/tags';
-import { PrimaryButton, SecondaryButton } from '@/shared/components/buttons';
+import { SecondaryButton } from '@/shared/components/buttons';
 import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
@@ -22,6 +22,7 @@ import { RelatedContent } from '@/shared/components/related-content';
 import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 interface Props {
   params: Promise<{ locale: string; slug: string }>;
@@ -330,9 +331,15 @@ export default async function ProductPage({ params }: Props) {
               </div>
               <div className="text-[12px] text-stone mt-1">{t('taxIncluded')}</div>
               <div className="mt-4 grid sm:grid-cols-[1fr_auto] gap-3">
-                <PrimaryButton full icon="ti-arrow-left" size="lg">
-                  {t('buyFrom', { store: cheapestPrice.store?.name || tc('store') })}
-                </PrimaryButton>
+                <a
+                  href={`${API_URL}/go/best/${product.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-sage text-cream rounded-lg transition-colors inline-flex items-center justify-center gap-2 hover:bg-sage-hover active:bg-sage-active px-6 py-[14px] text-[15px] w-full"
+                >
+                  <span>{t('buyFrom', { store: cheapestPrice.store?.name || tc('store') })}</span>
+                  <i className="ti ti-arrow-left text-[16px]"></i>
+                </a>
                 <SecondaryButton>{t('comparePrices')}</SecondaryButton>
               </div>
               <p className="text-[11px] text-stone text-center mt-3">
@@ -385,9 +392,12 @@ export default async function ProductPage({ params }: Props) {
             <>
               <div className="hairline rounded-xl overflow-hidden">
                 {sortedPrices.map((s, i) => (
-                  <div
+                  <a
                     key={i}
-                    className={`flex items-center px-4 md:px-5 py-4 text-[14px] ${
+                    href={`${API_URL}/go/${product.id}/${s.storeId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center px-4 md:px-5 py-4 text-[14px] transition-opacity hover:opacity-80 ${
                       i === 0 ? 'bg-verdict-good-bg' : 'bg-cream'
                     } ${i < sortedPrices.length - 1 ? 'hairline-b' : ''}`}
                   >
@@ -402,7 +412,7 @@ export default async function ProductPage({ params }: Props) {
                     <span className={`ms-auto ${i === 0 ? 'text-verdict-good-text' : 'text-charcoal'}`}>
                       <SarPrice amount={s.price} />
                     </span>
-                  </div>
+                  </a>
                 ))}
               </div>
               <p className="text-[11px] text-stone mt-3">{t('pricesMayChange')}</p>
