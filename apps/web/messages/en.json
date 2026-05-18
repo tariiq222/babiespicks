@@ -560,6 +560,11 @@
     "googleAnalyticsNote": "Open Google Analytics for real traffic and engagement data.",
     "published": "published",
     "affiliate": "Affiliate",
+    "affiliateTitle": "Affiliate Performance",
+    "affiliateTotalClicks": "Total Clicks",
+    "affiliateByStore": "By Store",
+    "affiliateTopProducts": "Top Products",
+    "affiliateDailyTrend": "Daily Trend",
     "seo": "SEO",
     "refresh": "Refresh"
   },

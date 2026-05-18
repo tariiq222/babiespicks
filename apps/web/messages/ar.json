@@ -559,7 +559,12 @@
     "openGoogleAnalytics": "فتح Google Analytics",
     "googleAnalyticsNote": "افتح Google Analytics لعرض بيانات الزيارات والتفاعل الحقيقية.",
     "published": "منشورة",
-    "affiliate": "التسويق",
+    "affiliate": "الأفلييت",
+    "affiliateTitle": "أداء الأفلييت",
+    "affiliateTotalClicks": "إجمالي النقرات",
+    "affiliateByStore": "حسب المتجر",
+    "affiliateTopProducts": "أكثر المنتجات نقراً",
+    "affiliateDailyTrend": "النقرات اليومية",
     "seo": "SEO",
     "refresh": "تحديث"
   },
