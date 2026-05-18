@@ -44,7 +44,7 @@ export async function getProducts(locale = 'ar', limit = 20): Promise<{ data: Pr
 
 export async function getProduct(slug: string, locale = 'ar'): Promise<Product | null> {
   const res = await fetch(`${API_URL}/products/${slug}?locale=${locale}`, {
-    next: { revalidate: 3600, tags: [`products:${slug}`] },
+    next: { revalidate: 3600, tags: ['products', `products:${slug}`] },
   });
   if (!res.ok) return null;
   return res.json();
@@ -52,7 +52,7 @@ export async function getProduct(slug: string, locale = 'ar'): Promise<Product |
 
 export async function getProductsByCategory(categorySlug: string, locale = 'ar'): Promise<Product[]> {
   const res = await fetch(`${API_URL}/products/category/${categorySlug}?locale=${locale}`, {
-    next: { revalidate: 3600, tags: [`products:category:${categorySlug}`] },
+    next: { revalidate: 3600, tags: ['products', `products:category:${categorySlug}`] },
   });
   if (!res.ok) return [];
   return res.json();
