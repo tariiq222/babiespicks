@@ -17,6 +17,7 @@ import { ShareButtons } from '@/shared/components/share-buttons';
 import { FaqSection } from './faq-section';
 import { JsonLd } from '@/shared/components/json-ld';
 import { RelatedContent } from '@/shared/components/related-content';
+import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
@@ -24,7 +25,7 @@ interface Props {
   params: Promise<{ locale: string; slug: string }>;
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
   const { locale, slug } = await params;
   const products = await getProductsByCategory(slug, locale);
   const categoryName = products[0]?.category?.name || slug;
@@ -32,6 +33,7 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: t('metaTitle', { category: categoryName }),
     description: t('metaDescription', { category: categoryName }),
+    alternates: getAlternates(`/best/${slug}`),
   };
 }
 

@@ -1,64 +1,75 @@
-export default function PrivacyPage() {
+import { getTranslations } from 'next-intl/server';
+import { getAlternates } from '@/shared/lib/metadata';
+
+export async function generateMetadata(): Promise<import('next').Metadata> {
+  return {
+    alternates: getAlternates('/privacy'),
+  };
+}
+
+export default async function PrivacyPage() {
+  const t = await getTranslations('privacy');
+
   return (
     <main>
       <article className="max-w-3xl mx-auto px-5 md:px-8 lg:px-12 py-12 md:py-20 prose-sm">
-        <h1 className="text-[28px] md:text-[36px] text-charcoal leading-[1.3] mb-8">سياسة الخصوصية</h1>
-        <p className="text-[11px] text-stone mb-8">آخر تحديث: مايو 2026</p>
+        <h1 className="text-[28px] md:text-[36px] text-charcoal leading-[1.3] mb-8">{t('title')}</h1>
+        <p className="text-[11px] text-stone mb-8">{t('lastUpdated')}</p>
 
         <div className="space-y-8 text-[14px] text-stone leading-[1.9]">
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">مقدمة</h2>
-            <p>بيبيز بيكس ("المنصة") تحترم خصوصيتك وتلتزم بحماية بياناتك الشخصية وفقاً لنظام حماية البيانات الشخصية السعودي (PDPL). توضح هذه السياسة كيف نجمع ونستخدم ونحمي معلوماتك.</p>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('introTitle')}</h2>
+            <p>{t('introText')}</p>
           </section>
 
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">البيانات التي نجمعها</h2>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('dataTitle')}</h2>
             <ul className="list-disc pr-5 space-y-2">
-              <li><strong className="text-charcoal">بيانات التصفح:</strong> عنوان IP (مجهّل)، نوع المتصفح، الصفحات المزارة، مدة الزيارة</li>
-              <li><strong className="text-charcoal">ملفات تعريف الارتباط:</strong> ملفات أساسية للتشغيل + تحليلية (Google Analytics) بموافقتك</li>
-              <li><strong className="text-charcoal">البريد الإلكتروني:</strong> فقط إذا اشتركتِ في النشرة البريدية طوعاً</li>
+              <li><strong className="text-charcoal">{t('dataBrowsing')}</strong> {t('dataBrowsingDesc')}</li>
+              <li><strong className="text-charcoal">{t('dataCookies')}</strong> {t('dataCookiesDesc')}</li>
+              <li><strong className="text-charcoal">{t('dataEmail')}</strong> {t('dataEmailDesc')}</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">الغرض من الجمع</h2>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('purposeTitle')}</h2>
             <ul className="list-disc pr-5 space-y-2">
-              <li>تحسين تجربة التصفح وأداء الموقع</li>
-              <li>إرسال النشرة البريدية (بموافقتك)</li>
-              <li>تحليل إحصائيات الاستخدام بشكل مجمّع</li>
-              <li>الكشف عن إساءة الاستخدام وحماية المنصة</li>
+              <li>{t('purpose1')}</li>
+              <li>{t('purpose2')}</li>
+              <li>{t('purpose3')}</li>
+              <li>{t('purpose4')}</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">مشاركة البيانات</h2>
-            <p>لا نبيع بياناتك أبداً. قد نشارك بيانات مجهّلة مع:</p>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('sharingTitle')}</h2>
+            <p>{t('sharingText')}</p>
             <ul className="list-disc pr-5 space-y-2 mt-2">
-              <li>Google Analytics (تحليلات مجمّعة)</li>
-              <li>Cloudflare (أمان وأداء CDN)</li>
-              <li>Resend (إرسال البريد الإلكتروني)</li>
+              <li>{t('sharingGA')}</li>
+              <li>{t('sharingCF')}</li>
+              <li>{t('sharingResend')}</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">حقوقك (نظام PDPL)</h2>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('rightsTitle')}</h2>
             <ul className="list-disc pr-5 space-y-2">
-              <li>حق الوصول إلى بياناتك الشخصية</li>
-              <li>حق تصحيح البيانات غير الدقيقة</li>
-              <li>حق حذف بياناتك ("الحق في النسيان")</li>
-              <li>حق الاعتراض على المعالجة</li>
-              <li>حق سحب الموافقة في أي وقت</li>
+              <li>{t('right1')}</li>
+              <li>{t('right2')}</li>
+              <li>{t('right3')}</li>
+              <li>{t('right4')}</li>
+              <li>{t('right5')}</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">مدة الاحتفاظ</h2>
-            <p>نحتفظ بالبيانات لمدة 14 شهراً كحد أقصى من آخر تفاعل. بيانات النشرة البريدية تُحذف فور إلغاء الاشتراك.</p>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('retentionTitle')}</h2>
+            <p>{t('retentionText')}</p>
           </section>
 
           <section>
-            <h2 className="text-[18px] text-charcoal mb-3">التواصل</h2>
-            <p>لأي استفسار حول خصوصيتك: <a href="mailto:privacy@babiespicks.com" className="text-sage hover:underline">privacy@babiespicks.com</a></p>
+            <h2 className="text-[18px] text-charcoal mb-3">{t('contactTitle')}</h2>
+            <p>{t('contactText')} <a href="mailto:privacy@babiespicks.com" className="text-sage hover:underline">privacy@babiespicks.com</a></p>
           </section>
         </div>
       </article>

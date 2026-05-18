@@ -19,6 +19,7 @@ import { SectionHead } from '@/shared/components/section-head';
 import { ShareButtons } from '@/shared/components/share-buttons';
 import { JsonLd } from '@/shared/components/json-ld';
 import { RelatedContent } from '@/shared/components/related-content';
+import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
@@ -26,7 +27,7 @@ interface Props {
   params: Promise<{ locale: string; slug: string }>;
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
   const { locale, slug } = await params;
   const t = await getTranslations('product');
   const product = await getProduct(slug, locale);
@@ -35,6 +36,7 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: name,
     description: getLocalizedDesc(product, locale) || t('metaFallback', { name }),
+    alternates: getAlternates(`/products/${slug}`),
   };
 }
 

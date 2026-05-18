@@ -1,14 +1,20 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { searchProducts, getVerdictVariant, getLocalizedName } from '@/shared/lib/api';
 import { VerdictPill } from '@/shared/components/verdict-pill';
 import { SarPrice } from '@/shared/components/sar-price';
 import { ProductImage } from '@/shared/components/product-image';
 import { SearchInput } from './search-input';
+import { getAlternates } from '@/shared/lib/metadata';
 
-export const metadata = {
-  title: 'بحث',
-  description: 'ابحثي عن أي منتج لطفلكِ في BabiesPicks',
-};
+export async function generateMetadata(): Promise<import('next').Metadata> {
+  const t = await getTranslations('search');
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+    alternates: getAlternates('/search'),
+  };
+}
 
 export default async function SearchPage({
   params,
@@ -20,10 +26,12 @@ export default async function SearchPage({
   const { locale } = await params;
   const { q } = await searchParams;
   const result = q ? await searchProducts(q, locale) : null;
+  const t = await getTranslations('search');
+  const tc = await getTranslations('common');
 
   return (
     <main className="max-w-4xl mx-auto px-5 md:px-8 lg:px-12 pt-8 md:pt-12 pb-16">
-      <h1 className="text-[24px] md:text-[32px] text-charcoal mb-6">بحث</h1>
+      <h1 className="text-[24px] md:text-[32px] text-charcoal mb-6">{t('title')}</h1>
 
       {/* Search input */}
       <SearchInput defaultValue={q || ''} />
@@ -33,8 +41,8 @@ export default async function SearchPage({
         <div className="mt-8">
           <p className="text-[13px] text-stone mb-5">
             {result.total > 0
-              ? `${result.total} نتيجة لـ "${result.query}"`
-              : `لا توجد نتائج لـ "${result.query}"`}
+              ? t('results', { count: result.total, query: result.query })
+              : t('noResults', { query: result.query })}
           </p>
 
           {result.total === 0 && (
@@ -42,7 +50,11 @@ export default async function SearchPage({
               <div className="w-16 h-16 rounded-full bg-linen mx-auto grid place-items-center mb-4">
                 <i className="ti ti-search-off text-sage text-[28px]"></i>
               </div>
-              <p className="text-[14px] text-stone">جربي كلمات مختلفة أو تصفحي <Link href="/categories" className="text-sage hover:underline">الفئات</Link></p>
+              <p className="text-[14px] text-stone">
+                {t.rich('noResultsHint', {
+                  link: (chunks) => <Link href="/categories" className="text-sage hover:underline">{chunks}</Link>,
+                })}
+              </p>
             </div>
           )}
 
@@ -69,7 +81,7 @@ export default async function SearchPage({
       )}
 
       {!result && (
-        <p className="text-[14px] text-stone mt-8">ابحثي عن اسم المنتج، العلامة التجارية، أو الفئة</p>
+        <p className="text-[14px] text-stone mt-8">{t('hint')}</p>
       )}
     </main>
   );

@@ -2,7 +2,7 @@ import Image from 'next/image';
 
 export function ProductImage({
   src,
-  alt = 'صورة المنتج',
+  alt = 'Product image',
   width = 120,
   height = 120,
   radius = 10,

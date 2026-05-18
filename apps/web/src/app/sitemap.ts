@@ -7,12 +7,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const locales = ['ar', 'en'];
 
   // Static pages
-  const staticPages = ['', '/about', '/privacy', '/terms'].flatMap((path) =>
+  const staticPages = ['', '/about', '/privacy', '/terms', '/search', '/contact', '/faq'].flatMap((path) =>
     locales.map((locale) => ({
       url: `${BASE_URL}/${locale}${path}`,
       lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
-      priority: path === '' ? 1.0 : 0.5,
+      changeFrequency: path === '' ? 'daily' as const : 'monthly' as const,
+      priority: path === '' ? 1.0 : path === '/search' || path === '/contact' || path === '/faq' ? 0.6 : 0.5,
       alternates: {
         languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}${path}`])),
       },

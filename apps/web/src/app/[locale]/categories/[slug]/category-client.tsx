@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { VerdictPill } from '@/shared/components/verdict-pill';
 import { SecondaryButton } from '@/shared/components/buttons';
 import { SarPrice } from '@/shared/components/sar-price';
@@ -9,10 +10,11 @@ import { ProductImage } from '@/shared/components/product-image';
 import type { Product } from '@/shared/lib/api';
 import { getVerdictVariant, getLocalizedName } from '@/shared/lib/api';
 
-const FILTERS = ['جميع المنتجات', 'يستاهل فقط', 'أقل من 100 ر.س'];
-
 export function CategoryProducts({ products, locale }: { products: Product[]; locale: string }) {
+  const t = useTranslations('category');
   const [filter, setFilter] = useState(0);
+
+  const filters = [t('allProducts'), t('worthItOnly'), t('under100')];
 
   const filtered = products.filter((p) => {
     if (filter === 1) return p.verdict?.type === 'WORTH_IT';
@@ -25,7 +27,7 @@ export function CategoryProducts({ products, locale }: { products: Product[]; lo
       {/* Mobile filter pills */}
       <div className="lg:hidden overflow-x-auto no-scrollbar -mx-5 px-5">
         <div className="flex gap-2 w-max">
-          {FILTERS.map((f, i) => (
+          {filters.map((f, i) => (
             <button
               key={i}
               onClick={() => setFilter(i)}
@@ -41,7 +43,7 @@ export function CategoryProducts({ products, locale }: { products: Product[]; lo
 
       {/* Sort bar */}
       <div className="mt-5 lg:mt-0 flex items-center gap-3">
-        <span className="text-[13px] text-stone">{filtered.length} منتج</span>
+        <span className="text-[13px] text-stone">{t('productCount', { count: filtered.length })}</span>
       </div>
 
       {/* Product grid */}
@@ -69,7 +71,7 @@ export function CategoryProducts({ products, locale }: { products: Product[]; lo
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-12 text-stone text-[14px]">لا توجد منتجات تطابق الفلتر</div>
+        <div className="text-center py-12 text-stone text-[14px]">{t('noFilterMatch')}</div>
       )}
     </div>
   );

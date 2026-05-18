@@ -9,8 +9,15 @@ import { SectionHead } from '@/shared/components/section-head';
 import { NewsletterSection } from '@/shared/components/newsletter-section';
 import { JsonLd } from '@/shared/components/json-ld';
 import { getProducts, getVerdictVariant, getLocalizedName } from '@/shared/lib/api';
+import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<import('next').Metadata> {
+  return {
+    alternates: getAlternates(''),
+  };
+}
 
 const CATEGORIES = [
   { key: 'formula', icon: 'ti-bottle', count: 42, tint: '#E8EFE9' },
@@ -233,9 +240,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12 md:mt-16">
         <div className="bg-lavender rounded-2xl p-8 md:p-12 text-center">
           <div className="text-[28px] mb-3" aria-hidden="true">💜</div>
-          <h2 className="text-[18px] md:text-[22px] text-lavender-text mb-3">من أم لأم</h2>
+          <h2 className="text-[18px] md:text-[22px] text-lavender-text mb-3">{t('momToMom')}</h2>
           <p className="text-[13px] md:text-[14px] text-lavender-text/90 leading-[1.9] max-w-xl mx-auto">
-            نعرف إحساس الأم وهي تختار لطفلها — في الثانية بعد منتصف الليل والصغير على صدرها. نراجع كأمهات، لأمهات، بصدق وحب.
+            {t('momToMomDesc')}
           </p>
         </div>
       </section>

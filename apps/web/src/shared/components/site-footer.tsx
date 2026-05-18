@@ -1,8 +1,10 @@
-import { getTranslations } from 'next-intl/server';
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 
-export async function SiteFooter() {
-  const t = await getTranslations('footer');
+export function SiteFooter() {
+  const t = useTranslations('footer');
 
   return (
     <footer className="bg-linen hairline-t mt-16">

@@ -5,6 +5,7 @@ import { getProductsByCategory, getRelatedContentForCategory, type Product } fro
 import { CategoryProducts } from './category-client';
 import { JsonLd } from '@/shared/components/json-ld';
 import { RelatedContent } from '@/shared/components/related-content';
+import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
@@ -101,7 +102,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
   );
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<import('next').Metadata> {
   const { locale, slug } = await params;
   const products = await getProductsByCategory(slug, locale);
   const categoryName = products[0]?.category?.name || slug;
@@ -109,5 +110,6 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: categoryName,
     description: t('metaDescription', { name: categoryName }),
+    alternates: getAlternates(`/categories/${slug}`),
   };
 }
