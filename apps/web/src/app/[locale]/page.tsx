@@ -267,7 +267,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <CategoryTag>{todaysPick.category?.translations[0]?.name ?? t('categoryTagFormula')}</CategoryTag>
+                <CategoryTag>{todaysPick.category?.name ?? t('categoryTagFormula')}</CategoryTag>
                 <span className="text-[11px] text-stone">{t('updatedAgo')}</span>
               </div>
               <h3 className="text-[22px] md:text-[28px] lg:text-[32px] text-charcoal mt-3 leading-[1.35] font-medium tracking-tight">
