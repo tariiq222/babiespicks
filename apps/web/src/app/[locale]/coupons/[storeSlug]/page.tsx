@@ -20,11 +20,11 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { storeSlug } = await params;
+  const { locale, storeSlug } = await params;
   const store = STORE_MAP[storeSlug];
   if (!store) return {};
   return {
-    alternates: getAlternates(`/coupons/${storeSlug}`),
+    alternates: getAlternates(`/coupons/${storeSlug}`, locale),
     title: `${store.name} — كوبونات وخصومات`,
     description: `احصلي على أفضل كوبونات وأكواد خصم ${store.name} على بيبيز بيكس`,
   };

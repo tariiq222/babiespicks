@@ -4,9 +4,14 @@ import type { Metadata } from 'next';
 import { getAlternates } from '@/shared/lib/metadata';
 import { CouponsClient } from './coupons-client';
 
-export async function generateMetadata(): Promise<Metadata> {
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
   return {
-    alternates: getAlternates('/coupons'),
+    alternates: getAlternates('/coupons', locale),
   };
 }
 

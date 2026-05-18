@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<import('next'
   return {
     title: t('metaTitle', { category: categoryName }),
     description: t('metaDescription', { category: categoryName }),
-    alternates: getAlternates(`/best/${slug}`),
+    alternates: getAlternates(`/best/${slug}`, locale),
   };
 }
 

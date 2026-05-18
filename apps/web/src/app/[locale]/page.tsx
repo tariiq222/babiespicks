@@ -14,8 +14,9 @@ import { getAlternates } from '@/shared/lib/metadata';
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<import('next').Metadata> {
+  const { locale } = await params;
   return {
-    alternates: getAlternates(''),
+    alternates: getAlternates('', locale),
   };
 }
 

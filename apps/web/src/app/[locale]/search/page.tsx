@@ -7,12 +7,17 @@ import { ProductImage } from '@/shared/components/product-image';
 import { SearchInput } from './search-input';
 import { getAlternates } from '@/shared/lib/metadata';
 
-export async function generateMetadata(): Promise<import('next').Metadata> {
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
+  const { locale } = await params;
   const t = await getTranslations('search');
   return {
     title: t('metaTitle'),
     description: t('metaDescription'),
-    alternates: getAlternates('/search'),
+    alternates: getAlternates('/search', locale),
   };
 }
 

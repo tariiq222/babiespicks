@@ -5,9 +5,17 @@ import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 
-export async function generateMetadata(): Promise<import('next').Metadata> {
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations('about');
   return {
-    alternates: getAlternates('/about'),
+    title: t('tag') + ' | BabiesPicks',
+    description: t('description'),
+    alternates: getAlternates('/about', locale),
   };
 }
 

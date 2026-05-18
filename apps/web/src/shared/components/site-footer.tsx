@@ -11,8 +11,8 @@ export function SiteFooter() {
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 py-12 grid grid-cols-2 md:grid-cols-4 gap-8 text-[13px]">
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-full bg-sage text-cream flex items-center justify-center text-[14px]">ب</div>
-            <span className="text-[14px] text-charcoal">بيبيز بيكس</span>
+            <div className="w-8 h-8 rounded-full bg-sage text-cream flex items-center justify-center text-[12px] font-medium font-inter tracking-tight">BP</div>
+            <span className="text-[14px] text-charcoal">BabiesPicks</span>
           </div>
           <p className="text-stone leading-[1.8] max-w-[260px]">
             {t('tagline')}

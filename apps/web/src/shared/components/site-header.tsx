@@ -27,7 +27,7 @@ export function SiteHeader() {
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 h-16 flex items-center gap-5">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-9 h-9 rounded-full bg-sage text-cream flex items-center justify-center text-[16px]">ب</div>
+          <div className="w-9 h-9 rounded-full bg-sage text-cream flex items-center justify-center text-[13px] font-medium font-inter tracking-tight">BP</div>
           <div className="leading-tight text-right">
             <div className="text-[14px] text-charcoal">{t('header.logoAr')}</div>
             <div className="text-[11px] text-stone tracking-wider font-inter">BABIESPICKS</div>

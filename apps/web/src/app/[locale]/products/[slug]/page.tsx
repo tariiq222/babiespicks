@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<import('next'
   return {
     title: name,
     description: getLocalizedDesc(product, locale) || t('metaFallback', { name }),
-    alternates: getAlternates(`/products/${slug}`),
+    alternates: getAlternates(`/products/${slug}`, locale),
   };
 }
 

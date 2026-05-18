@@ -1,9 +1,17 @@
 import { getTranslations } from 'next-intl/server';
 import { getAlternates } from '@/shared/lib/metadata';
 
-export async function generateMetadata(): Promise<import('next').Metadata> {
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<import('next').Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations('privacy');
   return {
-    alternates: getAlternates('/privacy'),
+    title: t('title'),
+    description: t('introText').slice(0, 160),
+    alternates: getAlternates('/privacy', locale),
   };
 }
 

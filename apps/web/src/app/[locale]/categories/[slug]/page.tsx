@@ -110,6 +110,6 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: categoryName,
     description: t('metaDescription', { name: categoryName }),
-    alternates: getAlternates(`/categories/${slug}`),
+    alternates: getAlternates(`/categories/${slug}`, locale),
   };
 }
