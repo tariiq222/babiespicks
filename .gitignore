@@ -40,3 +40,20 @@ uploads/
 # Sentry
 .sentryclirc
 apps/api/.env
+
+# Build artifacts
+*.tsbuildinfo
+next-env.d.ts
+
+# Screenshots (temp)
+*.png
+
+# Local tool configs
+.claude/
+.playwright-mcp/
+agent-os/
+
+# Test scripts (temp)
+apps/api/test-*.js
+apps/api/batch-pipeline.js
+apps/api/verify-db.js
