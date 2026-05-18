@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { Metadata } from 'next';
@@ -71,7 +72,9 @@ export default async function StoreCouponsPage({ params }: Props) {
           </nav>
           <div className="flex items-center gap-4">
             {storeLogoUrl ? (
-              <img src={storeLogoUrl} alt={storeName} className="w-14 h-14 md:w-16 md:h-16 rounded-full object-contain bg-cream" />
+              <div className="relative w-14 h-14 md:w-16 md:h-16 rounded-full overflow-hidden bg-cream">
+                  <Image src={storeLogoUrl} alt={storeName} fill sizes="64px" className="object-contain" unoptimized />
+                </div>
             ) : (
               <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-cream grid place-items-center shrink-0">
                 <i className="ti ti-store text-sage text-[28px] md:text-[32px]"></i>

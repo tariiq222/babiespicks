@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
@@ -103,12 +104,17 @@ function CouponCard({ coupon, locale }: { coupon: Coupon; locale: string }) {
       {/* Store + verified badge */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {coupon.store.logoUrl ? (
-            <img
-              src={coupon.store.logoUrl}
-              alt={coupon.store.name}
-              className="w-8 h-8 rounded-full object-contain bg-white"
-            />
+{coupon.store.logoUrl ? (
+            <div className="relative w-8 h-8 rounded-full overflow-hidden bg-white shrink-0">
+              <Image
+                src={coupon.store.logoUrl}
+                alt={coupon.store.name}
+                fill
+                sizes="32px"
+                className="object-contain"
+                unoptimized
+              />
+            </div>
           ) : (
             <div className="w-8 h-8 rounded-full bg-sage/10 grid place-items-center">
               <span className="text-sage text-[12px] font-bold">{coupon.store.name[0]}</span>

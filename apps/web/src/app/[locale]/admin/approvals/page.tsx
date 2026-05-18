@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { adminFetch } from '@/shared/lib/admin-fetch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -275,9 +276,15 @@ function TweetCard({ tweet, index }: { tweet: TweetContent; index: number }) {
       </div>
       <p className="text-sm text-charcoal leading-relaxed whitespace-pre-wrap">{tweet.text}</p>
       {tweet.mediaUrl && (
-        <div className="rounded-lg overflow-hidden border border-beige bg-linen h-32">
-          {/* nextjs img - safe in admin context */}
-          <img src={tweet.mediaUrl} alt="صورة التغريدة" className="h-full w-full object-cover" />
+        <div className="relative rounded-lg overflow-hidden border border-beige bg-linen h-32">
+          <Image
+            src={tweet.mediaUrl}
+            alt="صورة التغريدة"
+            fill
+            sizes="(max-width: 768px) 100vw, 400px"
+            className="object-cover"
+            unoptimized
+          />
         </div>
       )}
       <div className="flex items-center gap-5 text-stone">
@@ -336,25 +343,42 @@ export default function ApprovalsPage() {
   // ── Fetch: website ─────────────────────────────────────────────────────────
 
   const fetchWebItems = useCallback(async () => {
+    setWebLoading(true);
     try {
-      const res = await adminFetch(`${API_BASE}/admin/approvals`);
+      const res = await Promise.race([
+        adminFetch(`${API_BASE}/admin/approvals`),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('انتهت مهلة الاتصال — حاول مرة أخرى')), 10_000),
+        ),
+      ]);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json();
       const items = extractApprovalItems(raw).map(normalizeApprovalItem);
       setWebItems(items);
     } catch (err) {
       setWebError(err instanceof Error ? err.message : 'فشل تحميل البيانات');
+    } finally {
+      setWebLoading(false);
     }
   }, []);
 
   // ── Fetch: social ──────────────────────────────────────────────────────────
 
   const fetchSocialItems = useCallback(async () => {
+    setSocialLoading(true);
     try {
+      const withTimeout = (p: Promise<Response>) =>
+        Promise.race([
+          p,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('انتهت مهلة الاتصال — حاول مرة أخرى')), 10_000),
+          ),
+        ]);
+
       const [pendingRes, approvedRes, scheduledRes] = await Promise.all([
-        adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`),
-        adminFetch(`${API_BASE}/admin/approvals/social?status=APPROVED`),
-        adminFetch(`${API_BASE}/admin/approvals/social?status=SCHEDULED`),
+        withTimeout(adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`)),
+        withTimeout(adminFetch(`${API_BASE}/admin/approvals/social?status=APPROVED`)),
+        withTimeout(adminFetch(`${API_BASE}/admin/approvals/social?status=SCHEDULED`)),
       ]);
 
       if (!pendingRes.ok || !approvedRes.ok || !scheduledRes.ok) {
@@ -377,6 +401,8 @@ export default function ApprovalsPage() {
       );
     } catch (err) {
       setSocialError(err instanceof Error ? err.message : 'فشل تحميل البيانات');
+    } finally {
+      setSocialLoading(false);
     }
   }, []);
 

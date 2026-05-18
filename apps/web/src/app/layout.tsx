@@ -1,6 +1,21 @@
 import type { Metadata } from 'next';
 import { getLocale } from 'next-intl/server';
+import { IBM_Plex_Sans_Arabic, Inter } from 'next/font/google';
 import './globals.css';
+
+const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
+  weight: ['400', '500'],
+  subsets: ['arabic'],
+  variable: '--font-ibm-plex-sans-arabic',
+  display: 'swap',
+});
+
+const inter = Inter({
+  weight: ['400', '500'],
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: {
@@ -42,20 +57,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale} dir={dir}>
       <head>
         <meta name="verify-admitad" content="ff8299968f" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500&family=Inter:wght@400;500&display=swap"
-          rel="stylesheet"
-        />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"
         />
       </head>
       <body
-        className={`bg-cream text-charcoal leading-[1.7] ${dir === 'rtl' ? 'text-right' : 'text-left'}`}
-        style={{ fontFamily: "'IBM Plex Sans Arabic', 'Inter', system-ui, sans-serif" }}
+        className={`bg-cream text-charcoal leading-[1.7] ${dir === 'rtl' ? 'text-right' : 'text-left'} ${ibmPlexSansArabic.variable} ${inter.variable}`}
+        style={{ fontFamily: "var(--font-ibm-plex-sans-arabic), var(--font-inter), system-ui, sans-serif" }}
       >
         {children}
       </body>
