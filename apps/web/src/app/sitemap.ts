@@ -6,15 +6,29 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com'
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const locales = ['ar', 'en'];
 
-  // Static pages
-  const staticPages = ['', '/about', '/privacy', '/terms', '/search', '/contact', '/faq'].flatMap((path) =>
+// Static pages
+  const staticPages = ['', '/about', '/privacy', '/terms', '/search', '/contact', '/faq', '/compare'].flatMap((path) =>
     locales.map((locale) => ({
       url: `${BASE_URL}/${locale}${path}`,
       lastModified: new Date(),
-      changeFrequency: path === '' ? 'daily' as const : 'monthly' as const,
-      priority: path === '' ? 1.0 : path === '/search' || path === '/contact' || path === '/faq' ? 0.6 : 0.5,
+      changeFrequency: path === '' || path === '/compare' ? 'daily' as const : 'monthly' as const,
+      priority: path === '' ? 1.0 : path === '/search' || path === '/contact' || path === '/faq' || path === '/compare' ? 0.6 : 0.5,
       alternates: {
         languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}${path}`])),
+      },
+    })),
+  );
+
+  // Store coupon pages
+  const storeSlugs = ['amazon-sa', 'noon', 'mumzworld', 'jarir'];
+  const couponPages = storeSlugs.flatMap((store) =>
+    locales.map((locale) => ({
+      url: `${BASE_URL}/${locale}/coupons/${store}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+      alternates: {
+        languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}/coupons/${store}`])),
       },
     })),
   );
@@ -73,5 +87,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error('Failed to fetch products for sitemap:', e);
   }
 
-  return [...staticPages, ...categoryPages, ...bestListPages, ...productPages];
+  return [...staticPages, ...categoryPages, ...bestListPages, ...couponPages, ...productPages];
 }

@@ -24,6 +24,7 @@ export function SiteFooter() {
             <li><Link className="hover:text-charcoal" href="/about">{t('howWeReview')}</Link></li>
             <li><Link className="hover:text-charcoal" href="/categories">{t('categories')}</Link></li>
             <li><Link className="hover:text-charcoal" href="/best">{t('bestLists')}</Link></li>
+            <li><Link className="hover:text-charcoal" href="/coupons">الكوبونات</Link></li>
             <li><Link className="hover:text-charcoal" href="/contact">{t('contact')}</Link></li>
           </ul>
         </div>

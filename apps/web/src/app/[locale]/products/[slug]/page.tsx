@@ -233,6 +233,16 @@ export default async function ProductPage({ params }: Props) {
 
           <ShareButtons url={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com'}/${locale}/products/${product.slug}`} title={name} />
 
+          <div className="flex items-center gap-3 mt-4">
+            <Link
+              href={`/${locale}/compare?a=${product.slug}`}
+              className="inline-flex items-center gap-2 border border-sage text-sage rounded-lg px-4 py-2 text-[13px] hover:bg-sage-hover-bg transition-colors"
+            >
+              <i className="ti ti-arrows-shuffle text-[15px]"></i>
+              {tc('compare')}
+            </Link>
+          </div>
+
           <div className="mt-6">
             {product.verdict && variant ? (
               <VerdictCard
