@@ -5,6 +5,7 @@ import { ReviewAnalyzerService, type ReviewData } from '../review-analyzer/revie
 import { VerdictEngineService } from '../verdict-engine/verdict-engine.service';
 import { ContentWriterService } from '../content-writer/content-writer.service';
 import { PublisherService } from '../publisher/publisher.service';
+import { scrapeReviews } from '../data-acquisition/layers/review-scraper';
 
 export interface PipelineResult {
   productId: string;
@@ -77,15 +78,21 @@ export class CoordinatorService {
       return result;
     }
 
-    // Step 2: Analyze reviews (if provided)
+    // Step 2: Analyze reviews (scrape if not provided)
     try {
-      if (reviews && reviews.length > 0) {
-        await this.reviewAnalyzer.analyzeReviews(result.productId, reviews);
+      let reviewData = reviews;
+      if (!reviewData || reviewData.length === 0) {
+        this.logger.log('No reviews provided, attempting to scrape...');
+        reviewData = await scrapeReviews(url);
+      }
+
+      if (reviewData && reviewData.length > 0) {
+        await this.reviewAnalyzer.analyzeReviews(result.productId, reviewData);
         result.steps.reviews = 'success';
-        this.logger.log(`Step 2 DONE: ${reviews.length} reviews analyzed`);
+        this.logger.log(`Step 2 DONE: ${reviewData.length} reviews analyzed`);
       } else {
         result.steps.reviews = 'skipped';
-        this.logger.log('Step 2 SKIPPED: no reviews provided');
+        this.logger.log('Step 2 SKIPPED: no reviews found');
       }
     } catch (error) {
       this.logger.error(`Step 2 FAILED: ${(error as Error).message}`);

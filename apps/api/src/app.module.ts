@@ -17,6 +17,7 @@ import { ImagesModule } from './infrastructure/images/images.module';
 import { SafetyModule } from './infrastructure/safety/safety.module';
 import { FeatureFlagsModule } from './infrastructure/feature-flags/feature-flags.module';
 import { HealthModule } from './features/health/health.module';
+import { ContentModule } from './features/content/content.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { HealthModule } from './features/health/health.module';
     FeatureFlagsModule,
     CoordinatorModule,
     HealthModule,
+    ContentModule,
   ],
   controllers: [AppController],
   providers: [

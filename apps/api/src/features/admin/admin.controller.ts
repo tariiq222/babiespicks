@@ -1,8 +1,10 @@
 import { Controller, Post, Body, Delete, Get, UseGuards, HttpCode } from '@nestjs/common';
 import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { AdminApiKeyGuard } from './admin-api-key.guard';
 
 @Controller('admin')
+@UseGuards(AdminApiKeyGuard)
 export class AdminController {
   constructor(
     private readonly coordinator: CoordinatorService,
