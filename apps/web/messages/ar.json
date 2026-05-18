@@ -585,6 +585,12 @@
     "storeMetaTitle": "{store} — كوبونات وخصومات",
     "storeMetaDesc": "احصلي على كوبونات {store} وأكواد خصم حصرية على بيبيز بيكس"
   },
+  "whatsapp": {
+    "ariaLabel": "تواصلي معنا على واتساب",
+    "dismiss": "إغلاق زر واتساب",
+    "productInquiry": "اسألينا عن هذا المنتج",
+    "productInquiryAriaLabel": "اسألينا عن {name} على واتساب"
+  },
   "tools": {
     "metaTitle": "أدوات مفيدة للأمهات — بيبيز بيكس",
     "metaDescription": "أدوات تفاعلية تساعدكِ في اختيار المنتج المناسب وحساب تكاليف المولود الجديد.",

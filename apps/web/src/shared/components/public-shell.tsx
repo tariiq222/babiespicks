@@ -1,5 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
+import { WhatsAppButton } from '@/shared/components/whatsapp-button';
 
 export function PublicShell({
   children,
@@ -23,6 +24,7 @@ export function PublicShell({
       {children}
       {banner}
       {footer}
+      <WhatsAppButton />
     </>
   );
 }

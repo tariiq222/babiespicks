@@ -585,6 +585,12 @@
     "storeMetaTitle": "{store} — Coupons & Deals",
     "storeMetaDesc": "Get {store} coupons and exclusive discount codes on BabiesPicks"
   },
+  "whatsapp": {
+    "ariaLabel": "Contact us on WhatsApp",
+    "dismiss": "Dismiss WhatsApp button",
+    "productInquiry": "Ask us about this product",
+    "productInquiryAriaLabel": "Ask us about {name} on WhatsApp"
+  },
   "tools": {
     "metaTitle": "Useful Tools for Moms — BabiesPicks",
     "metaDescription": "Interactive tools to help you choose the right product and calculate new baby costs.",
