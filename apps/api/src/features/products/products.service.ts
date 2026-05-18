@@ -21,7 +21,7 @@ export class ProductsService {
       where,
       include: {
         translations: { where: { locale } },
-        category: true,
+        category: { select: { id: true, name: true, slug: true } },
         verdict: { select: { type: true, overallScore: true } },
         prices: {
           orderBy: { scrapedAt: 'desc' },
@@ -44,15 +44,15 @@ export class ProductsService {
       where: { slug },
       include: {
         translations: { where: { locale } },
-        category: true,
-        store: true,
+        category: { select: { id: true, name: true, slug: true } },
+        store: { select: { id: true, name: true, slug: true } },
         verdict: true,
         reviewSummary: true,
         specs: { where: { locale } },
         prices: {
           orderBy: { scrapedAt: 'desc' },
           take: 14,
-          include: { store: true },
+          include: { store: { select: { id: true, name: true, slug: true } } },
         },
       },
     });
@@ -66,6 +66,7 @@ export class ProductsService {
       },
       include: {
         translations: { where: { locale } },
+        category: { select: { id: true, name: true, slug: true } },
         verdict: { select: { type: true, overallScore: true } },
         prices: {
           orderBy: { scrapedAt: 'desc' },
