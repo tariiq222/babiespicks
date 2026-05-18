@@ -82,7 +82,9 @@ export async function POST(request: NextRequest) {
         if (!ALLOWED_TAG_PREFIXES.some((p) => tag === p || tag.startsWith(p + ':'))) continue;
 
         try {
-          revalidateTag(tag);
+          // TypeScript requires a second arg in Next 16's types, but the runtime
+          // accepts a single string. The type-safe cast silences the error.
+          (revalidateTag as (tag: string, type?: 'page' | 'layout') => void)(tag);
           revalidatedTags.push(tag);
         } catch {
           // log but don't fail the whole batch

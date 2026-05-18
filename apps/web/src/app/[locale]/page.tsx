@@ -21,12 +21,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 const CATEGORIES = [
-  { key: 'formula', icon: 'ti-bottle', count: 42, tint: '#E8EFE9' },
-  { key: 'diapers', icon: 'ti-droplet', count: 31, tint: '#EAF0EE' },
-  { key: 'carseats', icon: 'ti-car', count: 18, tint: '#E5EBE7' },
-  { key: 'bottles', icon: 'ti-baby-bottle', count: 24, tint: '#ECF2EE' },
-  { key: 'toys', icon: 'ti-puzzle', count: 36, tint: '#EBEFE6' },
-  { key: 'care', icon: 'ti-mug', count: 29, tint: '#E8EEEA' },
+  { key: 'formula', icon: 'ti-bottle', tint: '#E8EFE9' },
+  { key: 'diapers', icon: 'ti-droplet', tint: '#EAF0EE' },
+  { key: 'carseats', icon: 'ti-car', tint: '#E5EBE7' },
+  { key: 'bottles', icon: 'ti-baby-bottle', tint: '#ECF2EE' },
+  { key: 'toys', icon: 'ti-puzzle', tint: '#EBEFE6' },
+  { key: 'care', icon: 'ti-mug', tint: '#E8EEEA' },
 ];
 
 // Pick 2 featured products from the API results for the featured section
@@ -246,7 +246,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               </div>
               <div className="p-3 text-center">
                 <div className="text-[12px] md:text-[13px] text-charcoal font-semibold leading-tight">{tcat(cat.key)}</div>
-                <div className="text-[11px] text-stone mt-1">{t('productCount', { count: cat.count })}</div>
               </div>
             </Link>
           ))}
@@ -268,7 +267,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <CategoryTag>{todaysPick.category?.name ?? t('categoryTagFormula')}</CategoryTag>
-                <span className="text-[11px] text-stone">{t('updatedAgo')}</span>
               </div>
               <h3 className="text-[22px] md:text-[28px] lg:text-[32px] text-charcoal mt-3 leading-[1.35] font-medium tracking-tight">
                 {getLocalizedName(todaysPick, locale)}
