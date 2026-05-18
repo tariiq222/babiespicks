@@ -3,6 +3,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ArabClicksService } from './networks/arabclicks.service';
 import { AdmitadService } from './networks/admitad.service';
 import { AmazonAssociatesService } from './networks/amazon.service';
+import { NoonAffiliateService } from './networks/noon.service';
 
 export interface ClickStatsDto {
   totalClicks: number;
@@ -18,6 +19,7 @@ export class AffiliateService {
     private readonly arabClicks: ArabClicksService,
     private readonly admitad: AdmitadService,
     private readonly amazon: AmazonAssociatesService,
+    private readonly noon: NoonAffiliateService,
   ) {}
 
   async getBestPrice(
@@ -97,20 +99,25 @@ export class AffiliateService {
   /**
    * Resolves the final affiliate URL for a given raw product URL and store.
    * Applies network-specific deep link wrapping based on the store's affiliateNetwork.
+   * Priority: Amazon → Noon → ArabClicks → Admitad → raw URL
    */
   private resolveAffiliateUrl(
     rawUrl: string,
-    store: { affiliateNetwork: string | null },
+    store: { affiliateNetwork: string | null; slug?: string },
   ): string {
+    // Amazon Associates: tag by network designation OR by URL pattern
+    if (this.amazon.isAmazonStore(store) || this.amazon.isAmazonUrl(rawUrl)) {
+      return this.amazon.generateAffiliateUrl(rawUrl);
+    }
+    // Noon: by network designation, store slug, or URL pattern
+    if (this.noon.isNoonStore(store) || this.noon.isNoonUrl(rawUrl)) {
+      return this.noon.generateAffiliateUrl(rawUrl);
+    }
     if (this.arabClicks.isArabClicksStore(store)) {
       return this.arabClicks.generateDeepLink(rawUrl);
     }
     if (this.admitad.isAdmitadStore(store)) {
       return this.admitad.generateDeepLink(rawUrl);
-    }
-    // Amazon Associates: tag by network designation OR by URL pattern
-    if (this.amazon.isAmazonStore(store) || this.amazon.isAmazonUrl(rawUrl)) {
-      return this.amazon.generateAffiliateUrl(rawUrl);
     }
     return rawUrl;
   }
