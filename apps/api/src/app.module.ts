@@ -14,6 +14,7 @@ import { NewsletterModule } from './features/newsletter/newsletter.module';
 import { AdminModule } from './features/admin/admin.module';
 import { CouponsModule } from './features/coupons/coupons.module';
 import { ImagesModule } from './infrastructure/images/images.module';
+import { SafetyModule } from './infrastructure/safety/safety.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ImagesModule } from './infrastructure/images/images.module';
     AdminModule,
     CouponsModule,
     ImagesModule,
+    SafetyModule,
     CoordinatorModule,
   ],
   controllers: [AppController],
