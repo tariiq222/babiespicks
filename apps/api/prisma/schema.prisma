@@ -91,6 +91,75 @@ enum SocialPostStatus {
   REJECTED
 }
 
+enum ProductScoreStatus {
+  DRAFT
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+enum ArticleDraftStatus {
+  DRAFT
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  SCHEDULED
+  PUBLISHED
+}
+
+enum ScheduledJobStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum ScheduledJobRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
+enum OptimizationRecommendationStatus {
+  OPEN
+  APPROVED
+  DISMISSED
+  APPLIED
+  ARCHIVED
+}
+
+enum RetentionClass {
+  SHORT_LIVED
+  STANDARD
+  GENERATED_CONTENT
+  AUDIT
+}
+
+enum ApprovalAuditActorType {
+  ADMIN_API_KEY
+  SYSTEM
+  USER
+}
+
+enum ApprovalAuditAction {
+  APPROVED
+  REJECTED
+  SCHEDULED
+  REVISION_REQUESTED
+  PUBLISHED
+}
+
+enum ApprovalAuditEntityType {
+  CONTENT_PAGE
+  SOCIAL_POST
+  ARTICLE_DRAFT
+  PRODUCT_DRAFT
+  PRODUCT_SCORE
+}
+
 // ==================== AI OS ENUMS ====================
 
 enum AiRunType {
@@ -144,19 +213,19 @@ enum AiApprovalStatus {
 // ==================== MODELS ====================
 
 model Store {
-  id               String          @id @default(cuid())
+  id               String   @id @default(cuid())
   name             String
-  slug             String          @unique
+  slug             String   @unique
   url              String
   logoUrl          String?
   affiliateNetwork String?
-  isActive         Boolean         @default(true)
-  createdAt        DateTime        @default(now())
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
 
-  products         Product[]
-  prices           ProductPrice[]
-  coupons          Coupon[]
-  affiliateClicks  AffiliateClick[]
+  products        Product[]
+  prices          ProductPrice[]
+  coupons         Coupon[]
+  affiliateClicks AffiliateClick[]
 
   @@map("stores")
 }
@@ -181,31 +250,34 @@ model Category {
 }
 
 model Product {
-  id           String     @id @default(cuid())
-  name         String
-  slug         String     @unique
-  brand        String?
-  imageUrl     String?
-  storeId      String?
-  store        Store?     @relation(fields: [storeId], references: [id])
-  categoryId   String?
-  category     Category?  @relation(fields: [categoryId], references: [id])
-  sourceUrl    String?    @unique
-  dataSource   DataSource @default(MANUAL)
-  confidence   Float?
-  isActive     Boolean       @default(true)
-  status       ProductStatus @default(DISCOVERED)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id         String        @id @default(cuid())
+  name       String
+  slug       String        @unique
+  brand      String?
+  imageUrl   String?
+  storeId    String?
+  store      Store?        @relation(fields: [storeId], references: [id])
+  categoryId String?
+  category   Category?     @relation(fields: [categoryId], references: [id])
+  sourceUrl  String?       @unique
+  dataSource DataSource    @default(MANUAL)
+  confidence Float?
+  isActive   Boolean       @default(true)
+  status     ProductStatus @default(DISCOVERED)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
-  translations  ProductTranslation[]
-  prices        ProductPrice[]
-  specs         ProductSpec[]
-  reviewSummary ProductReviewSummary?
-  verdict       Verdict?
-  affiliateClicks AffiliateClick[]
-  agentJobs     AgentJob[]
-  socialPosts   SocialPost[]
+  translations                ProductTranslation[]
+  prices                      ProductPrice[]
+  specs                       ProductSpec[]
+  reviewSummary               ProductReviewSummary?
+  verdict                     Verdict?
+  affiliateClicks             AffiliateClick[]
+  agentJobs                   AgentJob[]
+  socialPosts                 SocialPost[]
+  productScores               ProductScore[]
+  analyticsEvents             AnalyticsEvent[]
+  optimizationRecommendations OptimizationRecommendation[]
 
   @@index([categoryId])
   @@index([storeId])
@@ -215,24 +287,25 @@ model Product {
 }
 
 model TrendSignal {
-  id                  String            @id @default(cuid())
-  source              String
-  sourceUrl           String?
-  canonicalUrl        String?           @unique
-  rawTitle            String
-  normalizedTitle     String            @unique
-  sourceHash          String            @unique
-  discoveryReason     String            @db.Text
-  trendScore          Float
-  demandSignal        String?           @db.Text
-  competitionSignal   String?           @db.Text
-  seasonalitySignal   String?           @db.Text
-  metadata            Json?
-  status              TrendSignalStatus @default(NEW)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  id                String            @id @default(cuid())
+  source            String
+  sourceUrl         String?
+  canonicalUrl      String?           @unique
+  rawTitle          String
+  normalizedTitle   String            @unique
+  sourceHash        String            @unique
+  discoveryReason   String            @db.Text
+  trendScore        Float
+  demandSignal      String?           @db.Text
+  competitionSignal String?           @db.Text
+  seasonalitySignal String?           @db.Text
+  metadata          Json?
+  status            TrendSignalStatus @default(NEW)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  productDrafts ProductDraft[]
+  productDrafts               ProductDraft[]
+  optimizationRecommendations OptimizationRecommendation[]
 
   // Affiliate AI OS Phase 1 reads/deduplicates by status, score, URL/title, and source hash.
   @@index([status, trendScore])
@@ -272,6 +345,8 @@ model ProductDraft {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
+  productScores ProductScore[]
+
   // Affiliate AI OS Phase 1 review queues and dedupe paths filter by status, score, URL/title, and source hash.
   @@index([trendSignalId])
   @@index([status, trendScore])
@@ -284,7 +359,7 @@ model ProductTranslation {
   id              String  @id @default(cuid())
   productId       String
   product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  locale          String  // "ar" | "en"
+  locale          String // "ar" | "en"
   name            String
   description     String?
   slug            String
@@ -332,7 +407,7 @@ model ProductReviewSummary {
   product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   averageRating  Float
   totalReviews   Int
-  sentimentScore Float    // -1 to 1
+  sentimentScore Float // -1 to 1
   prosAr         Json?
   prosEn         Json?
   consAr         Json?
@@ -344,33 +419,33 @@ model ProductReviewSummary {
 }
 
 model Verdict {
-  id             String      @id @default(cuid())
-  productId      String      @unique
-  product        Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  type           VerdictType
-  overallScore   Float
-  safetyScore    Float
-  qualityScore   Float
-  reviewsScore   Float
-  priceScore     Float
-  longTermScore  Float
-  reasoningAr    String      @db.Text
-  reasoningEn    String      @db.Text
-  conditionsAr   Json?
-  conditionsEn   Json?
-  isPublished    Boolean     @default(false)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id            String      @id @default(cuid())
+  productId     String      @unique
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type          VerdictType
+  overallScore  Float
+  safetyScore   Float
+  qualityScore  Float
+  reviewsScore  Float
+  priceScore    Float
+  longTermScore Float
+  reasoningAr   String      @db.Text
+  reasoningEn   String      @db.Text
+  conditionsAr  Json?
+  conditionsEn  Json?
+  isPublished   Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@map("verdicts")
 }
 
 model ContentPage {
-  id          String      @id @default(cuid())
-  type        ContentType
-  slug        String      @unique
-  categoryId  String?
-  category    Category?   @relation(fields: [categoryId], references: [id])
+  id              String        @id @default(cuid())
+  type            ContentType
+  slug            String        @unique
+  categoryId      String?
+  category        Category?     @relation(fields: [categoryId], references: [id])
   isPublished     Boolean       @default(false)
   publishedAt     DateTime?
   status          ContentStatus @default(DRAFT)
@@ -386,9 +461,12 @@ model ContentPage {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  translations  ContentPageTranslation[]
-  publishedPosts PublishedPost[]
-  socialPosts   SocialPost[]
+  translations                ContentPageTranslation[]
+  publishedPosts              PublishedPost[]
+  socialPosts                 SocialPost[]
+  articleDrafts               ArticleDraft[]
+  analyticsEvents             AnalyticsEvent[]
+  optimizationRecommendations OptimizationRecommendation[]
 
   @@index([type])
   @@index([categoryId])
@@ -476,7 +554,7 @@ model PublishedPost {
   id            String      @id @default(cuid())
   contentPageId String
   contentPage   ContentPage @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
-  channel       String      // "website", "telegram", "twitter"
+  channel       String // "website", "telegram", "twitter"
   publishedAt   DateTime    @default(now())
   metadata      Json?
 
@@ -492,24 +570,234 @@ model SocialPost {
   product         Product?         @relation(fields: [productId], references: [id])
   status          SocialPostStatus @default(DRAFT)
   platform        String           @default("twitter") // "twitter", "instagram", etc.
-  format          String           // "thread_ar", "thread_en", "single_ar", "single_en"
-  content         Json             // Array of tweet objects: [{text, mediaUrl?}]
+  format          String // "thread_ar", "thread_en", "single_ar", "single_en"
+  content         Json // Array of tweet objects: [{text, mediaUrl?}]
   hashtags        String[]
-  visualUrl       String?          // URL to generated verdict card image
+  visualUrl       String? // URL to generated verdict card image
   complianceScore Float?
   complianceNotes String?          @db.Text
   scheduledAt     DateTime?
   publishedAt     DateTime?
-  externalId      String?          // Twitter post ID after publishing
+  externalId      String? // Twitter post ID after publishing
   metadata        Json?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+
+  analyticsEvents             AnalyticsEvent[]
+  optimizationRecommendations OptimizationRecommendation[]
 
   @@index([contentPageId])
   @@index([productId])
   @@index([status])
   @@index([platform, status])
   @@map("social_posts")
+}
+
+model ProductScore {
+  id             String             @id @default(cuid())
+  productDraftId String?
+  productDraft   ProductDraft?      @relation(fields: [productDraftId], references: [id], onDelete: SetNull)
+  productId      String?
+  product        Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
+  aiRunId        String?
+  aiRun          AiRun?             @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+  idempotencyKey String?            @unique
+  scores         Json
+  reasoning      Json?
+  riskFlags      Json?
+  recommendation String?
+  status         ProductScoreStatus @default(DRAFT)
+  retentionClass RetentionClass     @default(GENERATED_CONTENT)
+  expiresAt      DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // Score review queues filter by status and latest update; retention cleanup scans by class/expiry.
+  @@index([status, updatedAt])
+  @@index([retentionClass, expiresAt])
+  @@index([expiresAt])
+  @@index([productDraftId, status])
+  @@index([productId, status])
+  @@index([aiRunId])
+  @@map("product_scores")
+}
+
+model ArticleDraft {
+  id              String             @id @default(cuid())
+  contentPageId   String?
+  contentPage     ContentPage?       @relation(fields: [contentPageId], references: [id], onDelete: SetNull)
+  aiRunId         String?
+  aiRun           AiRun?             @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+  idempotencyKey  String?            @unique
+  locale          String
+  type            ContentType
+  title           String
+  slug            String
+  outline         Json?
+  content         String?            @db.Text
+  productIds      String[]
+  seo             Json?
+  status          ArticleDraftStatus @default(DRAFT)
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?            @db.Text
+  revisionNotes   String?            @db.Text
+  retentionClass  RetentionClass     @default(GENERATED_CONTENT)
+  expiresAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Editorial queues filter by locale/type/status; retention cleanup scans by class/expiry.
+  @@unique([locale, slug])
+  @@index([status, updatedAt])
+  @@index([retentionClass, expiresAt])
+  @@index([expiresAt])
+  @@index([locale, type, status])
+  @@index([contentPageId])
+  @@index([aiRunId])
+  @@map("article_drafts")
+}
+
+model AnalyticsEvent {
+  id                    String         @id @default(cuid())
+  idempotencyKey        String?        @unique
+  sessionHash           String
+  eventType             String
+  source                String?
+  locale                String?
+  country               String?
+  productId             String?
+  product               Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  contentPageId         String?
+  contentPage           ContentPage?   @relation(fields: [contentPageId], references: [id], onDelete: SetNull)
+  socialPostId          String?
+  socialPost            SocialPost?    @relation(fields: [socialPostId], references: [id], onDelete: SetNull)
+  metadata              Json           @default("{}")
+  metadataSchemaVersion Int            @default(1)
+  retentionClass        RetentionClass @default(SHORT_LIVED)
+  expiresAt             DateTime?
+  occurredAt            DateTime       @default(now())
+  createdAt             DateTime       @default(now())
+
+  // Analytics reads are time-windowed by event/source/entity; retention cleanup scans by class/expiry.
+  @@index([occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([retentionClass, expiresAt])
+  @@index([expiresAt])
+  @@index([source, occurredAt])
+  @@index([productId, occurredAt])
+  @@index([contentPageId, occurredAt])
+  @@index([socialPostId, occurredAt])
+  @@index([sessionHash, occurredAt])
+  @@map("analytics_events")
+}
+
+model ScheduledJob {
+  id             String             @id @default(cuid())
+  key            String             @unique
+  name           String
+  handler        String
+  status         ScheduledJobStatus @default(ACTIVE)
+  cronExpression String?
+  timezone       String             @default("UTC")
+  nextRunAt      DateTime?
+  lastRunAt      DateTime?
+  lockKey        String?            @unique
+  lockedBy       String?
+  lockedUntil    DateTime?
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  runs ScheduledJobRun[]
+
+  // Schedulers poll enabled jobs by nextRunAt and use lockKey/lockedUntil for coarse-grained worker locks.
+  @@index([status, nextRunAt])
+  @@index([lockedUntil])
+  @@map("scheduled_jobs")
+}
+
+model ScheduledJobRun {
+  id             String                @id @default(cuid())
+  scheduledJobId String
+  scheduledJob   ScheduledJob          @relation(fields: [scheduledJobId], references: [id], onDelete: Cascade)
+  aiRunId        String?
+  aiRun          AiRun?                @relation(fields: [aiRunId], references: [id], onDelete: SetNull)
+  idempotencyKey String?               @unique
+  status         ScheduledJobRunStatus @default(PENDING)
+  scheduledFor   DateTime
+  startedAt      DateTime?
+  completedAt    DateTime?
+  attempt        Int                   @default(1)
+  lockedBy       String?
+  lockExpiresAt  DateTime?
+  error          String?               @db.Text
+  output         Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  // Idempotency is enforced per job/scheduled slot; workers claim pending/running rows by lock expiry.
+  @@unique([scheduledJobId, scheduledFor])
+  @@index([scheduledJobId, status, scheduledFor])
+  @@index([status, scheduledFor])
+  @@index([lockExpiresAt])
+  @@index([aiRunId])
+  @@map("scheduled_job_runs")
+}
+
+model OptimizationRecommendation {
+  id             String                           @id @default(cuid())
+  idempotencyKey String?                          @unique
+  productId      String?
+  product        Product?                         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  contentPageId  String?
+  contentPage    ContentPage?                     @relation(fields: [contentPageId], references: [id], onDelete: SetNull)
+  socialPostId   String?
+  socialPost     SocialPost?                      @relation(fields: [socialPostId], references: [id], onDelete: SetNull)
+  trendSignalId  String?
+  trendSignal    TrendSignal?                     @relation(fields: [trendSignalId], references: [id], onDelete: SetNull)
+  type           String
+  recommendation String                           @db.Text
+  rationale      String?                          @db.Text
+  priority       Int                              @default(0)
+  impactScore    Float?
+  status         OptimizationRecommendationStatus @default(OPEN)
+  metadata       Json?
+  retentionClass RetentionClass                   @default(STANDARD)
+  expiresAt      DateTime?
+  createdAt      DateTime                         @default(now())
+  updatedAt      DateTime                         @updatedAt
+
+  // Optimization queues group open recommendations by target entity/priority; retention cleanup scans by class/expiry.
+  @@index([status, priority])
+  @@index([retentionClass, expiresAt])
+  @@index([expiresAt])
+  @@index([productId, status])
+  @@index([contentPageId, status])
+  @@index([socialPostId, status])
+  @@index([trendSignalId, status])
+  @@map("optimization_recommendations")
+}
+
+model ApprovalAuditEvent {
+  id         String                  @id @default(cuid())
+  actorType  ApprovalAuditActorType
+  actorId    String
+  action     ApprovalAuditAction
+  entityType ApprovalAuditEntityType
+  entityId   String
+  reason     String?                 @db.Text
+  metadata   Json                    @default("{}")
+  createdAt  DateTime                @default(now())
+
+  // Append-only approval decision trail: create-only timestamp and no mutable foreign-key coupling.
+  @@index([entityType, entityId, createdAt])
+  @@index([actorType, actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("approval_audit_events")
 }
 
 model FeatureFlag {
@@ -568,11 +856,14 @@ model AiRun {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  steps     AiRunStep[]
-  artifacts AiArtifact[]
-  events    AiEvent[]
-  approvals AiApproval[]
-  costLogs  AiCostLog[]
+  steps            AiRunStep[]
+  artifacts        AiArtifact[]
+  events           AiEvent[]
+  approvals        AiApproval[]
+  costLogs         AiCostLog[]
+  productScores    ProductScore[]
+  articleDrafts    ArticleDraft[]
+  scheduledJobRuns ScheduledJobRun[]
 
   @@index([type, status])
   @@index([status])
@@ -581,17 +872,17 @@ model AiRun {
 }
 
 model AiRunStep {
-  id        String      @id @default(cuid())
-  aiRunId   String
-  aiRun     AiRun       @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
-  stepName  String
-  status    AiStepStatus @default(PENDING)
-  input     Json?
-  output    Json?
-  error     String?     @db.Text
-  startedAt DateTime?
+  id          String       @id @default(cuid())
+  aiRunId     String
+  aiRun       AiRun        @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  stepName    String
+  status      AiStepStatus @default(PENDING)
+  input       Json?
+  output      Json?
+  error       String?      @db.Text
+  startedAt   DateTime?
   completedAt DateTime?
-  createdAt DateTime    @default(now())
+  createdAt   DateTime     @default(now())
 
   @@index([aiRunId])
   @@map("ai_run_steps")
@@ -612,28 +903,28 @@ model AiArtifact {
 }
 
 model AiEvent {
-  id        String     @id @default(cuid())
+  id        String      @id @default(cuid())
   aiRunId   String
-  aiRun     AiRun      @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  aiRun     AiRun       @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
   type      AiEventType
   message   String
   metadata  Json?
-  createdAt DateTime   @default(now())
+  createdAt DateTime    @default(now())
 
   @@index([aiRunId])
   @@map("ai_events")
 }
 
 model AiApproval {
-  id          String          @id @default(cuid())
-  aiRunId     String
-  aiRun       AiRun           @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
-  stepName    String?
-  status      AiApprovalStatus @default(PENDING)
-  approverId  String?
-  comment     String?         @db.Text
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id         String           @id @default(cuid())
+  aiRunId    String
+  aiRun      AiRun            @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  stepName   String?
+  status     AiApprovalStatus @default(PENDING)
+  approverId String?
+  comment    String?          @db.Text
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   @@index([aiRunId])
   @@map("ai_approvals")
