@@ -1,21 +1,13 @@
-import { Prisma } from '@prisma/client';
+import {
+  ApprovalAuditAction,
+  ApprovalAuditActorType,
+  ApprovalAuditEntityType,
+  type Prisma,
+} from '@prisma/client';
 
-export const SERVER_DERIVED_APPROVAL_ACTOR_TYPE = 'ADMIN_API_KEY' as const;
+export const SERVER_DERIVED_APPROVAL_ACTOR_TYPE =
+  ApprovalAuditActorType.ADMIN_API_KEY;
 export const SERVER_DERIVED_APPROVAL_ACTOR_ID = 'admin-api-key' as const;
-
-type ApprovalAuditAction =
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'SCHEDULED'
-  | 'REVISION_REQUESTED'
-  | 'PUBLISHED';
-
-type ApprovalAuditEntityType =
-  | 'CONTENT_PAGE'
-  | 'SOCIAL_POST'
-  | 'ARTICLE_DRAFT'
-  | 'PRODUCT_DRAFT'
-  | 'PRODUCT_SCORE';
 
 interface ApprovalAuditInput {
   action: ApprovalAuditAction;
