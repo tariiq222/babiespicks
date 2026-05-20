@@ -1,20 +1,23 @@
 import * as cheerio from 'cheerio';
 import { Logger } from '@nestjs/common';
 import type { ReviewData } from '../../review-analyzer/review-analyzer.service';
+import { getTestSafeFetchOptions, getUrlLogTarget, safeFetch } from '../../../infrastructure/safety/url-safety';
+import { readBoundedHtmlResponse } from '../html-response';
 
 const logger = new Logger('ReviewScraper');
 
 export async function scrapeReviews(url: string, maxReviews = 20): Promise<ReviewData[]> {
   try {
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html',
         'Accept-Language': 'ar,en;q=0.9',
       },
-    });
-    if (!response.ok) return [];
+    }, getTestSafeFetchOptions());
 
-    const html = await response.text();
+    const html = await readBoundedHtmlResponse(response);
+    if (!html) return [];
     const $ = cheerio.load(html);
     const reviews: ReviewData[] = [];
 
@@ -79,10 +82,10 @@ export async function scrapeReviews(url: string, maxReviews = 20): Promise<Revie
       });
     }
 
-    logger.log(`Scraped ${reviews.length} reviews from ${url}`);
+    logger.log(`Scraped ${reviews.length} reviews from origin ${getUrlLogTarget(url)}`);
     return reviews;
   } catch (error) {
-    logger.warn(`Failed to scrape reviews from ${url}: ${(error as Error).message}`);
+    logger.warn(`Failed to scrape reviews from origin ${getUrlLogTarget(url)}: ${(error as Error).message}`);
     return [];
   }
 }

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { isSafeHttpUrl } from './url-safety';
 
 @Injectable()
 export class SafetyService {
@@ -52,41 +53,7 @@ export class SafetyService {
    * Validate URL is http/https and not internal/localhost.
    */
   validateUrl(url: string): boolean {
-    if (!url || typeof url !== 'string') {
-      return false;
-    }
-
-    try {
-      const parsed = new URL(url);
-      const protocol = parsed.protocol.toLowerCase();
-
-      if (protocol !== 'http:' && protocol !== 'https:') {
-        return false;
-      }
-
-      const hostname = parsed.hostname.toLowerCase();
-
-      // Reject localhost and private IPs
-      if (
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname === '0.0.0.0' ||
-        hostname === '::1' ||
-        hostname.startsWith('192.168.') ||
-        hostname.startsWith('10.') ||
-        hostname.startsWith('172.') ||
-        hostname.startsWith('169.254.') ||
-        hostname.startsWith('fc00:') ||
-        hostname.startsWith('fe80:') ||
-        hostname.startsWith('fd')
-      ) {
-        return false;
-      }
-
-      return true;
-    } catch {
-      return false;
-    }
+    return isSafeHttpUrl(url);
   }
 
   /**

@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { getTestSafeFetchOptions, getUrlLogTarget, isSafeHttpUrl, safeFetch } from '../safety/url-safety';
+
+export const MAX_TWITTER_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export interface TweetContent {
   text: string;
@@ -118,16 +121,52 @@ export class TwitterPublisherService {
       return null;
     }
 
+    if (!isSafeHttpUrl(imageUrl)) {
+      this.logger.warn('Rejected unsafe Twitter media URL');
+      return null;
+    }
+
     try {
       // Download the image first
-      const imageRes = await fetch(imageUrl);
+      const imageRes = await safeFetch(imageUrl, {
+        headers: {
+          'Accept': 'image/*',
+          'User-Agent': 'Mozilla/5.0 (compatible; BabiesPicks/1.0; +https://babiespicks.com)',
+        },
+      }, {
+        maxRedirects: 5,
+        ...getTestSafeFetchOptions(),
+      });
       if (!imageRes.ok) {
-        this.logger.warn(`Failed to download image from ${imageUrl}: ${imageRes.status}`);
+        this.logger.warn(`Failed to download image from origin ${getUrlLogTarget(imageUrl)}: ${imageRes.status}`);
         return null;
       }
 
-      const imageBuffer = await imageRes.arrayBuffer();
-      const contentType = imageRes.headers.get('content-type') ?? 'image/jpeg';
+      const contentType = imageRes.headers.get('content-type');
+      if (!contentType) {
+        this.logger.warn('Rejected Twitter media with missing content type');
+        return null;
+      }
+
+      if (!contentType.toLowerCase().startsWith('image/')) {
+        this.logger.warn(`Rejected Twitter media with non-image content type: ${contentType}`);
+        return null;
+      }
+
+      const contentLength = imageRes.headers.get('content-length');
+      if (contentLength) {
+        const parsedContentLength = Number.parseInt(contentLength, 10);
+        if (Number.isFinite(parsedContentLength) && parsedContentLength > MAX_TWITTER_IMAGE_BYTES) {
+          this.logger.warn('Rejected oversized Twitter media before buffering');
+          return null;
+        }
+      }
+
+      const imageBuffer = await readArrayBufferWithLimit(imageRes, MAX_TWITTER_IMAGE_BYTES).catch(() => null);
+      if (!imageBuffer) {
+        this.logger.warn('Rejected oversized Twitter media while streaming');
+        return null;
+      }
       const totalBytes = imageBuffer.byteLength;
 
       // Twitter media upload uses v1.1 endpoint (v2 media upload not yet available)
@@ -318,4 +357,45 @@ export class TwitterPublisherService {
       return { success: false, tweetIds, error: msg };
     }
   }
+}
+
+async function readArrayBufferWithLimit(response: Response, maxBytes: number): Promise<ArrayBuffer> {
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw new Error('Response body exceeded maximum media size');
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    if (!value) {
+      continue;
+    }
+
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel();
+      throw new Error('Response body exceeded maximum media size');
+    }
+    chunks.push(value);
+  }
+
+  const mediaBytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    mediaBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return mediaBytes.buffer;
 }
