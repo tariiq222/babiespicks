@@ -26,6 +26,7 @@ import { NotificationsModule } from './infrastructure/notifications/notification
 import { SocialModule } from './agents/social/social.module';
 import { AiOsModule } from './features/ai-os/ai-os.module';
 import { AffiliateAiOsModule } from './features/affiliate-ai-os/affiliate-ai-os.module';
+import { AnalyticsModule } from './infrastructure/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { AffiliateAiOsModule } from './features/affiliate-ai-os/affiliate-ai-os.
     SocialModule,
     AiOsModule,
     AffiliateAiOsModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [

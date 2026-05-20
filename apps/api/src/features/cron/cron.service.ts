@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { SocialPostStatus, AiRunType } from '@prisma/client';
+import { AiRunType } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { SitemapService } from '../../infrastructure/publishing/sitemap.service';
 import { PublisherService } from '../../agents/publisher/publisher.service';
-import { TwitterPublisherService, TweetContent } from '../../infrastructure/publishing/twitter-publisher.service';
 import { AiOsService } from '../ai-os/ai-os.service';
+import { SchedulerService } from './scheduler.service';
 
 @Injectable()
 export class CronService {
@@ -19,8 +19,8 @@ export class CronService {
     private readonly couponsService: CouponsService,
     private readonly sitemapService: SitemapService,
     private readonly publisher: PublisherService,
-    private readonly twitter: TwitterPublisherService,
     private readonly aiOs: AiOsService,
+    private readonly scheduler: SchedulerService,
   ) {}
 
   // Re-scrape prices and data for products with sourceUrl every 6 hours
@@ -121,78 +121,31 @@ export class CronService {
     }
   }
 
-  // Publish approved social posts — every 30 minutes
+  // Legacy entry point: only delegates to SchedulerService for due SCHEDULED posts.
+  // It intentionally never publishes APPROVED posts directly.
   @Cron('*/30 * * * *')
   async publishApprovedSocialPosts() {
     const runId = await this.aiOs.startLegacyRun({
       type: AiRunType.MANUAL,
-      name: 'cron:publish-social',
+      name: 'cron:publish-scheduled-social',
       source: 'cron',
       input: {},
     });
-    await this.aiOs.addLegacyEvent(runId, 'INFO', 'Social publish job started');
+    await this.aiOs.addLegacyEvent(runId, 'INFO', 'Scheduled social publish job started');
 
-    const approved = await this.prisma.socialPost.findMany({
-      where: { status: SocialPostStatus.APPROVED },
-    });
+    try {
+      const result = await this.scheduler.publishScheduledSocialPosts({
+        now: new Date(),
+        workerId: 'cron:legacy-social-publish',
+      });
 
-    if (approved.length === 0) {
-      await this.aiOs.completeLegacyRun(runId, { published: 0, failed: 0, skipped: 0 });
-      return;
+      this.logger.log(`publishScheduledSocialPosts: ${result.published} published, ${result.failed} failed, ${result.skippedUnapproved} skipped`);
+      await this.aiOs.completeLegacyRun(runId, result);
+    } catch (error) {
+      const message = safeLogMessage(error);
+      await this.aiOs.failLegacyRun(runId, message);
+      this.logger.warn(`Scheduled social publish failed: ${message}`);
     }
-
-    this.logger.log(`Found ${approved.length} approved social post(s) to publish`);
-
-    let published = 0;
-    let failed = 0;
-    let skipped = 0;
-
-    for (const post of approved) {
-      const tweets = (post.content ?? []) as unknown as TweetContent[];
-
-      if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
-        this.logger.warn(`SocialPost ${post.id} has no tweets — skipping`);
-        skipped++;
-        continue;
-      }
-
-      try {
-        const result = await this.twitter.postThread(tweets);
-
-        if (result.success) {
-          await this.prisma.socialPost.update({
-            where: { id: post.id },
-            data: {
-              status: SocialPostStatus.PUBLISHED,
-              publishedAt: new Date(),
-              externalId: result.tweetIds?.[0] ?? null,
-              metadata: { tweetIds: result.tweetIds } as any,
-            },
-          });
-          published++;
-          await this.aiOs.addLegacyEvent(runId, 'INFO', `Published SocialPost ${post.id}`);
-          this.logger.log(`SocialPost ${post.id} published — tweetId: ${result.tweetIds?.[0]}`);
-        } else {
-          await this.prisma.socialPost.update({
-            where: { id: post.id },
-            data: {
-              status: SocialPostStatus.REJECTED,
-              metadata: { error: result.error } as any,
-            },
-          });
-          failed++;
-          await this.aiOs.addLegacyEvent(runId, 'ERROR', `Failed SocialPost ${post.id}: ${result.error}`);
-          this.logger.warn(`SocialPost ${post.id} failed to publish: ${result.error}`);
-        }
-      } catch (error) {
-        failed++;
-        await this.aiOs.addLegacyEvent(runId, 'ERROR', `SocialPost ${post.id} error: ${(error as Error).message}`);
-        this.logger.error(`SocialPost ${post.id} publish error: ${(error as Error).message}`);
-      }
-    }
-
-    this.logger.log(`publishApprovedSocialPosts: ${published} published, ${failed} failed, ${skipped} skipped`);
-    await this.aiOs.completeLegacyRun(runId, { published, failed, skipped });
   }
 
   // Clean up old affiliate clicks (>90 days)
@@ -276,4 +229,12 @@ export class CronService {
 
     this.logger.log(`📊 Daily Stats — Products: ${products}, Verdicts: ${verdicts}, Clicks: ${clicks}, Agent Jobs: ${jobs}`);
   }
+}
+
+function safeLogMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
+  if (/credential|secret|token|api[_ -]?key|access[_ -]?token/i.test(message)) {
+    return 'Publisher credentials not configured';
+  }
+  return message.replace(/[A-Za-z0-9_\-]{16,}/g, '[redacted]');
 }
