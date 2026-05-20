@@ -142,27 +142,44 @@ export class SocialDraftService {
     }
 
     const publishedAt = new Date();
-    const result = await this.publishToPlatform(claimed.post);
+    let result: PublisherResult;
+    try {
+      result = await this.publishToPlatform(claimed.post);
+    } catch (error) {
+      const sanitizedError = sanitizePublisherError(error);
+      await this.markClaimedPostForManualRecovery(claimed, {
+        publishTrigger: options.trigger ?? 'manual',
+        publishError: sanitizedError,
+        recoveryReason: 'Provider call threw after the PUBLISHING claim; leaving PUBLISHING to prevent duplicate external posts',
+      });
+      return { success: false, error: sanitizedError, recoveryRequired: true };
+    }
 
     if (!result.success) {
       const sanitizedError = sanitizePublisherError(result.error);
-      const updated = await this.updateClaimedPost(claimed, {
-        status: SocialPostStatus.APPROVED,
-        data: {
-          metadata: {
-            ...withoutPublishLock(claimed.post.metadata),
-            publishTrigger: options.trigger ?? 'manual',
-            publishError: sanitizedError,
-          } as never,
-        },
+      await this.markClaimedPostForManualRecovery(claimed, {
+        publishTrigger: options.trigger ?? 'manual',
+        publishError: sanitizedError,
+        recoveryReason: hasExternalPublishId(result)
+          ? 'Provider returned a failure with an external id; leaving PUBLISHING for manual recovery'
+          : 'Provider failure after publish attempt has ambiguous external state; leaving PUBLISHING to prevent duplicate posts',
       });
 
-      return { success: false, error: sanitizedError, post: updated };
+      return { success: false, error: sanitizedError, recoveryRequired: true };
     }
 
     const externalId = result.tweetIds?.[0] ?? (result.messageId ? String(result.messageId) : null);
+    if (!externalId) {
+      await this.markClaimedPostForManualRecovery(claimed, {
+        publishTrigger: options.trigger ?? 'manual',
+        publishError: 'Missing external publish id',
+        recoveryReason: 'Provider reported success without an external id; leaving PUBLISHING for manual recovery',
+      });
+      return { success: false, error: 'Missing external publish id', recoveryRequired: true };
+    }
+
     const updated = await this.updateClaimedPost(claimed, {
-      status: SocialPostStatus.APPROVED,
+      status: SocialPostStatus.PUBLISHING,
       data: {
         status: SocialPostStatus.PUBLISHED,
         publishedAt,
@@ -214,9 +231,9 @@ export class SocialDraftService {
     if (!socialPostDelegate.updateMany) {
       await socialPostDelegate.update?.({
         where: { id: post.id },
-        data: { metadata: metadata as never },
+        data: { status: SocialPostStatus.PUBLISHING, metadata: metadata as never },
       });
-      return { post: { ...post, metadata }, attemptId };
+      return { post: { ...post, status: SocialPostStatus.PUBLISHING, metadata }, attemptId };
     }
 
     const claim = await socialPostDelegate.updateMany({
@@ -225,14 +242,29 @@ export class SocialDraftService {
         status: SocialPostStatus.APPROVED,
         ...metadataCompareWhere(post.metadata),
       } as never,
-      data: { metadata: metadata as never },
+      data: { status: SocialPostStatus.PUBLISHING, metadata: metadata as never },
     });
 
     if (claim.count !== 1) {
       return null;
     }
 
-    return { post: { ...post, metadata }, attemptId };
+    return { post: { ...post, status: SocialPostStatus.PUBLISHING, metadata }, attemptId };
+  }
+
+  private async markClaimedPostForManualRecovery(
+    claimed: ClaimedSocialPost,
+    metadataPatch: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.updateClaimedPost(claimed, {
+      status: SocialPostStatus.PUBLISHING,
+      data: {
+        metadata: {
+          ...safeMetadataRecord(claimed.post.metadata),
+          ...metadataPatch,
+        } as never,
+      },
+    });
   }
 
   private async updateClaimedPost(claimed: ClaimedSocialPost, args: { status: SocialPostStatus; data: Record<string, unknown> }): Promise<unknown> {
@@ -385,6 +417,10 @@ function safeMetadataRecord(metadata: unknown): Record<string, unknown> {
 function withoutPublishLock(metadata: unknown): Record<string, unknown> {
   const { publishLock: _publishLock, ...rest } = safeMetadataRecord(metadata);
   return rest;
+}
+
+function hasExternalPublishId(result: PublisherResult): boolean {
+  return Boolean(result.tweetIds?.length || result.messageId);
 }
 
 function metadataCompareWhere(metadata: unknown): Record<string, unknown> {

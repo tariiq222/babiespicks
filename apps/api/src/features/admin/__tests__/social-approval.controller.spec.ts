@@ -277,6 +277,49 @@ describe('SocialApprovalController', () => {
         const result = await controller.approve('post_schedule_policy', {});
 
         expect(result.scheduledAt).toEqual(new Date('2026-05-20T16:00:00.000Z')); // 19:00 Riyadh
+        expect(mockPrisma.socialPost.findMany).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({ platform: { in: ['twitter', 'x'] } }),
+        }));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('treats twitter and x as the same schedule platform and rolls forward on collision', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-05-20T07:30:00.000Z')); // 10:30 Riyadh
+      const pendingPost = makeTwitterPost({
+        id: 'post_x_alias_collision',
+        status: SocialPostStatus.PENDING_APPROVAL,
+        platform: 'x',
+      });
+      const mockPrisma = {
+        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(pendingPost),
+          findMany: vi.fn().mockResolvedValue([
+            { scheduledAt: new Date('2026-05-20T08:00:00.000Z') }, // twitter 11:00 Riyadh occupies x too
+          ]),
+          findFirst: vi.fn().mockResolvedValue(null),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_x_alias' }),
+        },
+      };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      try {
+        controller = createController(mockPrisma, mockTwitter, mockTelegram);
+        const result = await controller.approve('post_x_alias_collision', {});
+
+        expect(result.scheduledAt).toEqual(new Date('2026-05-20T16:00:00.000Z')); // 19:00 Riyadh
+        expect(mockPrisma.socialPost.findMany).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({ platform: { in: ['twitter', 'x'] } }),
+        }));
+        expect(mockPrisma.socialPost.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({ platform: { in: ['twitter', 'x'] } }),
+        }));
       } finally {
         vi.useRealTimers();
       }
@@ -315,6 +358,42 @@ describe('SocialApprovalController', () => {
       expect(mockTwitter.postThread).not.toHaveBeenCalled();
       expect(mockTelegram.postMessage).not.toHaveBeenCalled();
     });
+
+    it('retries approve-and-schedule when the selected slot loses a unique race', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-05-20T07:30:00.000Z')); // 10:30 Riyadh
+      const pendingPost = makeTwitterPost({
+        id: 'post_unique_conflict',
+        status: SocialPostStatus.PENDING_APPROVAL,
+      });
+      const mockPrisma = {
+        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(pendingPost),
+          findMany: vi.fn().mockResolvedValue([]),
+          findFirst: vi.fn().mockResolvedValue(null),
+          updateMany: vi
+            .fn()
+            .mockRejectedValueOnce({ code: 'P2002', meta: { target: ['platform', 'scheduledAt'] } })
+            .mockResolvedValueOnce({ count: 1 }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_retry' }),
+        },
+      };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      try {
+        controller = createController(mockPrisma, mockTwitter, mockTelegram);
+        const result = await controller.approveAndSchedule('post_unique_conflict', {});
+
+        expect(result).toEqual(expect.objectContaining({ status: 'SCHEDULED' }));
+        expect(result.scheduledAt).toEqual(new Date('2026-05-20T16:00:00.000Z'));
+        expect(mockPrisma.socialPost.updateMany).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('disabled immediate publish endpoints', () => {
@@ -350,6 +429,25 @@ describe('SocialApprovalController', () => {
         }),
       });
       expect(mockPrisma.socialPost.findMany).not.toHaveBeenCalled();
+      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+      expect(mockTelegram.postMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns 410 for manual social scheduling without accepting scheduledAt', async () => {
+      const mockPrisma = { socialPost: { findUniqueOrThrow: vi.fn(), update: vi.fn() } };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      await expect(controller.schedule('post_target')).rejects.toMatchObject({
+        status: 410,
+        response: expect.objectContaining({
+          error: expect.stringContaining('Manual social scheduling is disabled'),
+        }),
+      });
+      expect(mockPrisma.socialPost.findUniqueOrThrow).not.toHaveBeenCalled();
+      expect(mockPrisma.socialPost.update).not.toHaveBeenCalled();
       expect(mockTwitter.postThread).not.toHaveBeenCalled();
       expect(mockTelegram.postMessage).not.toHaveBeenCalled();
     });

@@ -336,74 +336,80 @@ export class SocialApprovalController {
 
     for (let attempt = 0; attempt < 8; attempt++) {
       const scheduledAt = await this.nextSafeSocialSlot(input.platform, cursor, input.id);
-      const scheduled = await this.prisma.$transaction(async (tx) => {
-        const occupied = await tx.socialPost.findFirst({
-          where: {
-            id: { not: input.id },
-            platform: this.platformWhereForScheduling(input.platform),
-            status: SocialPostStatus.SCHEDULED,
-            scheduledAt,
-          },
-          select: { id: true },
-        });
+      try {
+        const scheduled = await this.prisma.$transaction(async (tx) => {
+          const occupied = await tx.socialPost.findFirst({
+            where: {
+              id: { not: input.id },
+              platform: this.platformWhereForScheduling(input.platform),
+              status: { in: [SocialPostStatus.SCHEDULED, SocialPostStatus.PUBLISHING] },
+              scheduledAt,
+            },
+            select: { id: true },
+          });
 
-        if (occupied) {
-          return false;
-        }
+          if (occupied) {
+            return false;
+          }
 
-        const updateResult = await tx.socialPost.updateMany({
-          where: {
-            id: input.id,
-            status: { in: [SocialPostStatus.PENDING_APPROVAL, SocialPostStatus.APPROVED] },
-          },
-          data: {
-            status: SocialPostStatus.SCHEDULED,
-            scheduledAt,
+          const updateResult = await tx.socialPost.updateMany({
+            where: {
+              id: input.id,
+              status: { in: [SocialPostStatus.PENDING_APPROVAL, SocialPostStatus.APPROVED] },
+            },
+            data: {
+              status: SocialPostStatus.SCHEDULED,
+              scheduledAt,
+              metadata: {
+                ...safeMetadataRecord(input.metadata),
+                approvedAt: input.approvedAt.toISOString(),
+                approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+                scheduledAt: scheduledAt.toISOString(),
+                schedulingPolicy: {
+                  timezone: RIYADH_TIMEZONE,
+                  automatedAfterApproval: true,
+                  raceGuard: 'db_unique_platform_scheduled_at_with_retry',
+                },
+              } as any,
+            },
+          });
+
+          if (updateResult.count !== 1) {
+            return null;
+          }
+
+          await recordApprovalAuditEvent(tx, {
+            action: 'APPROVED',
+            entityType: 'SOCIAL_POST',
+            entityId: input.id,
+            metadata: { platform: input.platform, format: input.format, approvedAt: input.approvedAt.toISOString() },
+          });
+
+          await recordApprovalAuditEvent(tx, {
+            action: 'SCHEDULED',
+            entityType: 'SOCIAL_POST',
+            entityId: input.id,
             metadata: {
-              ...safeMetadataRecord(input.metadata),
-              approvedAt: input.approvedAt.toISOString(),
-              approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+              platform: input.platform,
+              format: input.format,
               scheduledAt: scheduledAt.toISOString(),
-              schedulingPolicy: {
-                timezone: RIYADH_TIMEZONE,
-                automatedAfterApproval: true,
-                raceGuard: 'best_effort_transaction_recheck',
-              },
-            } as any,
-          },
+              timezone: RIYADH_TIMEZONE,
+            },
+          });
+
+          return true;
         });
 
-        if (updateResult.count !== 1) {
-          return null;
+        if (scheduled === true) {
+          return { scheduled: true, scheduledAt };
         }
-
-        await recordApprovalAuditEvent(tx, {
-          action: 'APPROVED',
-          entityType: 'SOCIAL_POST',
-          entityId: input.id,
-          metadata: { platform: input.platform, format: input.format, approvedAt: input.approvedAt.toISOString() },
-        });
-
-        await recordApprovalAuditEvent(tx, {
-          action: 'SCHEDULED',
-          entityType: 'SOCIAL_POST',
-          entityId: input.id,
-          metadata: {
-            platform: input.platform,
-            format: input.format,
-            scheduledAt: scheduledAt.toISOString(),
-            timezone: RIYADH_TIMEZONE,
-          },
-        });
-
-        return true;
-      });
-
-      if (scheduled === true) {
-        return { scheduled: true, scheduledAt };
-      }
-      if (scheduled === null) {
-        return { scheduled: false };
+        if (scheduled === null) {
+          return { scheduled: false };
+        }
+      } catch (error) {
+        if (!isUniqueConstraintViolation(error)) {
+          throw error;
+        }
       }
 
       cursor = new Date(scheduledAt.getTime() + 1_000);
@@ -413,61 +419,21 @@ export class SocialApprovalController {
   }
 
   /**
-   * Schedule social post for future publishing.
-   * POST /admin/approvals/social/:id/schedule
+   * Disabled compatibility endpoint. Social approvals auto-schedule through the
+   * safe Riyadh slot policy, so callers must not provide arbitrary timestamps.
    */
   @Post(':id/schedule')
   @HttpCode(200)
-  async schedule(
-    @Param('id') id: string,
-    @Body() body: { scheduledAt: string; approvedBy?: string },
-  ) {
-    const post = await this.prisma.socialPost.findUniqueOrThrow({ where: { id } });
-
-    if (post.status !== SocialPostStatus.PENDING_APPROVAL && post.status !== SocialPostStatus.APPROVED) {
-      throw new BadRequestException(
-        `Cannot schedule: status is ${post.status}`,
-      );
-    }
-
-    if (!body.scheduledAt) {
-      throw new BadRequestException('scheduledAt is required');
-    }
-
-    const scheduledAt = new Date(body.scheduledAt);
-    if (isNaN(scheduledAt.getTime())) {
-      throw new BadRequestException('scheduledAt is not a valid date');
-    }
-    if (scheduledAt <= new Date()) {
-      throw new BadRequestException('scheduledAt must be in the future');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.socialPost.update({
-        where: { id },
-        data: {
-          status: SocialPostStatus.SCHEDULED,
-          scheduledAt,
-          metadata: {
-            approvedAt: new Date().toISOString(),
-            approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-          } as any,
-        },
-      });
-
-      await recordApprovalAuditEvent(tx, {
-        action: 'SCHEDULED',
-        entityType: 'SOCIAL_POST',
-        entityId: id,
-        metadata: { platform: post.platform, scheduledAt: scheduledAt.toISOString() },
-      });
+  async schedule(@Param('id') id: string) {
+    void id;
+    throw new GoneException({
+      success: false,
+      error: 'Manual social scheduling is disabled. Approval auto-schedules using the safe policy.',
     });
-
-    return { success: true, action: 'scheduled', status: 'SCHEDULED', scheduledAt };
   }
 
   private async nextSafeSocialSlot(platform: string, now: Date, postId: string): Promise<Date> {
-    const normalizedPlatform = platform === 'x' ? 'twitter' : platform;
+    const normalizedPlatform = normalizeSocialPlatform(platform);
     const policy = SOCIAL_SCHEDULE_POLICY[normalizedPlatform as keyof typeof SOCIAL_SCHEDULE_POLICY];
 
     if (!policy) {
@@ -483,7 +449,7 @@ export class SocialApprovalController {
         where: {
           id: { not: postId },
           platform: this.platformWhereForScheduling(normalizedPlatform),
-          status: SocialPostStatus.SCHEDULED,
+          status: { in: [SocialPostStatus.SCHEDULED, SocialPostStatus.PUBLISHING] },
           scheduledAt: { gte: dayStart, lt: dayEnd },
         },
         select: { scheduledAt: true },
@@ -512,7 +478,7 @@ export class SocialApprovalController {
   }
 
   private platformWhereForScheduling(platform: string): string | { in: string[] } {
-    const normalizedPlatform = platform === 'x' ? 'twitter' : platform;
+    const normalizedPlatform = normalizeSocialPlatform(platform);
     return normalizedPlatform === 'twitter' ? { in: ['twitter', 'x'] } : normalizedPlatform;
   }
 
@@ -568,6 +534,14 @@ function safeMetadataRecord(metadata: unknown): Record<string, unknown> {
     return metadata as Record<string, unknown>;
   }
   return {};
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+}
+
+function normalizeSocialPlatform(platform: string): string {
+  return platform === 'x' || platform === 'twitter' ? 'twitter' : platform;
 }
 
 function riyadhDateParts(date: Date): RiyadhDateParts {

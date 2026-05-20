@@ -60,6 +60,7 @@ interface PublisherResult {
   tweetIds?: string[];
   messageId?: number;
   error?: string;
+  failurePhase?: 'PRE_PROVIDER' | 'PROVIDER_ATTEMPTED';
 }
 
 interface ClaimedSocialPost {
@@ -234,29 +235,65 @@ export class SchedulerService {
         continue;
       }
 
-      const result = await this.publishToPlatform(claimed.post);
+      let result: PublisherResult;
+      try {
+        result = await this.publishToPlatform(claimed.post);
+      } catch (error) {
+        failed++;
+        await this.annotateUncertainClaimedScheduledPost(claimed, {
+          publishError: sanitizePublisherError(error),
+          workerId: input.workerId,
+          recoveryReason: 'Provider call threw after the PUBLISHING claim; leaving PUBLISHING to prevent duplicate external posts',
+        });
+        continue;
+      }
+
       if (!result.success) {
         failed++;
-        await this.updateClaimedScheduledPost(claimed, {
-          status: SocialPostStatus.SCHEDULED,
-          data: {
-            metadata: {
-              ...withoutPublishLock(claimed.post.metadata),
-              publishError: sanitizePublisherError(result.error),
-              workerId: input.workerId,
-            } as never,
-          },
+        if (result.failurePhase === 'PRE_PROVIDER') {
+          await this.updateClaimedScheduledPost(claimed, {
+            status: SocialPostStatus.PUBLISHING,
+            data: {
+              status: SocialPostStatus.SCHEDULED,
+              metadata: {
+                ...withoutPublishLock(claimed.post.metadata),
+                publishError: sanitizePublisherError(result.error),
+                workerId: input.workerId,
+                recoveryReason: 'Provider was unavailable before any external call began; retry is safe',
+              } as never,
+            },
+          });
+          continue;
+        }
+
+        await this.annotateUncertainClaimedScheduledPost(claimed, {
+          publishError: sanitizePublisherError(result.error),
+          workerId: input.workerId,
+          recoveryReason: hasExternalPublishId(result)
+            ? 'Provider returned a failure with an external id; leaving PUBLISHING for manual recovery'
+            : 'Provider failure after publish attempt has ambiguous external state; leaving PUBLISHING to prevent duplicate posts',
+        });
+        continue;
+      }
+
+      const externalId = result.tweetIds?.[0] ?? (result.messageId ? String(result.messageId) : null);
+      if (!externalId) {
+        failed++;
+        await this.annotateUncertainClaimedScheduledPost(claimed, {
+          publishError: 'Missing external publish id',
+          workerId: input.workerId,
+          recoveryReason: 'Provider reported success without an external id; leaving PUBLISHING for manual recovery',
         });
         continue;
       }
 
       published++;
       await this.updateClaimedScheduledPost(claimed, {
-        status: SocialPostStatus.SCHEDULED,
+        status: SocialPostStatus.PUBLISHING,
         data: {
           status: SocialPostStatus.PUBLISHED,
           publishedAt: input.now,
-          externalId: result.tweetIds?.[0] ?? (result.messageId ? String(result.messageId) : null),
+          externalId,
           metadata: {
             ...withoutPublishLock(claimed.post.metadata),
             publishTrigger: 'scheduled',
@@ -285,7 +322,6 @@ export class SchedulerService {
       throw error;
     }
   }
-
   private async createManualRunRecords(
     job: ScheduledJobRecord,
     now: Date,
@@ -410,13 +446,13 @@ export class SchedulerService {
   private async publishToPlatform(post: SocialPostRecord): Promise<PublisherResult> {
     if (post.platform === 'telegram') {
       if (!this.telegram) {
-        return { success: false, error: 'Telegram credentials not configured' };
+        return { success: false, error: 'Telegram credentials not configured', failurePhase: 'PRE_PROVIDER' };
       }
       return this.telegram.postMessage(extractTelegramText(post.content));
     }
 
     if (!this.twitter) {
-      return { success: false, tweetIds: [], error: 'Twitter credentials not configured' };
+      return { success: false, tweetIds: [], error: 'Twitter credentials not configured', failurePhase: 'PRE_PROVIDER' };
     }
     return this.twitter.postThread(extractTweetContent(post.content));
   }
@@ -473,14 +509,29 @@ export class SchedulerService {
         scheduledAt: { lte: input.now },
         ...metadataCompareWhere(post.metadata),
       } as never,
-      data: { metadata: metadata as never },
+      data: { status: SocialPostStatus.PUBLISHING, metadata: metadata as never },
     });
 
     if (claim.count !== 1) {
       return null;
     }
 
-    return { post: { ...post, metadata }, attemptId };
+    return { post: { ...post, status: SocialPostStatus.PUBLISHING, metadata }, attemptId };
+  }
+
+  private async annotateUncertainClaimedScheduledPost(
+    claimed: ClaimedSocialPost,
+    metadataPatch: Record<string, unknown>,
+  ): Promise<void> {
+    await this.updateClaimedScheduledPost(claimed, {
+      status: SocialPostStatus.PUBLISHING,
+      data: {
+        metadata: {
+          ...safeMetadataRecord(claimed.post.metadata),
+          ...metadataPatch,
+        } as never,
+      },
+    });
   }
 
   private async updateClaimedScheduledPost(
@@ -602,6 +653,10 @@ function safeMetadataRecord(metadata: unknown): Record<string, unknown> {
 function withoutPublishLock(metadata: unknown): Record<string, unknown> {
   const { publishLock: _publishLock, ...rest } = safeMetadataRecord(metadata);
   return rest;
+}
+
+function hasExternalPublishId(result: PublisherResult): boolean {
+  return Boolean(result.tweetIds?.length || result.messageId);
 }
 
 function metadataCompareWhere(metadata: unknown): Record<string, unknown> {

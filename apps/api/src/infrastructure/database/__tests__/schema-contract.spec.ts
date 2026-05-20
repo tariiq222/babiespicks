@@ -11,10 +11,20 @@ const securityMigrationPath = join(
   process.cwd(),
   'prisma/migrations/0005_security_audit_retention_controls/migration.sql',
 );
+const socialPublishClaimsMigrationPath = join(
+  process.cwd(),
+  'prisma/migrations/0006_social_publish_claims/migration.sql',
+);
+const normalizedSocialSlotsMigrationPath = join(
+  process.cwd(),
+  'prisma/migrations/0007_social_normalized_schedule_slots/migration.sql',
+);
 
 const schema = readFileSync(schemaPath, 'utf8');
 const migration = readFileSync(migrationPath, 'utf8');
 const securityMigration = readFileSync(securityMigrationPath, 'utf8');
+const socialPublishClaimsMigration = readFileSync(socialPublishClaimsMigrationPath, 'utf8');
+const normalizedSocialSlotsMigration = readFileSync(normalizedSocialSlotsMigrationPath, 'utf8');
 
 function modelBlock(modelName: string) {
   const match = schema.match(new RegExp(`model ${modelName} \\{[\\s\\S]*?\\n\\}`));
@@ -155,6 +165,24 @@ describe('Affiliate AI OS schema foundation contract', () => {
     expect(runBlock).toMatch(/lockExpiresAt\s+DateTime\?/);
     expect(runBlock).toContain('@@unique([scheduledJobId, scheduledFor])');
     expect(runBlock).toContain('@@index([scheduledJobId, status, scheduledFor])');
+  });
+
+  it('captures durable social publishing claims and slot uniqueness', () => {
+    const socialPostStatus = enumBlock('SocialPostStatus');
+    const socialPostBlock = modelBlock('SocialPost');
+
+    expect(socialPostStatus).toContain('PUBLISHING');
+    expect(socialPostBlock).toContain(
+      'raw SQL migration 0007_social_normalized_schedule_slots',
+    );
+    expect(socialPostBlock).not.toContain('@@unique([platform, scheduledAt]');
+    expect(socialPublishClaimsMigration).toContain("ADD VALUE IF NOT EXISTS 'PUBLISHING'");
+    expect(normalizedSocialSlotsMigration).toContain('DROP INDEX IF EXISTS "social_posts_platform_scheduled_at_unique"');
+    expect(normalizedSocialSlotsMigration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "social_posts_normalized_platform_scheduled_at_unique"',
+    );
+    expect(normalizedSocialSlotsMigration).toContain("WHEN \"platform\" IN ('twitter', 'x') THEN 'twitter'");
+    expect(normalizedSocialSlotsMigration).toContain('WHERE "scheduledAt" IS NOT NULL');
   });
 
   it('creates additive SQL migration objects and critical uniqueness/index constraints', () => {

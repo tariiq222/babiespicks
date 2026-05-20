@@ -78,6 +78,7 @@ describe('SchedulerService social publish hardening', () => {
       status: SocialPostStatus.SCHEDULED,
       metadata: expect.objectContaining({ equals: scheduledPost.metadata }),
     }));
+    expect(claimCall.data.status).toBe(SocialPostStatus.PUBLISHING);
     expect(claimCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
   });
 
@@ -88,5 +89,75 @@ describe('SchedulerService social publish hardening', () => {
 
     expect(result).toEqual({ published: 0, failed: 0, skippedUnapproved: 0 });
     expect(twitter.postThread).not.toHaveBeenCalled();
+  });
+
+  it('keeps provider failures without an external id in PUBLISHING for manual recovery', async () => {
+    twitter.postThread.mockResolvedValueOnce({ success: false, error: 'upstream unavailable' });
+
+    const result = await service.publishScheduledSocialPosts({ now, workerId: 'worker-1' });
+
+    expect(result).toEqual({ published: 0, failed: 1, skippedUnapproved: 0 });
+    const recoveryCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(recoveryCall.where).toEqual(expect.objectContaining({
+      id: scheduledPost.id,
+      status: SocialPostStatus.PUBLISHING,
+      metadata: expect.objectContaining({ path: ['publishLock', 'attemptId'] }),
+    }));
+    expect(recoveryCall.data.status).toBeUndefined();
+    expect(recoveryCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
+    expect(recoveryCall.data.metadata.recoveryReason).toContain('ambiguous external state');
+  });
+
+  it('keeps provider throws without an external id in PUBLISHING and not retryable', async () => {
+    twitter.postThread.mockRejectedValueOnce(new Error('network timeout'));
+
+    const result = await service.publishScheduledSocialPosts({ now, workerId: 'worker-1' });
+
+    expect(result).toEqual({ published: 0, failed: 1, skippedUnapproved: 0 });
+    const recoveryCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(recoveryCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(recoveryCall.data.status).toBeUndefined();
+    expect(recoveryCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
+    expect(recoveryCall.data.metadata.recoveryReason).toContain('prevent duplicate external posts');
+  });
+
+  it('keeps provider success without an external id in PUBLISHING for manual recovery', async () => {
+    twitter.postThread.mockResolvedValueOnce({ success: true, tweetIds: [] });
+
+    const result = await service.publishScheduledSocialPosts({ now, workerId: 'worker-1' });
+
+    expect(result).toEqual({ published: 0, failed: 1, skippedUnapproved: 0 });
+    const recoveryCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(recoveryCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(recoveryCall.data.status).toBeUndefined();
+    expect(recoveryCall.data.metadata.publishError).toBe('Missing external publish id');
+  });
+
+  it('leaves uncertain provider failures in PUBLISHING for manual recovery', async () => {
+    twitter.postThread.mockResolvedValueOnce({ success: false, tweetIds: ['tw_uncertain'], error: 'timeout' });
+
+    const result = await service.publishScheduledSocialPosts({ now, workerId: 'worker-1' });
+
+    expect(result).toEqual({ published: 0, failed: 1, skippedUnapproved: 0 });
+    const uncertainFinalizeCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(uncertainFinalizeCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(uncertainFinalizeCall.data.status).toBeUndefined();
+    expect(uncertainFinalizeCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
+    expect(uncertainFinalizeCall.data.metadata.recoveryReason).toContain('manual recovery');
+  });
+
+  it('does not leave a successfully published row eligible as SCHEDULED when finalization fails', async () => {
+    prisma.socialPost.updateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockRejectedValueOnce(new Error('db finalize failed'));
+
+    await expect(service.publishScheduledSocialPosts({ now, workerId: 'worker-1' })).rejects.toThrow('db finalize failed');
+
+    expect(twitter.postThread).toHaveBeenCalledOnce();
+    const claimCall = prisma.socialPost.updateMany.mock.calls[0][0];
+    const failedFinalizeCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(claimCall.data.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(failedFinalizeCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(failedFinalizeCall.data.status).toBe(SocialPostStatus.PUBLISHED);
   });
 });

@@ -49,6 +49,7 @@ describe('SocialDraftService publish hardening', () => {
     const claimCall = prisma.socialPost.updateMany.mock.calls[0][0];
     expect(claimCall.where).toEqual(expect.objectContaining({ id: 'post_1', status: SocialPostStatus.APPROVED }));
     expect(claimCall.where.metadata).toEqual(expect.objectContaining({ equals: approvedPost.metadata }));
+    expect(claimCall.data.status).toBe(SocialPostStatus.PUBLISHING);
     expect(claimCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
   });
 
@@ -59,5 +60,59 @@ describe('SocialDraftService publish hardening', () => {
 
     expect(twitter.postThread).not.toHaveBeenCalled();
     expect(result).toEqual({ success: false, error: 'Social draft is already being published' });
+  });
+
+  it('finalizes direct publish only from the matching PUBLISHING claim', async () => {
+    await service.publishSocialDraft('post_1', { actorId: 'admin', trigger: 'manual' });
+
+    const finalizeCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(finalizeCall.where).toEqual(expect.objectContaining({
+      id: 'post_1',
+      status: SocialPostStatus.PUBLISHING,
+      metadata: expect.objectContaining({ path: ['publishLock', 'attemptId'] }),
+    }));
+    expect(finalizeCall.data.status).toBe(SocialPostStatus.PUBLISHED);
+  });
+
+  it('keeps provider failures without an external id in PUBLISHING for manual recovery', async () => {
+    twitter.postThread.mockResolvedValueOnce({ success: false, error: 'provider down' });
+
+    const result = await service.publishSocialDraft('post_1', { actorId: 'admin', trigger: 'manual' });
+
+    expect(result).toEqual(expect.objectContaining({ success: false, error: 'Publish failed', recoveryRequired: true }));
+    const recoveryCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(recoveryCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(recoveryCall.data.status).toBeUndefined();
+    expect(recoveryCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
+    expect(recoveryCall.data.metadata.recoveryReason).toContain('ambiguous external state');
+  });
+
+  it('keeps provider throws without an external id in PUBLISHING and not retryable', async () => {
+    twitter.postThread.mockRejectedValueOnce(new Error('network timeout'));
+
+    const result = await service.publishSocialDraft('post_1', { actorId: 'admin', trigger: 'manual' });
+
+    expect(result).toEqual(expect.objectContaining({ success: false, recoveryRequired: true }));
+    const recoveryCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(recoveryCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(recoveryCall.data.status).toBeUndefined();
+    expect(recoveryCall.data.metadata.publishLock.attemptId).toEqual(expect.any(String));
+    expect(recoveryCall.data.metadata.recoveryReason).toContain('prevent duplicate external posts');
+  });
+
+  it('keeps provider success without an external id in PUBLISHING for manual recovery', async () => {
+    twitter.postThread.mockResolvedValueOnce({ success: true, tweetIds: [] });
+
+    const result = await service.publishSocialDraft('post_1', { actorId: 'admin', trigger: 'manual' });
+
+    expect(result).toEqual(expect.objectContaining({
+      success: false,
+      error: 'Missing external publish id',
+      recoveryRequired: true,
+    }));
+    const recoveryCall = prisma.socialPost.updateMany.mock.calls[1][0];
+    expect(recoveryCall.where.status).toBe(SocialPostStatus.PUBLISHING);
+    expect(recoveryCall.data.status).toBeUndefined();
+    expect(recoveryCall.data.metadata.publishError).toBe('Missing external publish id');
   });
 });

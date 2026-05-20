@@ -87,6 +87,7 @@ enum SocialPostStatus {
   PENDING_APPROVAL
   APPROVED
   SCHEDULED
+  PUBLISHING
   PUBLISHED
   REJECTED
 }
@@ -590,6 +591,8 @@ model SocialPost {
   @@index([productId])
   @@index([status])
   @@index([platform, status])
+  // Normalized schedule-slot uniqueness for twitter/x aliases is enforced by
+  // raw SQL migration 0007_social_normalized_schedule_slots.
   @@map("social_posts")
 }
 
