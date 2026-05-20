@@ -6,7 +6,9 @@ import {
   Body,
   Param,
   HttpCode,
+  UseGuards,
 } from '@nestjs/common';
+import { AdminApiKeyGuard } from '../../features/admin/admin-api-key.guard';
 import { FeatureFlagsService } from './feature-flags.service';
 
 class SetFlagDto {
@@ -17,6 +19,7 @@ class SetFlagDto {
 }
 
 @Controller('admin/flags')
+@UseGuards(AdminApiKeyGuard)
 export class FeatureFlagsController {
   constructor(private readonly featureFlagsService: FeatureFlagsService) {}
 
