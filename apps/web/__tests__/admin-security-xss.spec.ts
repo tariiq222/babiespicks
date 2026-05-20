@@ -6,9 +6,9 @@ import { adminFetch } from '../src/shared/lib/admin-fetch';
 
 const repoRoot = process.cwd();
 const webSrcRoot = path.join(repoRoot, 'apps/web/src');
-const adminApprovalsPagePath = path.join(
+const adminAffiliateOsPagePath = path.join(
   webSrcRoot,
-  'app/[locale]/admin/approvals/page.tsx',
+  'app/[locale]/admin/affiliate-os/page.tsx',
 );
 const adminFetchPath = path.join(webSrcRoot, 'shared/lib/admin-fetch.ts');
 const adminUiRoot = path.join(webSrcRoot, 'app/[locale]/admin');
@@ -28,9 +28,9 @@ function listSourceFiles(dir: string): string[] {
   });
 }
 
-describe('admin approvals stored-XSS guardrails', () => {
+describe('admin Affiliate OS stored-XSS guardrails', () => {
   it('does not render approval body fields with dangerouslySetInnerHTML', () => {
-    const source = readSource(adminApprovalsPagePath);
+    const source = readSource(adminAffiliateOsPagePath);
 
     expect(/\bdangerouslySetInnerHTML\b/.test(source)).toBe(false);
   });

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
 import { adminFetch } from '@/shared/lib/admin-fetch';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const PRODUCT_DRAFT_PAGE_SIZE = 100;
 
 type ProductDraftStatus =
   | 'NEEDS_REVIEW'
@@ -15,7 +15,8 @@ type ProductDraftStatus =
   | 'PUBLISHED'
   | 'ARCHIVED';
 
-type DraftAction = 'evaluate' | 'publish';
+type DraftAction = 'approve' | 'reject' | 'needs-edit';
+type ContentAction = 'approve' | 'schedule' | 'revise' | 'reject';
 type ToastType = 'success' | 'error';
 
 interface ProductDraft {
@@ -38,6 +39,18 @@ interface SocialPost {
   createdAt?: string | null;
 }
 
+interface ContentApproval {
+  id: string;
+  slug?: string | null;
+  type?: string | null;
+  status: string;
+  titleAr?: string | null;
+  titleEn?: string | null;
+  seoScore?: number | null;
+  qualityScore?: number | null;
+  createdAt?: string | null;
+}
+
 interface AiRun {
   id: string;
   name: string;
@@ -48,12 +61,18 @@ interface AiRun {
 
 interface DashboardData {
   drafts: ProductDraft[];
-  approvedDrafts: ProductDraft[];
+  contentApprovals: ContentApproval[];
   socialPosts: SocialPost[];
   aiRuns: AiRun[];
   activeRuns: number;
   totalClicks: number;
   topProductName: string | null;
+}
+
+interface DraftPaginationState {
+  offset: number;
+  hasMore: boolean;
+  loadingMore: boolean;
 }
 
 interface StatCardProps {
@@ -70,7 +89,7 @@ interface ActionButtonProps {
   disabled: boolean;
   onClick: () => void;
   title?: string;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'danger';
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -89,6 +108,10 @@ function isSocialPost(value: unknown): value is SocialPost {
 
 function isAiRun(value: unknown): value is AiRun {
   return isRecord(value) && typeof value.id === 'string' && typeof value.name === 'string';
+}
+
+function isContentApproval(value: unknown): value is ContentApproval {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.status === 'string';
 }
 
 function extractItems<T>(payload: unknown, guard: (value: unknown) => value is T): T[] {
@@ -191,6 +214,13 @@ function formatDate(value: string | null | undefined, locale: string): string {
   });
 }
 
+function getDefaultScheduleDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(9, 0, 0, 0);
+  return date.toISOString();
+}
+
 function firstTextFromContent(content: unknown): string {
   if (typeof content === 'string') {
     return content;
@@ -216,8 +246,14 @@ function firstTextFromContent(content: unknown): string {
 function getSocialPreview(post: SocialPost, locale: string): string {
   const localizedText =
     locale === 'ar'
-      ? post.tweetsAr?.[0]?.text || firstTextFromContent(post.contentAr) || post.tweetsEn?.[0]?.text || firstTextFromContent(post.contentEn)
-      : post.tweetsEn?.[0]?.text || firstTextFromContent(post.contentEn) || post.tweetsAr?.[0]?.text || firstTextFromContent(post.contentAr);
+      ? post.tweetsAr?.[0]?.text ||
+        firstTextFromContent(post.contentAr) ||
+        post.tweetsEn?.[0]?.text ||
+        firstTextFromContent(post.contentEn)
+      : post.tweetsEn?.[0]?.text ||
+        firstTextFromContent(post.contentEn) ||
+        post.tweetsAr?.[0]?.text ||
+        firstTextFromContent(post.contentAr);
   const rawText = localizedText || firstTextFromContent(post.content);
   const text = rawText.trim();
 
@@ -225,7 +261,12 @@ function getSocialPreview(post: SocialPost, locale: string): string {
     return '—';
   }
 
-  return text.length > 50 ? `${text.slice(0, 50)}…` : text;
+  return text.length > 70 ? `${text.slice(0, 70)}…` : text;
+}
+
+function getContentTitle(item: ContentApproval, locale: string): string {
+  const title = locale === 'ar' ? item.titleAr || item.titleEn : item.titleEn || item.titleAr;
+  return title || item.slug || item.id;
 }
 
 function makeRandomIdempotencyPart(): string {
@@ -243,15 +284,15 @@ function makeRandomIdempotencyPart(): string {
 }
 
 function makeIdempotencyKey(draftId: string, action: DraftAction): string {
-  return `affiliate-os-${action}-${draftId}-${makeRandomIdempotencyPart()}`.slice(0, 128);
+  return `affiliate-os-approval-${action}-${draftId}-${makeRandomIdempotencyPart()}`.slice(0, 128);
 }
 
-function canEvaluateDraft(draft: ProductDraft): boolean {
-  return draft.status === 'APPROVED';
+function canReviewDraft(draft: ProductDraft): boolean {
+  return draft.status === 'NEEDS_REVIEW' || draft.status === 'NEEDS_EDIT';
 }
 
-function canPublishDraft(draft: ProductDraft): boolean {
-  return draft.status === 'APPROVED';
+function canReviewContent(item: ContentApproval): boolean {
+  return item.status === 'PENDING_APPROVAL' || item.status === 'QUALITY_CHECK' || item.status === 'REVISION_REQUESTED';
 }
 
 export default function AffiliateOsPage() {
@@ -260,7 +301,7 @@ export default function AffiliateOsPage() {
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const [data, setData] = useState<DashboardData>({
     drafts: [],
-    approvedDrafts: [],
+    contentApprovals: [],
     socialPosts: [],
     aiRuns: [],
     activeRuns: 0,
@@ -268,6 +309,11 @@ export default function AffiliateOsPage() {
     topProductName: null,
   });
   const [pendingSocialCount, setPendingSocialCount] = useState(0);
+  const [draftPagination, setDraftPagination] = useState<DraftPaginationState>({
+    offset: 0,
+    hasMore: false,
+    loadingMore: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -301,20 +347,20 @@ export default function AffiliateOsPage() {
     setError(null);
 
     try {
-      const [draftsRes, approvedDraftsRes, socialRes, overviewRes, analyticsRes, aiRunsRes] =
+      const [draftsRes, contentRes, socialRes, overviewRes, analyticsRes, aiRunsRes] =
         await Promise.all([
-          adminFetch(`${API_BASE}/admin/product-drafts?limit=10`),
-          adminFetch(`${API_BASE}/admin/product-drafts?status=APPROVED&limit=50`),
+          adminFetch(`${API_BASE}/admin/product-drafts?limit=${PRODUCT_DRAFT_PAGE_SIZE}&offset=0`),
+          adminFetch(`${API_BASE}/admin/approvals`),
           adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`),
           adminFetch(`${API_BASE}/admin/ai-os/overview`),
           adminFetch(`${API_BASE}/admin/analytics`),
           adminFetch(`${API_BASE}/admin/ai-os/runs?limit=5`),
         ]);
 
-      const [draftsPayload, approvedDraftsPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload] =
+      const [draftsPayload, contentPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload] =
         await Promise.all([
           draftsRes.json().catch(() => null),
-          approvedDraftsRes.json().catch(() => null),
+          contentRes.json().catch(() => null),
           socialRes.json().catch(() => null),
           overviewRes.json().catch(() => null),
           analyticsRes.json().catch(() => null),
@@ -323,7 +369,7 @@ export default function AffiliateOsPage() {
 
       const failedResponse = [
         { response: draftsRes, payload: draftsPayload },
-        { response: approvedDraftsRes, payload: approvedDraftsPayload },
+        { response: contentRes, payload: contentPayload },
         { response: socialRes, payload: socialPayload },
         { response: overviewRes, payload: overviewPayload },
         { response: analyticsRes, payload: analyticsPayload },
@@ -337,15 +383,20 @@ export default function AffiliateOsPage() {
       }
 
       const drafts = extractItems(draftsPayload, isProductDraft);
-      const approvedDrafts = extractItems(approvedDraftsPayload, isProductDraft);
+      const contentApprovals = extractItems(contentPayload, isContentApproval).filter(canReviewContent);
       const socialPosts = extractItems(socialPayload, isSocialPost);
       const aiRuns = extractItems(aiRunsPayload, isAiRun);
 
       setPendingSocialCount(getResponseTotal(socialPayload, socialPosts.length));
+      setDraftPagination({
+        offset: drafts.length,
+        hasMore: drafts.length === PRODUCT_DRAFT_PAGE_SIZE,
+        loadingMore: false,
+      });
       setData({
         drafts,
-        approvedDrafts,
-        socialPosts: socialPosts.slice(0, 10),
+        contentApprovals,
+        socialPosts,
         aiRuns,
         activeRuns: getNumericField(overviewPayload, ['aiOs', 'runsRunning']),
         totalClicks: getNumericField(analyticsPayload, ['affiliate', 'totalClicks']),
@@ -358,18 +409,52 @@ export default function AffiliateOsPage() {
     }
   }, [t]);
 
+  async function loadMoreDrafts() {
+    const nextOffset = draftPagination.offset;
+    setDraftPagination((current) => ({ ...current, loadingMore: true }));
+
+    try {
+      const res = await adminFetch(
+        `${API_BASE}/admin/product-drafts?limit=${PRODUCT_DRAFT_PAGE_SIZE}&offset=${nextOffset}`,
+      );
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      const nextDrafts = extractItems(payload, isProductDraft);
+      setData((current) => ({
+        ...current,
+        drafts: [...current.drafts, ...nextDrafts],
+      }));
+      setDraftPagination({
+        offset: nextOffset + nextDrafts.length,
+        hasMore: nextDrafts.length === PRODUCT_DRAFT_PAGE_SIZE,
+        loadingMore: false,
+      });
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+      setDraftPagination((current) => ({ ...current, loadingMore: false }));
+    }
+  }
+
   useEffect(() => {
-    const timer = setTimeout(() => { void fetchAllData(); }, 0);
+    const timer = setTimeout(() => {
+      void fetchAllData();
+    }, 0);
     return () => clearTimeout(timer);
   }, [fetchAllData]);
 
   useEffect(() => {
-    const interval = setInterval(() => { void fetchAllData(); }, 30_000);
+    const interval = setInterval(() => {
+      void fetchAllData();
+    }, 30_000);
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
   async function runDraftAction(draft: ProductDraft, action: DraftAction) {
-    const actionKey = `${draft.id}:${action}`;
+    const actionKey = `product:${draft.id}:${action}`;
     const idempotencyKey = getActionIdempotencyKey(draft.id, action);
     setActionLoading(actionKey);
 
@@ -385,7 +470,7 @@ export default function AffiliateOsPage() {
       }
 
       clearActionIdempotencyKey(draft.id, action);
-      showToast('success', t('actionCompleted'));
+      showToast('success', t(`productApprovalSuccess.${action}`));
       void fetchAllData();
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('loadFailed'));
@@ -394,12 +479,45 @@ export default function AffiliateOsPage() {
     }
   }
 
-  async function runSocialAction(postId: string, action: 'approve') {
-    const actionKey = `${postId}:${action}`;
+  async function runContentAction(item: ContentApproval, action: ContentAction) {
+    const actionKey = `content:${item.id}:${action}`;
+    setActionLoading(actionKey);
+
+    const body =
+      action === 'schedule'
+        ? { scheduledAt: getDefaultScheduleDate() }
+        : action === 'revise'
+          ? { notes: t('defaultReviseNote') }
+          : action === 'reject'
+            ? { reason: t('defaultRejectReason') }
+            : undefined;
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/approvals/${item.id}/${action}`, {
+        method: 'POST',
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t(`contentApprovalSuccess.${action}`));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function runSocialApproveAndSchedule(postId: string) {
+    const actionKey = `social:${postId}:approve`;
     setActionLoading(actionKey);
 
     try {
-      const res = await adminFetch(`${API_BASE}/admin/approvals/social/${postId}/${action}`, {
+      const res = await adminFetch(`${API_BASE}/admin/approvals/social/${postId}/approve-and-schedule`, {
         method: 'POST',
       });
       const payload: unknown = await res.json().catch(() => null);
@@ -408,7 +526,7 @@ export default function AffiliateOsPage() {
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
-      showToast('success', t('actionCompleted'));
+      showToast('success', t('socialApproveScheduleSuccess'));
       void fetchAllData();
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('loadFailed'));
@@ -417,41 +535,22 @@ export default function AffiliateOsPage() {
     }
   }
 
-  async function handlePublishApprovedProducts() {
-    setActionLoading('publish-approved-products');
+  async function runSocialReject(postId: string) {
+    const actionKey = `social:${postId}:reject`;
+    setActionLoading(actionKey);
 
     try {
-      let successCount = 0;
-      let failureCount = 0;
-      let firstFailureReason: string | null = null;
+      const res = await adminFetch(`${API_BASE}/admin/approvals/social/${postId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: t('defaultSocialRejectReason') }),
+      });
+      const payload: unknown = await res.json().catch(() => null);
 
-      for (const draft of data.approvedDrafts) {
-        try {
-          const idempotencyKey = getActionIdempotencyKey(draft.id, 'publish');
-          const res = await adminFetch(`${API_BASE}/admin/product-drafts/${draft.id}/publish`, {
-            method: 'POST',
-            body: JSON.stringify({ idempotencyKey }),
-          });
-          const payload: unknown = await res.json().catch(() => null);
-
-          if (res.ok) {
-            successCount++;
-            clearActionIdempotencyKey(draft.id, 'publish');
-          } else {
-            failureCount++;
-            firstFailureReason ??= getErrorMessage(payload, `HTTP ${res.status}`);
-          }
-        } catch (err) {
-          failureCount++;
-          firstFailureReason ??= err instanceof Error ? err.message : t('loadFailed');
-        }
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
-      const countsMessage = `${t('publishedCount')}: ${formatNumber(successCount, locale)} — ${t('failedCount')}: ${formatNumber(failureCount, locale)}`;
-      showToast(
-        failureCount === 0 ? 'success' : 'error',
-        firstFailureReason ? `${countsMessage} — ${t('firstFailureReason')}: ${firstFailureReason}` : countsMessage,
-      );
+      showToast('success', t('socialRejectSuccess'));
       void fetchAllData();
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('loadFailed'));
@@ -460,16 +559,21 @@ export default function AffiliateOsPage() {
     }
   }
 
-  const pendingDraftsCount = data.drafts.filter((draft) => draft.status === 'NEEDS_REVIEW').length;
+  const pendingDraftsCount = data.drafts.filter(canReviewDraft).length;
   const isBusy = loading || actionLoading !== null;
 
   return (
     <div className="min-h-screen flex flex-col" dir={dir}>
       <header className="h-14 bg-white border-b border-beige flex items-center justify-between px-6 flex-shrink-0">
-        <h1 className="text-sm font-medium text-charcoal">{t('affiliateOs')}</h1>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sage">{t('singleAdminSurface')}</p>
+          <h1 className="text-sm font-medium text-charcoal">{t('affiliateOs')}</h1>
+        </div>
         <button
           type="button"
-          onClick={() => { void fetchAllData(); }}
+          onClick={() => {
+            void fetchAllData();
+          }}
           disabled={loading}
           className="flex items-center gap-1.5 text-xs text-stone hover:text-charcoal transition-colors disabled:opacity-50"
         >
@@ -490,7 +594,22 @@ export default function AffiliateOsPage() {
         </div>
       )}
 
-      <main className="flex-1 px-6 py-6 space-y-6 overflow-auto">
+      <div className="flex-1 px-6 py-6 space-y-6 overflow-auto">
+        <section className="rounded-2xl border border-sage/25 bg-sage/10 px-5 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="flex items-start gap-3">
+              <span aria-hidden="true" className="ti ti-automation text-xl text-sage mt-0.5" />
+              <div className="space-y-1">
+                <h2 className="text-base font-semibold text-charcoal">{t('automationBannerTitle')}</h2>
+                <p className="text-sm leading-6 text-stone max-w-3xl">{t('automationBannerBody')}</p>
+              </div>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-full border border-sage/20 bg-white px-3 py-1 text-xs font-semibold text-sage-deep">
+              {t('approvalOnlyMode')}
+            </span>
+          </div>
+        </section>
+
         {error && (
           <section className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
@@ -499,7 +618,9 @@ export default function AffiliateOsPage() {
             </div>
             <button
               type="button"
-              onClick={() => { void fetchAllData(); }}
+              onClick={() => {
+                void fetchAllData();
+              }}
               className="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-700 transition-colors"
             >
               {t('retry')}
@@ -511,18 +632,20 @@ export default function AffiliateOsPage() {
           <StatCard
             icon="ti-package-import"
             label={t('pendingDrafts')}
-            value={`${formatNumber(pendingDraftsCount, locale)} / ${formatNumber(data.approvedDrafts.length, locale)}`}
-            hint={t('approvedDrafts')}
+            value={formatNumber(pendingDraftsCount, locale)}
+            hint={t('approvalActionsOnly')}
+          />
+          <StatCard
+            icon="ti-file-check"
+            label={t('pendingContent')}
+            value={formatNumber(data.contentApprovals.length, locale)}
+            hint={t('contentApprovalsFromApi')}
           />
           <StatCard
             icon="ti-brand-x"
             label={t('pendingSocial')}
             value={formatNumber(pendingSocialCount, locale)}
-          />
-          <StatCard
-            icon="ti-brain"
-            label={t('activeRuns')}
-            value={formatNumber(data.activeRuns, locale)}
+            hint={t('socialApprovalSchedules')}
           />
           <StatCard
             icon="ti-click"
@@ -533,108 +656,160 @@ export default function AffiliateOsPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <Panel
-            title={t('productDrafts')}
-            icon="ti-package-import"
-            footerHref="/admin/discovery"
-            footerLabel={t('viewAll')}
-            dir={dir}
-          >
+          <Panel title={`${t('productDrafts')} (${formatNumber(data.drafts.length, locale)})`} icon="ti-package-import">
             {loading ? (
               <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
             ) : data.drafts.length === 0 ? (
               <StateBlock icon="ti-inbox" title={t('noDrafts')} />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-beige bg-linen/50">
-                      <TableHeader>{t('product')}</TableHeader>
-                      <TableHeader>{t('status')}</TableHeader>
-                      <TableHeader>{t('trendScore')}</TableHeader>
-                      <TableHeader>{t('actions')}</TableHeader>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-beige">
-                    {data.drafts.map((draft) => (
-                      <tr key={draft.id} className="hover:bg-linen/40 transition-colors">
-                        <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-72 truncate">
-                          <bdi dir="auto">{draft.title}</bdi>
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={draft.status} />
-                        </td>
-                        <td className="px-4 py-3 text-charcoal tabular-nums">
-                          {formatScore(draft.trendScore, locale)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <ActionButton
-                              icon="ti-sparkles"
-                              label={t('evaluate')}
-                              loading={actionLoading === `${draft.id}:evaluate`}
-                              disabled={isBusy || !canEvaluateDraft(draft)}
-                              title={!canEvaluateDraft(draft) ? t('actionUnavailable') : undefined}
-                              onClick={() => { void runDraftAction(draft, 'evaluate'); }}
-                            />
-                            <ActionButton
-                              icon="ti-send"
-                              label={t('publish')}
-                              loading={actionLoading === `${draft.id}:publish`}
-                              disabled={isBusy || !canPublishDraft(draft)}
-                              title={!canPublishDraft(draft) ? t('actionUnavailable') : undefined}
-                              onClick={() => { void runDraftAction(draft, 'publish'); }}
-                            />
-                          </div>
-                        </td>
+              <div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <caption className="sr-only">{t('productDraftsTableCaption')}</caption>
+                    <thead>
+                      <tr className="border-b border-beige bg-linen/50">
+                        <TableHeader>{t('product')}</TableHeader>
+                        <TableHeader>{t('status')}</TableHeader>
+                        <TableHeader>{t('trendScore')}</TableHeader>
+                        <TableHeader>{t('approvalDecision')}</TableHeader>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-beige">
+                      {data.drafts.map((draft) => (
+                        <tr key={draft.id} className="hover:bg-linen/40 transition-colors">
+                          <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-72 truncate">
+                            <bdi dir="auto">{draft.title}</bdi>
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={draft.status} />
+                          </td>
+                          <td className="px-4 py-3 text-charcoal tabular-nums">
+                            {formatScore(draft.trendScore, locale)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <ActionButton
+                                icon="ti-check"
+                                label={t('approve')}
+                                loading={actionLoading === `product:${draft.id}:approve`}
+                                disabled={isBusy || !canReviewDraft(draft)}
+                                title={!canReviewDraft(draft) ? t('actionUnavailable') : undefined}
+                                variant="primary"
+                                onClick={() => {
+                                  void runDraftAction(draft, 'approve');
+                                }}
+                              />
+                              <ActionButton
+                                icon="ti-edit"
+                                label={t('needsEdit')}
+                                loading={actionLoading === `product:${draft.id}:needs-edit`}
+                                disabled={isBusy || !canReviewDraft(draft)}
+                                title={!canReviewDraft(draft) ? t('actionUnavailable') : undefined}
+                                onClick={() => {
+                                  void runDraftAction(draft, 'needs-edit');
+                                }}
+                              />
+                              <ActionButton
+                                icon="ti-x"
+                                label={t('reject')}
+                                loading={actionLoading === `product:${draft.id}:reject`}
+                                disabled={isBusy || !canReviewDraft(draft)}
+                                title={!canReviewDraft(draft) ? t('actionUnavailable') : undefined}
+                                variant="danger"
+                                onClick={() => {
+                                  void runDraftAction(draft, 'reject');
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {draftPagination.hasMore && (
+                  <div className="border-t border-beige px-5 py-4">
+                    <ActionButton
+                      icon="ti-list-plus"
+                      label={t('loadMoreDrafts')}
+                      loading={draftPagination.loadingMore}
+                      disabled={isBusy || draftPagination.loadingMore}
+                      onClick={() => {
+                        void loadMoreDrafts();
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </Panel>
 
-          <Panel
-            title={t('socialPosts')}
-            icon="ti-messages"
-            footerHref="/admin/approvals"
-            footerLabel={t('viewAll')}
-            dir={dir}
-          >
+          <Panel title={t('contentApprovals')} icon="ti-file-check">
             {loading ? (
               <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
-            ) : data.socialPosts.length === 0 ? (
-              <StateBlock icon="ti-brand-x" title={t('noSocialPosts')} />
+            ) : data.contentApprovals.length === 0 ? (
+              <StateBlock icon="ti-file-check" title={t('noContentApprovals')} />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
+                  <caption className="sr-only">{t('contentApprovalsTableCaption')}</caption>
                   <thead>
                     <tr className="border-b border-beige bg-linen/50">
-                      <TableHeader>{t('platform')}</TableHeader>
-                      <TableHeader>{t('preview')}</TableHeader>
+                      <TableHeader>{t('content')}</TableHeader>
+                      <TableHeader>{t('type')}</TableHeader>
                       <TableHeader>{t('status')}</TableHeader>
-                      <TableHeader>{t('actions')}</TableHeader>
+                      <TableHeader>{t('approvalDecision')}</TableHeader>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-beige">
-                    {data.socialPosts.map((post) => (
-                      <tr key={post.id} className="hover:bg-linen/40 transition-colors">
-                        <td className="px-4 py-3 text-charcoal font-medium"><bdi dir="auto">{post.platform}</bdi></td>
-                        <td className="px-4 py-3 text-stone text-xs min-w-56 max-w-72 truncate" dir="auto">
-                          <bdi dir="auto">{getSocialPreview(post, locale)}</bdi>
+                    {data.contentApprovals.map((item) => (
+                      <tr key={item.id} className="hover:bg-linen/40 transition-colors">
+                        <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-72 truncate">
+                          <bdi dir="auto">{getContentTitle(item, locale)}</bdi>
+                        </td>
+                        <td className="px-4 py-3 text-stone"><bdi dir="auto">{item.type ?? '—'}</bdi></td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={item.status} />
                         </td>
                         <td className="px-4 py-3">
-                          <StatusBadge status={post.status} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <ActionButton
                               icon="ti-check"
                               label={t('approve')}
-                              loading={actionLoading === `${post.id}:approve`}
+                              loading={actionLoading === `content:${item.id}:approve`}
                               disabled={isBusy}
-                              onClick={() => { void runSocialAction(post.id, 'approve'); }}
+                              variant="primary"
+                              onClick={() => {
+                                void runContentAction(item, 'approve');
+                              }}
+                            />
+                            <ActionButton
+                              icon="ti-calendar-time"
+                              label={t('approveAndSchedule')}
+                              loading={actionLoading === `content:${item.id}:schedule`}
+                              disabled={isBusy}
+                              onClick={() => {
+                                void runContentAction(item, 'schedule');
+                              }}
+                            />
+                            <ActionButton
+                              icon="ti-edit"
+                              label={t('revise')}
+                              loading={actionLoading === `content:${item.id}:revise`}
+                              disabled={isBusy}
+                              onClick={() => {
+                                void runContentAction(item, 'revise');
+                              }}
+                            />
+                            <ActionButton
+                              icon="ti-x"
+                              label={t('reject')}
+                              loading={actionLoading === `content:${item.id}:reject`}
+                              disabled={isBusy}
+                              variant="danger"
+                              onClick={() => {
+                                void runContentAction(item, 'reject');
+                              }}
                             />
                           </div>
                         </td>
@@ -647,42 +822,56 @@ export default function AffiliateOsPage() {
           </Panel>
         </section>
 
-        <section className="bg-white rounded-xl border border-beige overflow-hidden">
-          <div className="px-5 py-4 border-b border-beige flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span aria-hidden="true" className="ti ti-activity text-sage" />
-              <h2 className="text-sm font-semibold text-charcoal">{t('aiActivity')}</h2>
-            </div>
-            <Link href="/admin/ai-os/runs" className="text-xs text-sage hover:text-sage-deep transition-colors">
-              {t('viewAll')}
-            </Link>
-          </div>
-
+        <Panel title={t('socialPosts')} icon="ti-messages">
           {loading ? (
             <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
-          ) : data.aiRuns.length === 0 ? (
-            <StateBlock icon="ti-brain" title={t('noAiRuns')} />
+          ) : data.socialPosts.length === 0 ? (
+            <StateBlock icon="ti-brand-x" title={t('noSocialPosts')} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
+                <caption className="sr-only">{t('socialPostsTableCaption')}</caption>
                 <thead>
                   <tr className="border-b border-beige bg-linen/50">
-                    <TableHeader>{t('name')}</TableHeader>
-                    <TableHeader>{t('type')}</TableHeader>
+                    <TableHeader>{t('platform')}</TableHeader>
+                    <TableHeader>{t('preview')}</TableHeader>
                     <TableHeader>{t('status')}</TableHeader>
-                    <TableHeader>{t('createdAt')}</TableHeader>
+                    <TableHeader>{t('approvalDecision')}</TableHeader>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-beige">
-                  {data.aiRuns.map((run) => (
-                    <tr key={run.id} className="hover:bg-linen/40 transition-colors">
-                      <td className="px-4 py-3 text-charcoal font-medium"><bdi dir="auto">{run.name}</bdi></td>
-                      <td className="px-4 py-3 text-stone"><bdi dir="auto">{run.type}</bdi></td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={run.status} />
+                  {data.socialPosts.map((post) => (
+                    <tr key={post.id} className="hover:bg-linen/40 transition-colors">
+                      <td className="px-4 py-3 text-charcoal font-medium"><bdi dir="auto">{post.platform}</bdi></td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-56 max-w-xl truncate" dir="auto">
+                        <bdi dir="auto">{getSocialPreview(post, locale)}</bdi>
                       </td>
-                      <td className="px-4 py-3 text-stone text-xs tabular-nums">
-                        {formatDate(run.createdAt, locale)}
+                      <td className="px-4 py-3">
+                        <StatusBadge status={post.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <ActionButton
+                            icon="ti-calendar-check"
+                            label={t('approveAndSchedule')}
+                            loading={actionLoading === `social:${post.id}:approve`}
+                            disabled={isBusy}
+                            variant="primary"
+                            onClick={() => {
+                              void runSocialApproveAndSchedule(post.id);
+                            }}
+                          />
+                          <ActionButton
+                            icon="ti-x"
+                            label={t('reject')}
+                            loading={actionLoading === `social:${post.id}:reject`}
+                            disabled={isBusy}
+                            variant="danger"
+                            onClick={() => {
+                              void runSocialReject(post.id);
+                            }}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -690,33 +879,67 @@ export default function AffiliateOsPage() {
               </table>
             </div>
           )}
-        </section>
+        </Panel>
 
-        <section className="bg-white rounded-xl border border-beige p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span aria-hidden="true" className="ti ti-bolt text-sage" />
-            <h2 className="text-sm font-semibold text-charcoal">{t('quickActions')}</h2>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <ActionButton
-              icon="ti-package-export"
-              label={t('publishApprovedProducts')}
-              loading={actionLoading === 'publish-approved-products'}
-              disabled={isBusy || data.approvedDrafts.length === 0}
-              title={data.approvedDrafts.length === 0 ? t('actionUnavailable') : undefined}
-              variant="primary"
-              onClick={() => { void handlePublishApprovedProducts(); }}
-            />
-            <ActionButton
-              icon="ti-refresh"
-              label={t('refreshAll')}
-              loading={loading}
-              disabled={isBusy}
-              onClick={() => { void fetchAllData(); }}
-            />
-          </div>
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+          <Panel title={t('aiActivity')} icon="ti-activity">
+            {loading ? (
+              <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+            ) : data.aiRuns.length === 0 ? (
+              <StateBlock icon="ti-brain" title={t('noAiRuns')} />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">{t('aiActivityTableCaption')}</caption>
+                  <thead>
+                    <tr className="border-b border-beige bg-linen/50">
+                      <TableHeader>{t('name')}</TableHeader>
+                      <TableHeader>{t('type')}</TableHeader>
+                      <TableHeader>{t('status')}</TableHeader>
+                      <TableHeader>{t('createdAt')}</TableHeader>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-beige">
+                    {data.aiRuns.map((run) => (
+                      <tr key={run.id} className="hover:bg-linen/40 transition-colors">
+                        <td className="px-4 py-3 text-charcoal font-medium"><bdi dir="auto">{run.name}</bdi></td>
+                        <td className="px-4 py-3 text-stone"><bdi dir="auto">{run.type}</bdi></td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={run.status} />
+                        </td>
+                        <td className="px-4 py-3 text-stone text-xs tabular-nums">
+                          {formatDate(run.createdAt, locale)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          <section className="bg-white rounded-xl border border-beige p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="ti ti-shield-check text-sage" />
+              <h2 className="text-sm font-semibold text-charcoal">{t('opsStatus')}</h2>
+            </div>
+            <StatusLine icon="ti-automation" label={t('automationStatus')} value={t('automationStatusValue')} />
+            <StatusLine icon="ti-share-off" label={t('socialPublishPolicy')} value={t('socialPublishPolicyValue')} />
+            <StatusLine icon="ti-settings-off" label={t('settingsPolicy')} value={t('settingsPolicyValue')} />
+            <div className="pt-2">
+              <ActionButton
+                icon="ti-refresh"
+                label={t('refreshAll')}
+                loading={loading}
+                disabled={isBusy}
+                onClick={() => {
+                  void fetchAllData();
+                }}
+              />
+            </div>
+          </section>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
@@ -737,20 +960,14 @@ function StatCard({ icon, label, value, hint }: StatCardProps) {
 function Panel({
   title,
   icon,
-  footerHref,
-  footerLabel,
-  dir,
   children,
 }: {
   title: string;
   icon: string;
-  footerHref: '/admin/discovery' | '/admin/approvals';
-  footerLabel: string;
-  dir: 'rtl' | 'ltr';
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-beige overflow-hidden">
+    <section className="bg-white rounded-xl border border-beige overflow-hidden">
       <div className="px-5 py-4 border-b border-beige flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span aria-hidden="true" className={`ti ${icon} text-sage`} />
@@ -758,16 +975,7 @@ function Panel({
         </div>
       </div>
       {children}
-      <div className="px-5 py-3 border-t border-beige">
-        <Link
-          href={footerHref}
-          className="inline-flex items-center gap-1 text-xs text-sage hover:text-sage-deep transition-colors"
-        >
-          <span>{footerLabel}</span>
-          <span aria-hidden="true" className={`ti ${dir === 'rtl' ? 'ti-chevron-left' : 'ti-chevron-right'} text-xs`} />
-        </Link>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -784,11 +992,25 @@ function StateBlock({ icon, title }: { icon: string; title: string }) {
   );
 }
 
+function StatusLine({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl bg-linen/70 px-4 py-3">
+      <span aria-hidden="true" className={`ti ${icon} text-sage mt-0.5`} />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-charcoal">{label}</p>
+        <p className="text-xs leading-5 text-stone">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations('admin');
   const classes: Record<string, string> = {
     NEEDS_REVIEW: 'bg-amber-50 text-amber-700 border-amber-200',
     PENDING_APPROVAL: 'bg-amber-50 text-amber-700 border-amber-200',
+    QUALITY_CHECK: 'bg-amber-50 text-amber-700 border-amber-200',
+    REVISION_REQUESTED: 'bg-lavender/20 text-lavender-text border-lavender/30',
     PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
     APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -805,6 +1027,8 @@ function StatusBadge({ status }: { status: string }) {
   const labels: Record<string, string> = {
     NEEDS_REVIEW: t('statusNeedsReview'),
     PENDING_APPROVAL: t('statusPendingApproval'),
+    QUALITY_CHECK: t('statusQualityCheck'),
+    REVISION_REQUESTED: t('statusRevisionRequested'),
     PENDING: t('statusPending'),
     APPROVED: t('statusApproved'),
     COMPLETED: t('statusCompleted'),
@@ -838,10 +1062,11 @@ function ActionButton({
   title,
   variant = 'secondary',
 }: ActionButtonProps) {
-  const classes =
-    variant === 'primary'
-      ? 'bg-sage hover:bg-sage-deep text-cream border border-sage'
-      : 'bg-linen hover:bg-beige text-charcoal border border-beige';
+  const classes = {
+    primary: 'bg-sage hover:bg-sage-deep text-cream border border-sage',
+    secondary: 'bg-linen hover:bg-beige text-charcoal border border-beige',
+    danger: 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200',
+  }[variant];
 
   return (
     <button
@@ -849,7 +1074,7 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${classes}`}
+      className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${classes}`}
     >
       <span aria-hidden="true" className={`ti ${loading ? 'ti-loader-2 animate-spin' : icon} text-sm`} />
       <span>{label}</span>

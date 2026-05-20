@@ -13,10 +13,6 @@ interface CircuitBreaker {
   tripCount: number;
 }
 
-interface ApprovalsResponse {
-  items?: unknown[];
-}
-
 export default function AdminLayout({
   children,
 }: {
@@ -30,34 +26,19 @@ export default function AdminLayout({
   const dir = isRtl ? 'rtl' : 'ltr';
 
   const [breakers, setBreakers] = useState<CircuitBreaker[]>([]);
-  const [pendingCount, setPendingCount] = useState<number>(0);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadSidebarData() {
       try {
-        const [cbRes, appRes] = await Promise.all([
-          adminFetch(`${API_BASE}/admin/circuit-breakers`).catch(() => null),
-          adminFetch(`${API_BASE}/admin/approvals`).catch(() => null),
-        ]);
+        const cbRes = await adminFetch(`${API_BASE}/admin/circuit-breakers`).catch(() => null);
 
         if (!mounted) return;
 
         if (cbRes?.ok) {
           const cbData: CircuitBreaker[] = await cbRes.json().catch(() => []);
           setBreakers(Array.isArray(cbData) ? cbData : []);
-        }
-
-        if (appRes?.ok) {
-          const appData: ApprovalsResponse | unknown[] = await appRes.json().catch(() => []);
-          const items: unknown[] = Array.isArray(appData)
-            ? appData
-            : (appData as ApprovalsResponse).items ?? [];
-          const pending = items.filter(
-            (i) => (i as { status: string }).status === 'PENDING_APPROVAL',
-          ).length;
-          setPendingCount(pending);
         }
       } catch {
         // sidebar data is non-critical; silently skip
@@ -109,20 +90,8 @@ export default function AdminLayout({
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <NavItem href="/admin" icon="ti-layout-dashboard" label={t('dashboard')} pathname={pathname} exact />
-          <NavItem
-            href="/admin/approvals"
-            icon="ti-clipboard-check"
-            label={t('approvals')}
-            pathname={pathname}
-            badge={pendingCount > 0 ? pendingCount : undefined}
-          />
-          <NavItem href="/admin/channels" icon="ti-share" label={t('channels')} pathname={pathname} />
-          <NavItem href="/admin/ai-os" icon="ti-brain" label={t('aiOs')} pathname={pathname} />
+        <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label={t('adminPrimaryNavigation')}>
           <NavItem href="/admin/affiliate-os" icon="ti-chart-arcs" label={t('affiliateOs')} pathname={pathname} />
-          <NavItem href="/admin/discovery" icon="ti-radar-2" label={t('discoveryNav')} pathname={pathname} />
-          <NavItem href="/admin/settings" icon="ti-settings-2" label={t('settings')} pathname={pathname} />
 
           <div className="h-px bg-beige my-2.5 mx-1" />
 
@@ -160,7 +129,6 @@ function NavItem({
   label,
   external,
   pathname,
-  badge,
   exact,
 }: {
   href: string;
@@ -168,7 +136,6 @@ function NavItem({
   label: string;
   external?: boolean;
   pathname: string;
-  badge?: number;
   exact?: boolean;
 }) {
   const isActive = exact
@@ -189,11 +156,6 @@ function NavItem({
     >
       <span aria-hidden="true" className={`ti ${icon} text-base flex-shrink-0`} />
       <span className="flex-1 font-medium">{label}</span>
-      {badge !== undefined && (
-        <span className="inline-flex items-center justify-center min-w-[18px] h-4.5 rounded-full text-[10px] font-semibold px-1.5 bg-sage text-cream tabular-nums">
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
     </Link>
   );
 }

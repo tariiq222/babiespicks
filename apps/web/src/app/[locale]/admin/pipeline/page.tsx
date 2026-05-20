@@ -7,5 +7,5 @@ type PageProps = {
 export default async function Page({ params }: PageProps) {
   const { locale } = await params;
 
-  redirect(`/${locale}/admin/ai-os`);
+  redirect(`/${locale}/admin/affiliate-os`);
 }
