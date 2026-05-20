@@ -926,19 +926,19 @@ export default function ApprovalsPage() {
                     <div className="p-5 max-h-72 overflow-y-auto">
                       {bodyLang === 'ar' ? (
                         webSelected.bodyAr ? (
-                          <div
-                            className="text-sm text-charcoal leading-relaxed prose prose-sm max-w-none"
-                            dangerouslySetInnerHTML={{ __html: webSelected.bodyAr }}
-                          />
+                          <div className="text-sm text-charcoal leading-relaxed whitespace-pre-wrap break-words">
+                            {webSelected.bodyAr}
+                          </div>
                         ) : (
                           <p className="text-sm text-stone italic">لا يوجد محتوى عربي</p>
                         )
                       ) : webSelected.bodyEn ? (
                         <div
-                          className="text-sm text-charcoal leading-relaxed prose prose-sm max-w-none"
+                          className="text-sm text-charcoal leading-relaxed whitespace-pre-wrap break-words"
                           dir="ltr"
-                          dangerouslySetInnerHTML={{ __html: webSelected.bodyEn }}
-                        />
+                        >
+                          {webSelected.bodyEn}
+                        </div>
                       ) : (
                         <p className="text-sm text-stone italic" dir="ltr">No English content</p>
                       )}
