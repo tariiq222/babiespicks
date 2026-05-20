@@ -1,0 +1,39 @@
+{
+  "name": "ai-affiliate-os-phase-1-offer-pipeline",
+  "nodes": [
+    {
+      "id": "inspect-worktree",
+      "label": "Inspect git status, diff stat, and implementation files",
+      "status": "complete",
+      "dependsOn": []
+    },
+    {
+      "id": "document-phase-scope",
+      "label": "Create Phase 1 offer pipeline documentation",
+      "status": "complete",
+      "dependsOn": ["inspect-worktree"]
+    },
+    {
+      "id": "create-run-artifacts",
+      "label": "Create CTO run artifacts under .opencode/runs",
+      "status": "complete",
+      "dependsOn": ["document-phase-scope"]
+    },
+    {
+      "id": "validate-artifacts",
+      "label": "Run git diff --check on documentation and run artifacts",
+      "status": "complete",
+      "dependsOn": ["create-run-artifacts"]
+    }
+  ],
+  "criticalPath": [
+    "inspect-worktree",
+    "document-phase-scope",
+    "create-run-artifacts",
+    "validate-artifacts"
+  ],
+  "publishGate": {
+    "autoPublishingAllowed": false,
+    "reason": "Phase 1 is approval-only; publishing requires a separate later workflow."
+  }
+}

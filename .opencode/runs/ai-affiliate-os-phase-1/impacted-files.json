@@ -1,0 +1,55 @@
+{
+  "worktree": "/Users/tariq/code/ai-affiliate-os",
+  "branch": "feat/ai-affiliate-os-offer-pipeline",
+  "base": "b639297c375f684dcaf9de9d3f36b92e089e0636",
+  "implementationFiles": {
+    "modified": [
+      "apps/api/src/features/affiliate-ai-os/__tests__/product-drafts.service.spec.ts",
+      "apps/api/src/features/affiliate-ai-os/__tests__/trend-intelligence.service.spec.ts",
+      "apps/api/src/features/affiliate-ai-os/affiliate-ai-os.module.ts",
+      "apps/api/src/features/affiliate-ai-os/dto/product-drafts.dto.ts",
+      "apps/api/src/features/affiliate-ai-os/dto/trend-intelligence.dto.ts",
+      "apps/api/src/features/affiliate-ai-os/product-drafts.controller.ts",
+      "apps/api/src/features/affiliate-ai-os/product-drafts.service.ts",
+      "apps/api/src/features/affiliate-ai-os/trend-intelligence.service.ts",
+      "apps/web/messages/ar.json",
+      "apps/web/messages/en.json",
+      "apps/web/src/app/[locale]/admin/affiliate-os/page.tsx"
+    ],
+    "untracked": [
+      "apps/api/src/features/affiliate-ai-os/__tests__/product-drafts.controller.spec.ts",
+      "apps/api/src/features/affiliate-ai-os/__tests__/trend-signals.controller.spec.ts",
+      "apps/api/src/features/affiliate-ai-os/trend-signals.controller.ts"
+    ]
+  },
+  "documentationFilesCreated": [
+    "docs/ai-affiliate-os/phase-1-offer-pipeline.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/request.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/discovery.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/impacted-files.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/risk-scorecard.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/dag-plan.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/rollback-plan.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/tests.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/result.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/memory-context.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/clarity-score.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/dependencies.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/agents.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/approval-log.json",
+    ".opencode/runs/ai-affiliate-os-phase-1/merge-report.md",
+    ".opencode/runs/ai-affiliate-os-phase-1/no-memory-update.txt",
+    ".opencode/runs/ai-affiliate-os-phase-1/trace.jsonl",
+    ".opencode/runs/ai-affiliate-os-phase-1/cost-estimate.json"
+  ],
+  "excludedPaths": [
+    "app source files during documentation run",
+    "package files",
+    "env files",
+    "migrations",
+    "admin/auth/proxy outside existing implementation state",
+    "original main worktree",
+    "stash",
+    "git history"
+  ]
+}

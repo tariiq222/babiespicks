@@ -24,6 +24,18 @@ interface ProductDraft {
   title: string;
   status: ProductDraftStatus | string;
   trendScore?: number | null;
+  discoveryReason?: string | null;
+  createdAt?: string | null;
+}
+
+interface TrendSignal {
+  id: string;
+  source?: string | null;
+  title?: string | null;
+  rawTitle?: string | null;
+  trendScore?: number | null;
+  discoveryReason?: string | null;
+  status: string;
   createdAt?: string | null;
 }
 
@@ -60,6 +72,7 @@ interface AiRun {
 }
 
 interface DashboardData {
+  trendSignals: TrendSignal[];
   drafts: ProductDraft[];
   contentApprovals: ContentApproval[];
   socialPosts: SocialPost[];
@@ -102,6 +115,10 @@ function isProductDraft(value: unknown): value is ProductDraft {
   return isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string';
 }
 
+function isTrendSignal(value: unknown): value is TrendSignal {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.status === 'string';
+}
+
 function isSocialPost(value: unknown): value is SocialPost {
   return isRecord(value) && typeof value.id === 'string' && typeof value.platform === 'string';
 }
@@ -123,7 +140,7 @@ function extractItems<T>(payload: unknown, guard: (value: unknown) => value is T
     return [];
   }
 
-  const candidates = [payload.items, payload.data, payload.drafts, payload.runs];
+  const candidates = [payload.items, payload.data, payload.drafts, payload.signals, payload.trendSignals, payload.runs];
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
       return candidate.filter(guard);
@@ -269,6 +286,10 @@ function getContentTitle(item: ContentApproval, locale: string): string {
   return title || item.slug || item.id;
 }
 
+function getTrendSignalTitle(signal: TrendSignal): string {
+  return signal.title || signal.rawTitle || signal.id;
+}
+
 function makeRandomIdempotencyPart(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
@@ -300,6 +321,7 @@ export default function AffiliateOsPage() {
   const locale = useLocale();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const [data, setData] = useState<DashboardData>({
+    trendSignals: [],
     drafts: [],
     contentApprovals: [],
     socialPosts: [],
@@ -347,8 +369,9 @@ export default function AffiliateOsPage() {
     setError(null);
 
     try {
-      const [draftsRes, contentRes, socialRes, overviewRes, analyticsRes, aiRunsRes] =
+      const [trendSignalsRes, draftsRes, contentRes, socialRes, overviewRes, analyticsRes, aiRunsRes] =
         await Promise.all([
+          adminFetch(`${API_BASE}/admin/trend-signals?limit=50`),
           adminFetch(`${API_BASE}/admin/product-drafts?limit=${PRODUCT_DRAFT_PAGE_SIZE}&offset=0`),
           adminFetch(`${API_BASE}/admin/approvals`),
           adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`),
@@ -357,8 +380,9 @@ export default function AffiliateOsPage() {
           adminFetch(`${API_BASE}/admin/ai-os/runs?limit=5`),
         ]);
 
-      const [draftsPayload, contentPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload] =
+      const [trendSignalsPayload, draftsPayload, contentPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload] =
         await Promise.all([
+          trendSignalsRes.json().catch(() => null),
           draftsRes.json().catch(() => null),
           contentRes.json().catch(() => null),
           socialRes.json().catch(() => null),
@@ -368,6 +392,7 @@ export default function AffiliateOsPage() {
         ]);
 
       const failedResponse = [
+        { response: trendSignalsRes, payload: trendSignalsPayload },
         { response: draftsRes, payload: draftsPayload },
         { response: contentRes, payload: contentPayload },
         { response: socialRes, payload: socialPayload },
@@ -382,6 +407,7 @@ export default function AffiliateOsPage() {
         );
       }
 
+      const trendSignals = extractItems(trendSignalsPayload, isTrendSignal);
       const drafts = extractItems(draftsPayload, isProductDraft);
       const contentApprovals = extractItems(contentPayload, isContentApproval).filter(canReviewContent);
       const socialPosts = extractItems(socialPayload, isSocialPost);
@@ -394,6 +420,7 @@ export default function AffiliateOsPage() {
         loadingMore: false,
       });
       setData({
+        trendSignals,
         drafts,
         contentApprovals,
         socialPosts,
@@ -471,6 +498,30 @@ export default function AffiliateOsPage() {
 
       clearActionIdempotencyKey(draft.id, action);
       showToast('success', t(`productApprovalSuccess.${action}`));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function createDraftFromTrendSignal(signalId: string) {
+    const actionKey = `trend:${signalId}:create-draft`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/product-drafts/from-trend-signal`, {
+        method: 'POST',
+        body: JSON.stringify({ trendSignalId: signalId }),
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t('trendSignalDraftCreated'));
       void fetchAllData();
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('loadFailed'));
@@ -655,6 +706,65 @@ export default function AffiliateOsPage() {
           />
         </section>
 
+        <Panel title={`${t('trendSignals')} (${formatNumber(data.trendSignals.length, locale)})`} icon="ti-radar-2">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : data.trendSignals.length === 0 ? (
+            <StateBlock icon="ti-radar-off" title={t('noTrendSignals')} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <caption className="sr-only">{t('trendSignalsTableCaption')}</caption>
+                <thead>
+                  <tr className="border-b border-beige bg-linen/50">
+                    <TableHeader>{t('source')}</TableHeader>
+                    <TableHeader>{t('title')}</TableHeader>
+                    <TableHeader>{t('trendScore')}</TableHeader>
+                    <TableHeader>{t('discoveryReason')}</TableHeader>
+                    <TableHeader>{t('status')}</TableHeader>
+                    <TableHeader>{t('createdAt')}</TableHeader>
+                    <TableHeader>{t('actions')}</TableHeader>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-beige">
+                  {data.trendSignals.map((signal) => (
+                    <tr key={signal.id} className="hover:bg-linen/40 transition-colors">
+                      <td className="px-4 py-3 text-stone whitespace-nowrap"><bdi dir="auto">{signal.source || '—'}</bdi></td>
+                      <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-72 truncate">
+                        <bdi dir="auto">{getTrendSignalTitle(signal)}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-charcoal tabular-nums">
+                        {formatScore(signal.trendScore, locale)}
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-56 max-w-md truncate" dir="auto">
+                        <bdi dir="auto">{signal.discoveryReason || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={signal.status} />
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs tabular-nums">
+                        {formatDate(signal.createdAt, locale)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <ActionButton
+                          icon="ti-package-import"
+                          label={t('createDraft')}
+                          loading={actionLoading === `trend:${signal.id}:create-draft`}
+                          disabled={isBusy}
+                          variant="primary"
+                          onClick={() => {
+                            void createDraftFromTrendSignal(signal.id);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+
         <section className="grid gap-6 xl:grid-cols-2">
           <Panel title={`${t('productDrafts')} (${formatNumber(data.drafts.length, locale)})`} icon="ti-package-import">
             {loading ? (
@@ -671,6 +781,7 @@ export default function AffiliateOsPage() {
                         <TableHeader>{t('product')}</TableHeader>
                         <TableHeader>{t('status')}</TableHeader>
                         <TableHeader>{t('trendScore')}</TableHeader>
+                        <TableHeader>{t('discoveryReason')}</TableHeader>
                         <TableHeader>{t('approvalDecision')}</TableHeader>
                       </tr>
                     </thead>
@@ -685,6 +796,9 @@ export default function AffiliateOsPage() {
                           </td>
                           <td className="px-4 py-3 text-charcoal tabular-nums">
                             {formatScore(draft.trendScore, locale)}
+                          </td>
+                          <td className="px-4 py-3 text-stone text-xs min-w-56 max-w-md truncate" dir="auto">
+                            <bdi dir="auto">{draft.discoveryReason || '—'}</bdi>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1048,7 +1162,7 @@ function StatusBadge({ status }: { status: string }) {
         classes[status] ?? 'bg-linen text-stone border-beige'
       }`}
     >
-      {labels[status] ?? t('statusUnknown')}
+      {labels[status] ?? status}
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -14,6 +15,7 @@ export const PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 export const PRODUCT_DRAFT_REASON_MAX_LENGTH = 1_000;
 export const PRODUCT_DRAFT_NOTES_MAX_LENGTH = 2_000;
 export const PRODUCT_DRAFT_LIST_OFFSET_MAX = 10_000;
+export const PRODUCT_DRAFT_TEXT_MAX_LENGTH = 2_000;
 
 export const PRODUCT_DRAFT_STATUSES = [
   'NEEDS_REVIEW',
@@ -52,6 +54,19 @@ export interface ProductDraftEvaluationInput {
 export interface ProductDraftPublishInput {
   actorId?: string;
   idempotencyKey?: string;
+}
+
+export interface ProductDraftUpdateInput {
+  title?: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  sourceUrl?: string | null;
+  canonicalUrl?: string | null;
+  affiliateUrl?: string | null;
+  category?: string | null;
+  discoveryReason?: string;
+  trendScore?: number;
+  rawData?: unknown;
 }
 
 export class ProductDraftTransitionBodyDto {
@@ -98,6 +113,64 @@ export class ProductDraftPublishBodyDto {
   @IsString()
   @MaxLength(PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH)
   idempotencyKey?: string;
+}
+
+export class CreateProductDraftFromTrendSignalBodyDto {
+  @IsString()
+  @MaxLength(128)
+  trendSignalId!: string;
+}
+
+export class UpdateProductDraftBodyDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_TEXT_MAX_LENGTH)
+  description?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_TEXT_MAX_LENGTH)
+  imageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_TEXT_MAX_LENGTH)
+  sourceUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_TEXT_MAX_LENGTH)
+  canonicalUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_TEXT_MAX_LENGTH)
+  affiliateUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  category?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_TEXT_MAX_LENGTH)
+  discoveryReason?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  trendScore?: number;
+
+  @IsOptional()
+  rawData?: unknown;
 }
 
 export class ListProductDraftsQueryDto {

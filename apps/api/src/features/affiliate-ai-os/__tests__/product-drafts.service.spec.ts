@@ -22,6 +22,11 @@ describe('ProductDraftsService', () => {
     expect(findManyArgs.select.id).toBe(true);
     expect(findManyArgs.select.title).toBe(true);
     expect(findManyArgs.select.status).toBe(true);
+    expect(findManyArgs.select.discoveryReason).toBe(true);
+    expect(findManyArgs.select.trendScore).toBe(true);
+    expect(findManyArgs.select.trendSignal).toEqual(expect.objectContaining({
+      select: expect.objectContaining({ id: true }),
+    }));
     expect(findManyArgs.select.rawData).toBeUndefined();
   });
 
@@ -89,83 +94,185 @@ describe('ProductDraftsService', () => {
     expect(tx.approvalAuditEvent.create).toHaveBeenCalled();
   });
 
-  it('automates approval, evaluation, and publish with deterministic idempotency keys', async () => {
-    const draft = {
-      id: 'draft_auto',
-      status: 'NEEDS_REVIEW' as const,
-      transitionIdempotencyKey: null,
+  it('creates a product draft from a trend signal with Phase 1 fields and signal reference', async () => {
+    const trendSignal = {
+      id: 'signal_1',
+      source: 'manual',
+      sourceUrl: 'https://source.example/signal',
+      canonicalUrl: 'https://store.example/product',
+      rawTitle: 'Baby Monitor',
+      normalizedTitle: 'baby monitor',
+      sourceHash: 'hash_1',
+      discoveryReason: 'High intent parent searches',
+      trendScore: 81,
+      demandSignal: 'Demand up',
+      competitionSignal: null,
+      seasonalitySignal: null,
+      metadata: { source: 'manual' },
+    };
+    const detail = {
+      id: 'draft_1',
+      trendSignalId: 'signal_1',
+      trendSignal: { id: 'signal_1' },
+      discoveryReason: 'High intent parent searches',
+      trendScore: 81,
+      status: 'NEEDS_REVIEW',
     };
     const prisma = {
-      productDraft: {
-        findUnique: vi.fn().mockResolvedValue(draft),
+      trendSignal: {
+        findUnique: vi.fn().mockResolvedValue(trendSignal),
       },
-      productScore: {
+      productDraft: {
         findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 'draft_1', status: 'NEEDS_REVIEW' }),
+        findUnique: vi.fn().mockResolvedValue(detail),
       },
     };
     const service = new ProductDraftsService(prisma as unknown as PrismaService);
-    const transition = vi.spyOn(service, 'transitionDraft').mockResolvedValue({
-      ...draft,
-      status: 'APPROVED',
-    } as never);
-    const evaluate = vi.spyOn(service, 'evaluateDraft').mockResolvedValue({
-      id: 'score_1',
-      productDraftId: 'draft_auto',
-      scores: { safety: 8.5, overall: 8.2, affiliate: 8, content: 8 },
-      reasoning: {},
-      riskFlags: [],
-      recommendation: 'READY',
-      status: 'APPROVED',
-    } as never);
-    const publish = vi.spyOn(service, 'publishApprovedDraft').mockResolvedValue({
-      product: { id: 'product_1' },
-      draft: { ...draft, status: 'PUBLISHED' },
-    } as never);
 
-    const result = await service.approveEvaluateAndPublishDraft('draft_auto');
+    const result = await service.createDraftFromSignal('signal_1');
 
-    expect(result).toEqual(expect.objectContaining({ success: true, action: 'approved_evaluated_published' }));
-    expect(transition).toHaveBeenCalledWith('draft_auto', expect.objectContaining({
-      action: 'approve',
-      idempotencyKey: 'product-draft:draft_auto:approval-automation:v1:approve',
+    expect(result).toBe(detail);
+    expect(prisma.productDraft.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        trendSignalId: 'signal_1',
+        discoveryReason: 'High intent parent searches',
+        trendScore: 81,
+        status: 'NEEDS_REVIEW',
+      }),
     }));
-    expect(evaluate).toHaveBeenCalledWith('draft_auto', {
-      idempotencyKey: 'product-draft:draft_auto:approval-automation:v1:evaluate',
-    });
-    expect(publish).toHaveBeenCalledWith('draft_auto', expect.objectContaining({
-      idempotencyKey: 'product-draft:draft_auto:approval-automation:v1:publish',
+    expect(prisma.productDraft.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        discoveryReason: true,
+        trendScore: true,
+        trendSignal: expect.any(Object),
+      }),
     }));
   });
 
-  it('does not publish when automated evaluation is not ready', async () => {
+  it('approves a draft with audit only and never publishes', async () => {
     const draft = {
-      id: 'draft_unsafe',
-      status: 'APPROVED' as const,
+      id: 'draft_approve',
+      status: 'NEEDS_REVIEW' as const,
       transitionIdempotencyKey: null,
+    };
+    const updatedDraft = { ...draft, status: 'APPROVED' as const };
+    const tx = {
+      productDraft: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue(updatedDraft),
+      },
+      approvalAuditEvent: {
+        create: vi.fn().mockResolvedValue({ id: 'audit_1' }),
+      },
     };
     const prisma = {
       productDraft: {
-        findUnique: vi.fn().mockResolvedValue(draft),
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(draft)
+          .mockResolvedValueOnce(updatedDraft),
       },
-      productScore: {
-        findFirst: vi.fn().mockResolvedValue(null),
+      product: { upsert: vi.fn() },
+      $transaction: vi.fn((fn: (transaction: typeof tx) => Promise<unknown>) => fn(tx)),
+    };
+    const service = new ProductDraftsService(prisma as unknown as PrismaService);
+    const publish = vi.spyOn(service, 'publishApprovedDraft');
+
+    const result = await service.transitionDraft('draft_approve', { action: 'approve' });
+
+    expect(result).toBe(updatedDraft);
+    expect(tx.approvalAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'APPROVED' }),
+    }));
+    expect(publish).not.toHaveBeenCalled();
+    expect(prisma.product.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects a draft with audit only', async () => {
+    const draft = {
+      id: 'draft_reject',
+      status: 'NEEDS_REVIEW' as const,
+      transitionIdempotencyKey: null,
+    };
+    const updatedDraft = { ...draft, status: 'REJECTED' as const, rejectionReason: 'unsafe' };
+    const tx = {
+      productDraft: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue(updatedDraft),
+      },
+      approvalAuditEvent: {
+        create: vi.fn().mockResolvedValue({ id: 'audit_reject' }),
+      },
+    };
+    const prisma = {
+      productDraft: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(draft)
+          .mockResolvedValueOnce(updatedDraft),
+      },
+      $transaction: vi.fn((fn: (transaction: typeof tx) => Promise<unknown>) => fn(tx)),
+    };
+    const service = new ProductDraftsService(prisma as unknown as PrismaService);
+
+    await expect(service.transitionDraft('draft_reject', {
+      action: 'reject',
+      reason: 'unsafe',
+    })).resolves.toBe(updatedDraft);
+    expect(tx.approvalAuditEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'REJECTED', reason: 'unsafe' }),
+    }));
+  });
+
+  it('updates editable fields before approval', async () => {
+    const draft = {
+      id: 'draft_edit',
+      status: 'NEEDS_EDIT' as const,
+      transitionIdempotencyKey: null,
+    };
+    const updatedDraft = {
+      ...draft,
+      title: 'Edited title',
+      discoveryReason: 'Better reason',
+      trendScore: 91,
+    };
+    const prisma = {
+      productDraft: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce(draft)
+          .mockResolvedValueOnce(updatedDraft),
+        update: vi.fn().mockResolvedValue(updatedDraft),
       },
     };
     const service = new ProductDraftsService(prisma as unknown as PrismaService);
-    vi.spyOn(service, 'evaluateDraft').mockResolvedValue({
-      id: 'score_unsafe',
-      productDraftId: 'draft_unsafe',
-      scores: { safety: 5, overall: 6, affiliate: 8, content: 8 },
-      reasoning: {},
-      riskFlags: [],
-      recommendation: 'NEEDS_REVIEW',
-      status: 'NEEDS_REVIEW',
-    } as never);
-    const publish = vi.spyOn(service, 'publishApprovedDraft').mockResolvedValue({} as never);
 
-    await expect(service.approveEvaluateAndPublishDraft('draft_unsafe')).rejects.toMatchObject({
-      response: expect.objectContaining({ success: false, stage: 'evaluate' }),
+    const result = await service.updateDraft('draft_edit', {
+      title: '  Edited title  ',
+      discoveryReason: 'Better reason',
+      trendScore: 91,
     });
-    expect(publish).not.toHaveBeenCalled();
+
+    expect(result).toBe(updatedDraft);
+    expect(prisma.productDraft.update).toHaveBeenCalledWith({
+      where: { id: 'draft_edit' },
+      data: expect.objectContaining({
+        title: 'Edited title',
+        discoveryReason: 'Better reason',
+        trendScore: 91,
+      }),
+    });
+  });
+
+  it('fails closed when direct publish is called', async () => {
+    const prisma = {
+      product: { upsert: vi.fn() },
+      productDraft: { updateMany: vi.fn() },
+    };
+    const service = new ProductDraftsService(prisma as unknown as PrismaService);
+
+    await expect(service.publishApprovedDraft('draft_1')).rejects.toThrow(
+      'Direct product draft publishing is disabled in Affiliate AI OS Phase 1',
+    );
+    expect(prisma.product.upsert).not.toHaveBeenCalled();
+    expect(prisma.productDraft.updateMany).not.toHaveBeenCalled();
   });
 });

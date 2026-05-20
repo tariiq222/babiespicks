@@ -1,0 +1,24 @@
+{
+  "approvals": [
+    {
+      "item": "Documentation artifact creation",
+      "status": "approved-by-task-spec",
+      "source": "user TaskSpec"
+    },
+    {
+      "item": "App source edits",
+      "status": "not-approved",
+      "source": "user TaskSpec scope restriction"
+    },
+    {
+      "item": "Git history or stash changes",
+      "status": "not-approved",
+      "source": "user TaskSpec scope restriction"
+    },
+    {
+      "item": "Auto-publishing",
+      "status": "not-approved",
+      "source": "Phase 1 no auto-publishing rule"
+    }
+  ]
+}

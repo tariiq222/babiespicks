@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -14,6 +15,7 @@ import type {
   ListProductDraftsQuery,
   ProductDraftStatusValue,
   ProductDraftTransitionInput,
+  ProductDraftUpdateInput,
 } from './dto/product-drafts.dto';
 
 const PRODUCT_DRAFT_STATUS_NEEDS_REVIEW = 'NEEDS_REVIEW' as const;
@@ -78,7 +80,6 @@ interface ProductDraftEvaluationRecord extends ProductDraftRecord {
 interface ProductScoreRecord {
   id: string;
   productDraftId?: string | null;
-  productId?: string | null;
   aiRunId?: string | null;
   idempotencyKey?: string | null;
   scores: unknown;
@@ -86,20 +87,6 @@ interface ProductScoreRecord {
   riskFlags?: unknown;
   recommendation?: string | null;
   status: string;
-}
-
-interface ProductRecord {
-  id: string;
-  slug?: string;
-  sourceUrl?: string | null;
-}
-
-interface StoreRecord {
-  id: string;
-}
-
-interface ApprovalAuditRecord {
-  metadata?: unknown;
 }
 
 interface AffiliateAiOsPrisma {
@@ -120,25 +107,7 @@ interface AffiliateAiOsPrisma {
     findFirst(args: unknown): Promise<ProductScoreRecord | null>;
     update(args: unknown): Promise<ProductScoreRecord>;
   };
-  product: {
-    create(args: unknown): Promise<ProductRecord>;
-    findFirst(args: unknown): Promise<ProductRecord | null>;
-    upsert(args: unknown): Promise<ProductRecord>;
-  };
-  productTranslation: {
-    upsert(args: unknown): Promise<unknown>;
-  };
-  productPrice: {
-    upsert(args: unknown): Promise<unknown>;
-  };
-  verdict: {
-    upsert(args: unknown): Promise<unknown>;
-  };
-  store: {
-    upsert(args: unknown): Promise<StoreRecord>;
-  };
   approvalAuditEvent: {
-    findFirst(args: unknown): Promise<ApprovalAuditRecord | null>;
     create(args: unknown): Promise<unknown>;
   };
 }
@@ -185,9 +154,23 @@ const TRANSITIONABLE_DRAFT_STATUSES = [
   PRODUCT_DRAFT_STATUS_NEEDS_EDIT,
 ] as const;
 
+const TREND_SIGNAL_REFERENCE_SELECT = {
+  id: true,
+  source: true,
+  sourceUrl: true,
+  canonicalUrl: true,
+  rawTitle: true,
+  normalizedTitle: true,
+  discoveryReason: true,
+  trendScore: true,
+  status: true,
+  createdAt: true,
+} as const;
+
 const PRODUCT_DRAFT_LIST_SELECT = {
   id: true,
   trendSignalId: true,
+  trendSignal: { select: TREND_SIGNAL_REFERENCE_SELECT },
   title: true,
   description: true,
   imageUrl: true,
@@ -216,14 +199,19 @@ const PRODUCT_DRAFT_LIST_SELECT = {
   updatedAt: true,
 } as const;
 
+const PRODUCT_DRAFT_DETAIL_SELECT = {
+  ...PRODUCT_DRAFT_LIST_SELECT,
+  rawData: true,
+} as const;
+
 @Injectable()
 export class ProductDraftsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Converts a trend signal into a review-only product draft.
-   * This deliberately never creates or upserts a Product; publishing is outside
-   * Affiliate AI OS Phase 1 and requires a separate explicit approval path.
+   * This deliberately never writes a Product; product creation is
+   * outside Affiliate AI OS Phase 1 and requires a separate explicit workflow.
    */
   async createDraftFromSignal(signalId: string) {
     const db = this.prisma as unknown as AffiliateAiOsPrisma;
@@ -248,11 +236,11 @@ export class ProductDraftsService {
     });
 
     if (existingDraft) {
-      return existingDraft;
+      return this.getDraft(existingDraft.id);
     }
 
     try {
-      return await db.productDraft.create({
+      const draft = await db.productDraft.create({
         data: {
           trendSignalId: trendSignal.id,
           title: trendSignal.rawTitle,
@@ -270,6 +258,7 @@ export class ProductDraftsService {
           status: PRODUCT_DRAFT_STATUS_NEEDS_REVIEW,
         },
       });
+      return this.getDraft(draft.id);
     } catch (error) {
       if (!this.isUniqueConstraintViolation(error)) {
         throw error;
@@ -280,11 +269,26 @@ export class ProductDraftsService {
       });
 
       if (racedDraft) {
-        return racedDraft;
+        return this.getDraft(racedDraft.id);
       }
 
       throw error;
     }
+  }
+
+  /** Gets a single draft with its trend signal reference for the review UI. */
+  async getDraft(id: string) {
+    const db = this.prisma as unknown as AffiliateAiOsPrisma;
+    const draft = await db.productDraft.findUnique({
+      where: { id },
+      select: PRODUCT_DRAFT_DETAIL_SELECT,
+    });
+
+    if (!draft) {
+      throw new NotFoundException(`ProductDraft ${id} was not found`);
+    }
+
+    return draft;
   }
 
   /** Lists dashboard review drafts with a bounded result size. */
@@ -302,9 +306,38 @@ export class ProductDraftsService {
     });
   }
 
+  /** Updates editable draft fields before final approval or rejection. */
+  async updateDraft(id: string, input: ProductDraftUpdateInput) {
+    const db = this.prisma as unknown as AffiliateAiOsPrisma;
+    const draft = await db.productDraft.findUnique({ where: { id } });
+
+    if (!draft) {
+      throw new NotFoundException(`ProductDraft ${id} was not found`);
+    }
+
+    if (!TRANSITIONABLE_DRAFT_STATUSES.some((status) => status === draft.status)) {
+      throw new ConflictException(
+        `Cannot update draft from ${draft.status}; expected NEEDS_REVIEW or NEEDS_EDIT`,
+      );
+    }
+
+    const data = this.buildUpdateData(input);
+
+    if (Object.keys(data).length === 0) {
+      return this.getDraft(id);
+    }
+
+    await db.productDraft.update({
+      where: { id },
+      data,
+    });
+
+    return this.getDraft(id);
+  }
+
   /**
    * Applies an admin review transition to a draft with idempotent retries.
-   * Invalid transitions fail closed with ConflictException and never publish a Product.
+   * Invalid transitions fail closed with ConflictException and never create a Product.
    */
   async transitionDraft(id: string, options: ProductDraftTransitionInput) {
     const db = this.prisma as unknown as AffiliateAiOsPrisma;
@@ -319,7 +352,7 @@ export class ProductDraftsService {
       transitionIdempotencyKey &&
       draft.transitionIdempotencyKey === transitionIdempotencyKey
     ) {
-      return draft;
+      return this.getDraft(id);
     }
 
     if (!this.canTransition(draft.status, options.action)) {
@@ -360,14 +393,14 @@ export class ProductDraftsService {
     });
 
     if (transitionResult.updateCount === 1) {
-      return transitionResult.updatedDraft;
+      return this.getDraft(id);
     }
 
     if (
       transitionIdempotencyKey &&
       transitionResult.updatedDraft.transitionIdempotencyKey === transitionIdempotencyKey
     ) {
-      return transitionResult.updatedDraft;
+      return this.getDraft(id);
     }
 
     throw new ConflictException(
@@ -376,7 +409,7 @@ export class ProductDraftsService {
   }
 
   /**
-   * Evaluates a draft into a reviewable ProductScore without publishing it.
+   * Evaluates a draft into a reviewable ProductScore without creating Product content.
    * The score is deterministic from draft metadata so repeated runs can safely
    * update the same idempotency key or latest draft score.
    */
@@ -438,265 +471,13 @@ export class ProductDraftsService {
   }
 
   /**
-   * Human approval automation: approve using the normal audited transition,
-   * ensure a safe READY evaluation exists, then publish. Deterministic keys make
-   * retries and double-clicks idempotent without trusting any request-body actor.
-   */
-  async approveEvaluateAndPublishDraft(
-    id: string,
-    options: ProductDraftPublishInput = {},
-  ) {
-    const db = this.prisma as unknown as AffiliateAiOsPrisma;
-    const automationKey = this.automationKeyForDraft(id, options.idempotencyKey);
-    const keys = {
-      transition: `${automationKey}:approve`,
-      evaluation: `${automationKey}:evaluate`,
-      publish: `${automationKey}:publish`,
-    };
-    const initialDraft = await db.productDraft.findUnique({ where: { id } });
-
-    if (!initialDraft) {
-      throw new NotFoundException(`ProductDraft ${id} was not found`);
-    }
-
-    if (initialDraft.status === PRODUCT_DRAFT_STATUS_PUBLISHED) {
-      const published = await this.publishApprovedDraft(id, {
-        actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-        idempotencyKey: keys.publish,
-      });
-      return { success: true, action: 'approved_evaluated_published', idempotent: true, ...published };
-    }
-
-    try {
-      if (initialDraft.status !== PRODUCT_DRAFT_STATUS_APPROVED) {
-        await this.transitionDraft(id, {
-          action: 'approve',
-          reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-          idempotencyKey: keys.transition,
-        });
-      }
-
-      let score = await db.productScore.findFirst({
-        where: { productDraftId: id },
-        orderBy: { updatedAt: 'desc' },
-      });
-
-      if (!this.isApprovedReadyScore(score)) {
-        score = await this.evaluateDraft(id, { idempotencyKey: keys.evaluation });
-      }
-
-      if (!this.isApprovedReadyScore(score)) {
-        throw this.automationConflict(
-          'evaluate',
-          'Evaluation did not produce an APPROVED READY ProductScore with a safe safety score',
-        );
-      }
-
-      const published = await this.publishApprovedDraft(id, {
-        actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-        idempotencyKey: keys.publish,
-      });
-
-      return { success: true, action: 'approved_evaluated_published', ...published };
-    } catch (error) {
-      if (error instanceof ConflictException || error instanceof NotFoundException) {
-        throw error;
-      }
-
-      throw this.automationConflict('publish', safeAutomationError(error));
-    }
-  }
-
-  /**
-   * Publishes an explicitly APPROVED draft into the public product tables.
-   * Publishing is separate from approval and requires an APPROVED/READY score.
+   * Phase 1 is approval-queue only. Direct publishing is fail-closed until a
+   * later phase introduces a separate, explicit publishing workflow.
    */
   async publishApprovedDraft(id: string, options: ProductDraftPublishInput = {}) {
-    const db = this.prisma as unknown as AffiliateAiOsPrisma;
-    const draft = await db.productDraft.findUnique({ where: { id } });
-
-    const idempotencyKey = options.idempotencyKey?.trim() || null;
-
-    if (!draft) {
-      throw new NotFoundException(`ProductDraft ${id} was not found`);
-    }
-
-    if (
-      draft.status === PRODUCT_DRAFT_STATUS_PUBLISHED &&
-      idempotencyKey
-    ) {
-      return this.findPublishedDraftResult(db, draft, idempotencyKey);
-    }
-
-    if (draft.status !== PRODUCT_DRAFT_STATUS_APPROVED) {
-      throw new ConflictException(
-        `Cannot publish draft from ${draft.status}; expected APPROVED`,
-      );
-    }
-
-    const score = await db.productScore.findFirst({
-      where: { productDraftId: draft.id },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    if (!this.isApprovedReadyScore(score)) {
-      throw new ConflictException(
-        'Cannot publish draft without an APPROVED READY ProductScore and safe safety score',
-      );
-    }
-
-    const publishedAt = new Date();
-
-    return db.$transaction(async (tx) => {
-      const publishClaim = await tx.productDraft.updateMany({
-        where: {
-          id: draft.id,
-          status: PRODUCT_DRAFT_STATUS_APPROVED,
-        },
-        data: { status: PRODUCT_DRAFT_STATUS_PUBLISHED },
-      });
-
-      if (publishClaim.count !== 1) {
-        const currentDraft = await tx.productDraft.findUnique({ where: { id: draft.id } });
-        if (currentDraft?.status === PRODUCT_DRAFT_STATUS_PUBLISHED && idempotencyKey) {
-          return this.findPublishedDraftResult(tx, currentDraft, idempotencyKey);
-        }
-
-        throw new ConflictException(
-          `Cannot publish draft from ${currentDraft?.status ?? 'UNKNOWN'}; expected APPROVED`,
-        );
-      }
-
-      const store = await tx.store.upsert(this.buildStoreUpsertArgs(draft));
-      const product = await tx.product.upsert(
-        this.buildProductUpsertArgs(draft, store.id),
-      );
-      const translation = await tx.productTranslation.upsert(
-        this.buildProductTranslationUpsertArgs(draft, product.id),
-      );
-
-      const price = draft.price
-        ? await tx.productPrice.upsert(
-            this.buildProductPriceUpsertArgs(draft, product.id, store.id),
-          )
-        : null;
-
-      const verdict = await tx.verdict.upsert(
-        this.buildVerdictUpsertArgs(product.id, score),
-      );
-      const updatedScore = await tx.productScore.update({
-        where: { id: score.id },
-        data: {
-          productId: product.id,
-          status: PRODUCT_SCORE_STATUS_PUBLISHED,
-        },
-      });
-      const updatedDraft = await tx.productDraft.findUnique({ where: { id: draft.id } });
-
-      await recordApprovalAuditEvent(tx, {
-        action: 'PUBLISHED',
-        entityType: 'PRODUCT_DRAFT',
-        entityId: draft.id,
-        metadata: {
-          ...(idempotencyKey ? { idempotencyKey } : {}),
-          productId: product.id,
-          productScoreId: score.id,
-          publishedAt: publishedAt.toISOString(),
-        },
-      });
-
-      return {
-        product,
-        translation,
-        price,
-        verdict,
-        score: updatedScore,
-        draft: updatedDraft ?? { ...draft, status: PRODUCT_DRAFT_STATUS_PUBLISHED },
-      };
-    });
-  }
-
-  /** Returns the previously published product for a same-key publish retry. */
-  private async findPublishedDraftResult(
-    db: AffiliateAiOsPrisma,
-    draft: ProductDraftEvaluationRecord,
-    idempotencyKey: string,
-  ) {
-    const auditEvent = await db.approvalAuditEvent.findFirst({
-      where: {
-        action: 'PUBLISHED',
-        entityType: 'PRODUCT_DRAFT',
-        entityId: draft.id,
-        metadata: { path: ['idempotencyKey'], equals: idempotencyKey },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    const auditMetadata = this.asRecord(auditEvent?.metadata);
-    const productId =
-      typeof auditMetadata.productId === 'string' ? auditMetadata.productId : null;
-    const productScoreId =
-      typeof auditMetadata.productScoreId === 'string'
-        ? auditMetadata.productScoreId
-        : null;
-
-    if (!productId) {
-      throw new ConflictException(
-        'Cannot resolve previously published product for idempotent retry',
-      );
-    }
-
-    const score = await db.productScore.findFirst({
-      where: productScoreId
-        ? { id: productScoreId }
-        : {
-            productDraftId: draft.id,
-            productId,
-            status: PRODUCT_SCORE_STATUS_PUBLISHED,
-          },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    if (!score?.productId || score.productId !== productId) {
-      throw new ConflictException(
-        'Cannot resolve previously published product for idempotent retry',
-      );
-    }
-
-    const product = await db.product.findFirst({ where: { id: productId } });
-
-    if (!product) {
-      throw new ConflictException(
-        'Cannot resolve previously published product for idempotent retry',
-      );
-    }
-
-    return {
-      product,
-      translation: null,
-      price: null,
-      verdict: null,
-      score,
-      draft,
-    };
-  }
-
-  private asRecord(value: unknown): Record<string, unknown> {
-    return typeof value === 'object' && value !== null
-      ? (value as Record<string, unknown>)
-      : {};
-  }
-
-  private automationKeyForDraft(id: string, idempotencyKey?: string): string {
-    const key = idempotencyKey?.trim() || `product-draft:${id}:approval-automation:v1`;
-    return key.slice(0, 96);
-  }
-
-  private automationConflict(stage: 'approve' | 'evaluate' | 'publish', message: string): ConflictException {
-    return new ConflictException({
-      success: false,
-      stage,
-      error: message,
-    });
+    void id;
+    void options;
+    throw new ConflictException('Direct product draft publishing is disabled in Affiliate AI OS Phase 1');
   }
 
   private buildTransitionData(
@@ -757,6 +538,39 @@ export class ProductDraftsService {
     return 'REVISION_REQUESTED';
   }
 
+  private buildUpdateData(input: ProductDraftUpdateInput): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+
+    for (const field of [
+      'title',
+      'description',
+      'imageUrl',
+      'sourceUrl',
+      'canonicalUrl',
+      'affiliateUrl',
+      'category',
+      'discoveryReason',
+    ] as const) {
+      if (field in input) {
+        const value = input[field];
+        if ((field === 'title' || field === 'discoveryReason') && !value?.trim()) {
+          throw new BadRequestException(`${field} cannot be empty`);
+        }
+        data[field] = typeof value === 'string' ? value.trim() || null : value ?? null;
+      }
+    }
+
+    if ('trendScore' in input && input.trendScore !== undefined) {
+      data.trendScore = Math.min(100, Math.max(0, Number(input.trendScore)));
+    }
+
+    if ('rawData' in input) {
+      data.rawData = input.rawData ?? null;
+    }
+
+    return data;
+  }
+
   private buildScorePayload(
     draft: ProductDraftEvaluationRecord,
   ): ProductDraftScorePayload {
@@ -814,172 +628,6 @@ export class ProductDraftsService {
       recommendation,
       status,
     };
-  }
-
-  private buildStoreUpsertArgs(draft: ProductDraftEvaluationRecord) {
-    const slug = this.storeSlugForDraft(draft);
-
-    return {
-      where: { slug },
-      create: {
-        name: this.storeNameForSlug(slug),
-        slug,
-        url: this.originForDraft(draft) ?? draft.sourceUrl ?? 'https://babiespicks.com',
-        affiliateNetwork: draft.sourceType ?? null,
-        isActive: true,
-      },
-      update: {
-        affiliateNetwork: draft.sourceType ?? null,
-        isActive: true,
-      },
-    };
-  }
-
-  private buildProductUpsertArgs(
-    draft: ProductDraftEvaluationRecord,
-    storeId: string,
-  ) {
-    const sourceUrl = this.productSourceUrl(draft);
-    const slug = this.slugify(`${draft.normalizedTitle}-${draft.sourceHash}`);
-    const brand = this.extractBrand(draft.rawData);
-
-    return {
-      where: sourceUrl ? { sourceUrl } : { slug },
-      create: {
-        name: draft.title,
-        slug,
-        brand,
-        imageUrl: draft.imageUrl ?? null,
-        storeId,
-        sourceUrl,
-        dataSource: 'AI_EXTRACTION',
-        confidence: this.roundScore(this.scoreFromTrend(draft.trendScore)) / 10,
-        isActive: true,
-        status: 'READY',
-      },
-      update: {
-        name: draft.title,
-        brand,
-        imageUrl: draft.imageUrl ?? null,
-        storeId,
-        sourceUrl,
-        dataSource: 'AI_EXTRACTION',
-        status: 'READY',
-        isActive: true,
-      },
-    };
-  }
-
-  private buildProductTranslationUpsertArgs(
-    draft: ProductDraftEvaluationRecord,
-    productId: string,
-  ) {
-    const slug = this.slugify(draft.normalizedTitle || draft.title);
-
-    return {
-      where: { productId_locale: { productId, locale: 'ar' } },
-      create: {
-        productId,
-        locale: 'ar',
-        name: draft.title,
-        description: draft.description ?? draft.discoveryReason,
-        slug,
-        metaTitle: draft.title,
-        metaDescription: draft.description ?? draft.discoveryReason,
-      },
-      update: {
-        name: draft.title,
-        description: draft.description ?? draft.discoveryReason,
-        slug,
-        metaTitle: draft.title,
-        metaDescription: draft.description ?? draft.discoveryReason,
-      },
-    };
-  }
-
-  private buildProductPriceUpsertArgs(
-    draft: ProductDraftEvaluationRecord,
-    productId: string,
-    storeId: string,
-  ) {
-    return {
-      where: { id: `price_${productId}_${storeId}` },
-      create: {
-        id: `price_${productId}_${storeId}`,
-        productId,
-        storeId,
-        price: draft.price,
-        currency: 'SAR',
-        url: draft.affiliateUrl ?? this.productSourceUrl(draft),
-        inStock: true,
-      },
-      update: {
-        price: draft.price,
-        currency: 'SAR',
-        url: draft.affiliateUrl ?? this.productSourceUrl(draft),
-        inStock: true,
-      },
-    };
-  }
-
-  private buildVerdictUpsertArgs(productId: string, score: ProductScoreRecord) {
-    const scores = this.asScoreObject(score.scores);
-    const reasoning = this.asReasoningObject(score.reasoning);
-
-    return {
-      where: { productId },
-      create: {
-        productId,
-        type: this.verdictTypeForOverall(scores.overall),
-        overallScore: scores.overall,
-        safetyScore: scores.safety,
-        qualityScore: scores.content,
-        reviewsScore: scores.content,
-        priceScore: scores.affiliate,
-        longTermScore: scores.overall,
-        reasoningAr: reasoning.ar,
-        reasoningEn: reasoning.en,
-        conditionsAr: [],
-        conditionsEn: [],
-        isPublished: true,
-      },
-      update: {
-        type: this.verdictTypeForOverall(scores.overall),
-        overallScore: scores.overall,
-        safetyScore: scores.safety,
-        qualityScore: scores.content,
-        reviewsScore: scores.content,
-        priceScore: scores.affiliate,
-        longTermScore: scores.overall,
-        reasoningAr: reasoning.ar,
-        reasoningEn: reasoning.en,
-        isPublished: true,
-      },
-    };
-  }
-
-  private isApprovedReadyScore(score: ProductScoreRecord | null): score is ProductScoreRecord {
-    if (!score) {
-      return false;
-    }
-
-    const scores = this.asScoreObject(score.scores);
-    const riskFlags = Array.isArray(score.riskFlags) ? score.riskFlags : [];
-    const hasHighRisk = riskFlags.some(
-      (flag) =>
-        typeof flag === 'object' &&
-        flag !== null &&
-        'severity' in flag &&
-        flag.severity === 'HIGH',
-    );
-
-    return (
-      score.status === PRODUCT_SCORE_STATUS_APPROVED &&
-      score.recommendation === PRODUCT_SCORE_RECOMMENDATION_READY &&
-      scores.safety >= MINIMUM_SAFE_SAFETY_SCORE &&
-      scores.overall >= MINIMUM_SAFE_SAFETY_SCORE &&
-      !hasHighRisk
-    );
   }
 
   private normalizeRawData(rawData: unknown): ProductDraftRawData {
@@ -1097,12 +745,12 @@ export class ProductDraftsService {
     }
 
     if (recommendation === PRODUCT_SCORE_RECOMMENDATION_NEEDS_REVIEW) {
-      return `يحتاج ${draft.title} إلى مراجعة تحريرية قبل النشر بسبب مؤشرات جودة أو سلامة.`;
+      return `يحتاج ${draft.title} إلى مراجعة تحريرية قبل المرحلة التالية بسبب مؤشرات جودة أو سلامة.`;
     }
 
     return riskFlags.length === 0
-      ? `يبدو ${draft.title} مناسباً للنشر مع طلب جيد ومخاطر سلامة منخفضة.`
-      : `يبدو ${draft.title} مناسباً للنشر بعد مراجعة مؤشرات المخاطر المحدودة.`;
+      ? `يبدو ${draft.title} جاهزاً للمراجعة النهائية مع طلب جيد ومخاطر سلامة منخفضة.`
+      : `يبدو ${draft.title} جاهزاً للمراجعة النهائية بعد مراجعة مؤشرات المخاطر المحدودة.`;
   }
 
   private buildEnglishReasoning(
@@ -1115,117 +763,12 @@ export class ProductDraftsService {
     }
 
     if (recommendation === PRODUCT_SCORE_RECOMMENDATION_NEEDS_REVIEW) {
-      return `${draft.title} needs editorial review before publishing due to quality or safety signals.`;
+      return `${draft.title} needs editorial review before the next phase due to quality or safety signals.`;
     }
 
     return riskFlags.length === 0
-      ? `${draft.title} is ready to publish with strong demand and low safety risk.`
-      : `${draft.title} is ready to publish after reviewing limited risk signals.`;
-  }
-
-  private asScoreObject(scores: unknown): ProductDraftScorePayload['scores'] {
-    const value =
-      typeof scores === 'object' && scores !== null
-        ? (scores as Record<string, unknown>)
-        : {};
-
-    return {
-      overall: this.numberFromScore(value.overall),
-      safety: this.numberFromScore(value.safety),
-      affiliate: this.numberFromScore(value.affiliate),
-      content: this.numberFromScore(value.content),
-    };
-  }
-
-  private asReasoningObject(reasoning: unknown): ProductDraftScorePayload['reasoning'] {
-    const value =
-      typeof reasoning === 'object' && reasoning !== null
-        ? (reasoning as Record<string, unknown>)
-        : {};
-
-    return {
-      ar: typeof value.ar === 'string' ? value.ar : 'تم تقييم المنتج للنشر.',
-      en: typeof value.en === 'string' ? value.en : 'The product was evaluated for publishing.',
-    };
-  }
-
-  private numberFromScore(value: unknown): number {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? this.roundScore(parsed) : 0;
-  }
-
-  private verdictTypeForOverall(score: number): 'WORTH_IT' | 'WORTH_IT_WITH' | 'WAIT' | 'NOT_WORTH_IT' {
-    if (score >= 7.5) {
-      return 'WORTH_IT';
-    }
-
-    if (score >= 6) {
-      return 'WORTH_IT_WITH';
-    }
-
-    if (score >= 4.5) {
-      return 'WAIT';
-    }
-
-    return 'NOT_WORTH_IT';
-  }
-
-  private extractBrand(rawData: unknown): string | null {
-    const normalized = this.normalizeRawData(rawData);
-    return typeof normalized.brand === 'string' && normalized.brand.trim()
-      ? normalized.brand.trim()
-      : null;
-  }
-
-  private productSourceUrl(draft: ProductDraftEvaluationRecord): string | null {
-    return draft.canonicalUrl ?? draft.sourceUrl ?? null;
-  }
-
-  private storeSlugForDraft(draft: ProductDraftEvaluationRecord): string {
-    if (draft.sourceType) {
-      return this.slugify(draft.sourceType);
-    }
-
-    const origin = this.originForDraft(draft);
-
-    if (origin) {
-      return this.slugify(new URL(origin).hostname.replace(/^www\./, ''));
-    }
-
-    return 'babiespicks-manual';
-  }
-
-  private storeNameForSlug(slug: string): string {
-    return slug
-      .split('-')
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  }
-
-  private originForDraft(draft: ProductDraftEvaluationRecord): string | null {
-    const url = draft.canonicalUrl ?? draft.sourceUrl;
-
-    if (!url) {
-      return null;
-    }
-
-    try {
-      return new URL(url).origin;
-    } catch {
-      return null;
-    }
-  }
-
-  private slugify(value: string): string {
-    const slug = value
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[\u064B-\u065F\u0670]/g, '')
-      .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 96);
-
-    return slug || 'product-draft';
+      ? `${draft.title} is ready for final review with strong demand and low safety risk.`
+      : `${draft.title} is ready for final review after reviewing limited risk signals.`;
   }
 
   private clampScore(value: number): number {
@@ -1266,12 +809,4 @@ export class ProductDraftsService {
       error.code === 'P2002'
     );
   }
-}
-
-function safeAutomationError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? 'Automation failed');
-  if (/credential|secret|token|api[_ -]?key|access[_ -]?token/i.test(message)) {
-    return 'Automation failed due to an upstream configuration error';
-  }
-  return message || 'Automation failed';
 }

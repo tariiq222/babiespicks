@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -11,10 +12,11 @@ import {
 import { AdminApiKeyGuard } from '../admin/admin-api-key.guard';
 import { SERVER_DERIVED_APPROVAL_ACTOR_ID } from '../../infrastructure/approval/approval-audit';
 import {
+  CreateProductDraftFromTrendSignalBodyDto,
   ProductDraftEvaluationBodyDto,
-  ProductDraftPublishBodyDto,
   ListProductDraftsQueryDto,
   ProductDraftTransitionBodyDto,
+  UpdateProductDraftBodyDto,
 } from './dto/product-drafts.dto';
 import { ProductDraftsService } from './product-drafts.service';
 
@@ -29,9 +31,33 @@ export class ProductDraftsController {
     return this.drafts.listDrafts(query);
   }
 
+  /** GET /admin/product-drafts/:id — inspect a draft before approval. */
+  @Get(':id')
+  async get(@Param('id') id: string): Promise<unknown> {
+    return this.drafts.getDraft(id);
+  }
+
+  /** POST /admin/product-drafts/from-trend-signal — queue a draft from a trend signal. */
+  @Post('from-trend-signal')
+  @HttpCode(201)
+  async createFromTrendSignal(
+    @Body() body: CreateProductDraftFromTrendSignalBodyDto,
+  ): Promise<unknown> {
+    return this.drafts.createDraftFromSignal(body.trendSignalId);
+  }
+
+  /** PATCH /admin/product-drafts/:id — edit a draft before approval. */
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateProductDraftBodyDto,
+  ): Promise<unknown> {
+    return this.drafts.updateDraft(id, body);
+  }
+
   /**
    * POST /admin/product-drafts/:id/approve — human approval gate.
-   * After approval the backend evaluates if needed and publishes idempotently.
+   * Phase 1 only records approval and never publishes public products.
    */
   @Post(':id/approve')
   @HttpCode(200)
@@ -39,8 +65,9 @@ export class ProductDraftsController {
     @Param('id') id: string,
     @Body() body: ProductDraftTransitionBodyDto = {},
   ): Promise<unknown> {
-    return this.drafts.approveEvaluateAndPublishDraft(id, {
-      actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+    return this.drafts.transitionDraft(id, {
+      action: 'approve',
+      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       idempotencyKey: body.idempotencyKey,
     });
   }
@@ -88,16 +115,4 @@ export class ProductDraftsController {
     });
   }
 
-  /** POST /admin/product-drafts/:id/publish — publish an approved and scored draft. */
-  @Post(':id/publish')
-  @HttpCode(200)
-  async publish(
-    @Param('id') id: string,
-    @Body() body: ProductDraftPublishBodyDto = {},
-  ): Promise<unknown> {
-    return this.drafts.publishApprovedDraft(id, {
-      actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-      idempotencyKey: body.idempotencyKey,
-    });
-  }
 }

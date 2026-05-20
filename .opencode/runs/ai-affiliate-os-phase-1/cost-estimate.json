@@ -1,0 +1,6 @@
+{
+  "currency": "USD",
+  "estimatedCost": 0,
+  "billingSource": "not available in runtime",
+  "notes": "No external paid service calls were made by this documentation run. Estimate excludes model/runtime costs that are not exposed to the workspace."
+}

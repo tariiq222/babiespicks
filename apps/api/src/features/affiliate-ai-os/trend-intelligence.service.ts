@@ -1,7 +1,11 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import type { CreateTrendSignalInput } from './dto/trend-intelligence.dto';
+import type {
+  CreateManualTrendSignalInput,
+  CreateTrendSignalInput,
+  ListTrendSignalsQuery,
+} from './dto/trend-intelligence.dto';
 
 const TREND_SIGNAL_STATUS_NEW = 'NEW' as const;
 const SAFE_CLICKABLE_URL_PROTOCOLS = new Set(['http:', 'https:']);
@@ -17,11 +21,15 @@ interface TrendSignalRecord {
   discoveryReason: string;
   trendScore: number;
   status?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface AffiliateAiOsPrisma {
   trendSignal: {
+    findMany(args: unknown): Promise<TrendSignalRecord[]>;
     findFirst(args: unknown): Promise<TrendSignalRecord | null>;
+    findUnique(args: unknown): Promise<TrendSignalRecord | null>;
     create(args: unknown): Promise<TrendSignalRecord>;
   };
 }
@@ -29,6 +37,38 @@ interface AffiliateAiOsPrisma {
 @Injectable()
 export class TrendIntelligenceService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Lists admin-visible trend signals with bounded offset pagination. */
+  async listSignals(query: ListTrendSignalsQuery = {}) {
+    const db = this.prisma as unknown as AffiliateAiOsPrisma;
+
+    return db.trendSignal.findMany({
+      where: query.status ? { status: query.status } : undefined,
+      orderBy: [{ trendScore: 'desc' }, { createdAt: 'desc' }],
+      skip: this.normalizeOffset(query.offset),
+      take: this.normalizeLimit(query.limit),
+    });
+  }
+
+  /** Gets a single trend signal for manual review. */
+  async getSignal(id: string) {
+    const db = this.prisma as unknown as AffiliateAiOsPrisma;
+    const signal = await db.trendSignal.findUnique({ where: { id } });
+
+    if (!signal) {
+      throw new NotFoundException(`TrendSignal ${id} was not found`);
+    }
+
+    return signal;
+  }
+
+  /** Creates a manual admin trend signal without creating or publishing a product draft. */
+  async createManualSignal(input: CreateManualTrendSignalInput) {
+    return this.createSignalFromSource({
+      ...input,
+      source: input.source?.trim() || 'manual',
+    });
+  }
 
   /**
    * Creates a normalized trend signal from an upstream discovery payload.
@@ -183,5 +223,27 @@ export class TrendIntelligenceService {
     }
 
     return Math.min(100, Math.max(0, score));
+  }
+
+  private normalizeLimit(value?: number | string): number {
+    const parsed =
+      typeof value === 'number' ? value : Number.parseInt(value ?? '50', 10);
+
+    if (!Number.isFinite(parsed)) {
+      return 50;
+    }
+
+    return Math.min(100, Math.max(1, parsed));
+  }
+
+  private normalizeOffset(value?: number | string): number {
+    const parsed =
+      typeof value === 'number' ? value : Number.parseInt(value ?? '0', 10);
+
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+
+    return Math.min(10_000, Math.max(0, parsed));
   }
 }
