@@ -11,6 +11,7 @@ export interface SocialPipelineResult {
   posts: Array<{
     id: string;
     locale: 'ar' | 'en';
+    platform: string;
     format: string;
     status: string;
     tweetCount: number;
@@ -32,9 +33,41 @@ export class SocialCoordinatorService {
     private readonly visualMaker: VisualMakerService,
   ) {}
 
-  async runSocialPipeline(contentPageId: string): Promise<SocialPipelineResult> {
+  /**
+   * Run the social content pipeline for a ContentPage.
+   * @param contentPageId The ContentPage to generate social posts for
+   * @param platforms Optional array of platforms to generate for. Defaults to ['twitter'].
+   *                  Supported: 'twitter', 'telegram'. Empty or fully-unrecognized arrays reject with 400.
+   * @throws BadRequestException if platforms contains unsupported values or an empty array.
+   */
+  async runSocialPipeline(
+    contentPageId: string,
+    platforms?: string[],
+  ): Promise<SocialPipelineResult> {
     const start = Date.now();
-    this.logger.log(`=== Social Pipeline START: ${contentPageId} ===`);
+
+    const SUPPORTED = ['twitter', 'telegram'] as const;
+
+    // Fail-closed: reject unsupported platform values
+    if (platforms !== undefined) {
+      if (!Array.isArray(platforms) || platforms.length === 0) {
+        throw new Error('platforms must be a non-empty array of supported values: twitter, telegram');
+      }
+      const unsupported = platforms.filter((p) => !(SUPPORTED as readonly string[]).includes(p));
+      if (unsupported.length > 0) {
+        throw new Error(`Unsupported platform(s): ${unsupported.join(', ')}. Supported: ${SUPPORTED.join(', ')}`);
+      }
+    }
+
+    const requestedPlatforms = (platforms ?? ['twitter']).filter(
+      (p) => (SUPPORTED as readonly string[]).includes(p),
+    );
+    const createTwitter = requestedPlatforms.includes('twitter');
+    const createTelegram = requestedPlatforms.includes('telegram');
+
+    this.logger.log(
+      `=== Social Pipeline START: ${contentPageId}, platforms=${requestedPlatforms.join(',')} ===`,
+    );
 
     // Load ContentPage + related product info
     const contentPage = await this.prisma.contentPage.findUnique({
@@ -133,58 +166,98 @@ export class SocialCoordinatorService {
       : null;
 
     for (const { locale, thread, hashtags } of localeResults) {
-      // Thread post
-      const threadPost = await this.prisma.socialPost.create({
-        data: {
-          contentPageId,
-          productId,
-          status: finalStatus as any,
+      const trans = contentPage.translations.find((t) => t.locale === locale);
+      const title = trans?.title ?? contentPage.slug;
+
+      // ── Twitter posts ──────────────────────────────────────────────────────
+      if (createTwitter) {
+        // Thread post
+        const threadPost = await this.prisma.socialPost.create({
+          data: {
+            contentPageId,
+            productId,
+            status: finalStatus as any,
+            platform: 'twitter',
+            format: thread.format,
+            content: thread.tweets as any,
+            hashtags,
+            visualUrl,
+            complianceScore: complianceResult.score,
+            complianceNotes,
+          },
+        });
+
+        createdPosts.push({
+          id: threadPost.id,
+          locale,
           platform: 'twitter',
           format: thread.format,
-          content: thread.tweets as any,
-          hashtags,
-          visualUrl,
+          status: finalStatus,
+          tweetCount: thread.tweets.length,
+          hashtagCount: hashtags.length,
           complianceScore: complianceResult.score,
-          complianceNotes,
-        },
-      });
+        });
 
-      createdPosts.push({
-        id: threadPost.id,
-        locale,
-        format: thread.format,
-        status: finalStatus,
-        tweetCount: thread.tweets.length,
-        hashtagCount: hashtags.length,
-        complianceScore: complianceResult.score,
-      });
+        // Single tweet post
+        const singleFormat = locale === 'ar' ? 'single_ar' : 'single_en';
+        const singlePost = await this.prisma.socialPost.create({
+          data: {
+            contentPageId,
+            productId,
+            status: finalStatus as any,
+            platform: 'twitter',
+            format: singleFormat,
+            content: [{ text: thread.singleTweet, order: 1 }] as any,
+            hashtags,
+            visualUrl,
+            complianceScore: complianceResult.score,
+            complianceNotes,
+          },
+        });
 
-      // Single tweet post
-      const singleFormat = locale === 'ar' ? 'single_ar' : 'single_en';
-      const singlePost = await this.prisma.socialPost.create({
-        data: {
-          contentPageId,
-          productId,
-          status: finalStatus as any,
+        createdPosts.push({
+          id: singlePost.id,
+          locale,
           platform: 'twitter',
           format: singleFormat,
-          content: [{ text: thread.singleTweet, order: 1 }] as any,
-          hashtags,
-          visualUrl,
+          status: finalStatus,
+          tweetCount: 1,
+          hashtagCount: hashtags.length,
           complianceScore: complianceResult.score,
-          complianceNotes,
-        },
-      });
+        });
+      }
 
-      createdPosts.push({
-        id: singlePost.id,
-        locale,
-        format: singleFormat,
-        status: finalStatus,
-        tweetCount: 1,
-        hashtagCount: hashtags.length,
-        complianceScore: complianceResult.score,
-      });
+      // ── Telegram posts ──────────────────────────────────────────────────────
+      if (createTelegram) {
+        const telegramContent = this.formatTelegramPost(title, thread, hashtags, locale);
+        const telegramFormat = locale === 'ar' ? 'telegram_ar' : 'telegram_en';
+
+        const telegramPost = await this.prisma.socialPost.create({
+          data: {
+            contentPageId,
+            productId,
+            status: finalStatus as any,
+            platform: 'telegram',
+            format: telegramFormat,
+            content: telegramContent as any,
+            hashtags,
+            visualUrl,
+            complianceScore: complianceResult.score,
+            complianceNotes,
+          },
+        });
+
+        createdPosts.push({
+          id: telegramPost.id,
+          locale,
+          platform: 'telegram',
+          format: telegramFormat,
+          status: finalStatus,
+          tweetCount: 1,
+          hashtagCount: hashtags.length,
+          complianceScore: complianceResult.score,
+        });
+      }
     }
 
     // Log coordinator agent job
@@ -214,5 +287,32 @@ export class SocialCoordinatorService {
       posts: createdPosts,
       totalTimeMs,
     };
+  }
+
+  /**
+   * Format a Telegram post from Twitter thread content.
+   * Adapts the Twitter thread content for Telegram's format and limits.
+   */
+  private formatTelegramPost(
+    title: string,
+    thread: { singleTweet: string; tweets: Array<{ text: string }> },
+    hashtags: string[],
+    locale: 'ar' | 'en',
+  ): { text: string } {
+    const hashtagStr = hashtags.length > 0 ? '\n\n' + hashtags.map((h) => `#${h.replace('#', '')}`).join(' ') : '';
+
+    // Use the single tweet as the main content — it's already concise
+    const content = thread.singleTweet;
+
+    const disclosure = locale === 'ar'
+      ? '\n\n⚠️ هذا المحتوى من BabiesPicks — نتائجنا مستقلة.'
+      : '\n\n⚠️ This content is from BabiesPicks — our results are independent.';
+
+    // Telegram messages should be under 4096 chars. The single tweet is already short,
+    // but we guard anyway.
+    const fullText = `${title}\n\n${content}${hashtagStr}${disclosure}`;
+    const truncated = fullText.length > 4096 ? fullText.slice(0, 4093) + '...' : fullText;
+
+    return { text: truncated };
   }
 }

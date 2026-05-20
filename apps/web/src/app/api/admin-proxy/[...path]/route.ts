@@ -5,10 +5,7 @@ const BACKEND_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:3001';
 
-const ADMIN_KEY =
-  process.env.ADMIN_API_KEY ||
-  process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-  '';
+const ADMIN_KEY = process.env.ADMIN_API_KEY || '';
 
 const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'HEAD'];
 
@@ -59,6 +56,10 @@ async function proxy(
   method: string,
   params: Promise<{ path: string[] }>,
 ) {
+  if (!isAuthorizedAdminRequest(request)) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
   const { path } = await params;
   const search = request.nextUrl.search;
   const backendUrl = `${BACKEND_BASE}/${path.join('/')}${search}`;
@@ -71,7 +72,7 @@ async function proxy(
   const accept = request.headers.get('accept');
   if (accept) headers['Accept'] = accept;
 
-  if (ADMIN_KEY) headers['x-admin-key'] = ADMIN_KEY;
+  headers['x-admin-key'] = ADMIN_KEY;
 
   let body: BodyInit | undefined;
   if (method !== 'GET' && method !== 'HEAD') {
@@ -112,4 +113,23 @@ async function proxy(
     status: res.status,
     headers: responseHeaders,
   });
+}
+
+function isAuthorizedAdminRequest(request: NextRequest) {
+  if (!ADMIN_KEY) return false;
+
+  const incomingAdminKey = request.headers.get('x-admin-key')?.trim();
+  if (incomingAdminKey === ADMIN_KEY) return true;
+
+  const bearerToken = parseBearerToken(request.headers.get('authorization'));
+  return bearerToken === ADMIN_KEY;
+}
+
+function parseBearerToken(authorization: string | null) {
+  if (!authorization) return null;
+
+  const [scheme, token] = authorization.trim().split(/\s+/, 2);
+  if (scheme?.toLowerCase() !== 'bearer' || !token) return null;
+
+  return token.trim();
 }

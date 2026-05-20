@@ -66,12 +66,78 @@ enum ProductStatus {
   REJECTED
 }
 
+enum TrendSignalStatus {
+  NEW
+  PROMOTED_TO_DRAFT
+  DISMISSED
+  ARCHIVED
+}
+
+enum ProductDraftStatus {
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+  NEEDS_EDIT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum SocialPostStatus {
   DRAFT
   PENDING_APPROVAL
   APPROVED
   SCHEDULED
   PUBLISHED
+  REJECTED
+}
+
+// ==================== AI OS ENUMS ====================
+
+enum AiRunType {
+  PRODUCT_PIPELINE
+  CONTENT_PIPELINE
+  DISCOVERY
+  CONTENT_SPRINT
+  MANUAL
+}
+
+enum AiRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AiStepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum AiArtifactType {
+  TEXT
+  IMAGE
+  JSON
+  URL
+}
+
+enum AiEventType {
+  INFO
+  WARNING
+  ERROR
+  APPROVAL_REQUIRED
+  CHECKPOINT
+  QUEUED
+  STARTED
+  COMPLETED
+}
+
+enum AiApprovalStatus {
+  PENDING
+  APPROVED
   REJECTED
 }
 
@@ -146,6 +212,72 @@ model Product {
   @@index([slug])
   @@index([status])
   @@map("products")
+}
+
+model TrendSignal {
+  id                  String            @id @default(cuid())
+  source              String
+  sourceUrl           String?
+  canonicalUrl        String?           @unique
+  rawTitle            String
+  normalizedTitle     String            @unique
+  sourceHash          String            @unique
+  discoveryReason     String            @db.Text
+  trendScore          Float
+  demandSignal        String?           @db.Text
+  competitionSignal   String?           @db.Text
+  seasonalitySignal   String?           @db.Text
+  metadata            Json?
+  status              TrendSignalStatus @default(NEW)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  productDrafts ProductDraft[]
+
+  // Affiliate AI OS Phase 1 reads/deduplicates by status, score, URL/title, and source hash.
+  @@index([status, trendScore])
+  @@index([status, createdAt])
+  @@map("trend_signals")
+}
+
+model ProductDraft {
+  id                       String             @id @default(cuid())
+  trendSignalId            String?
+  trendSignal              TrendSignal?       @relation(fields: [trendSignalId], references: [id], onDelete: SetNull)
+  title                    String
+  description              String?            @db.Text
+  imageUrl                 String?
+  price                    Decimal?           @db.Decimal(10, 2)
+  sourceUrl                String?
+  canonicalUrl             String?            @unique
+  affiliateUrl             String?
+  category                 String?
+  sourceType               String?
+  normalizedTitle          String             @unique
+  sourceHash               String             @unique
+  discoveryReason          String             @db.Text
+  trendScore               Float
+  demandSignal             String?            @db.Text
+  competitionSignal        String?            @db.Text
+  seasonalitySignal        String?            @db.Text
+  rawData                  Json?
+  status                   ProductDraftStatus @default(NEEDS_REVIEW)
+  approvedBy               String?
+  approvedAt               DateTime?
+  rejectedBy               String?
+  rejectedAt               DateTime?
+  rejectionReason          String?            @db.Text
+  editNotes                String?            @db.Text
+  transitionIdempotencyKey String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  // Affiliate AI OS Phase 1 review queues and dedupe paths filter by status, score, URL/title, and source hash.
+  @@index([trendSignalId])
+  @@index([status, trendScore])
+  @@index([status, createdAt])
+  @@index([transitionIdempotencyKey])
+  @@map("product_drafts")
 }
 
 model ProductTranslation {
@@ -417,6 +549,108 @@ model CircuitBreakerState {
   updatedAt     DateTime  @updatedAt
 
   @@map("circuit_breaker_states")
+}
+
+// ==================== AI OS MODELS ====================
+
+model AiRun {
+  id          String      @id @default(cuid())
+  name        String
+  type        AiRunType
+  status      AiRunStatus @default(PENDING)
+  input       Json?
+  output      Json?
+  error       String?     @db.Text
+  tokensUsed  Int?
+  costUsd     Decimal?    @db.Decimal(10, 6)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  steps     AiRunStep[]
+  artifacts AiArtifact[]
+  events    AiEvent[]
+  approvals AiApproval[]
+  costLogs  AiCostLog[]
+
+  @@index([type, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("ai_runs")
+}
+
+model AiRunStep {
+  id        String      @id @default(cuid())
+  aiRunId   String
+  aiRun     AiRun       @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  stepName  String
+  status    AiStepStatus @default(PENDING)
+  input     Json?
+  output    Json?
+  error     String?     @db.Text
+  startedAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime    @default(now())
+
+  @@index([aiRunId])
+  @@map("ai_run_steps")
+}
+
+model AiArtifact {
+  id        String         @id @default(cuid())
+  aiRunId   String
+  aiRun     AiRun          @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  type      AiArtifactType
+  name      String
+  content   String?        @db.Text
+  metadata  Json?
+  createdAt DateTime       @default(now())
+
+  @@index([aiRunId])
+  @@map("ai_artifacts")
+}
+
+model AiEvent {
+  id        String     @id @default(cuid())
+  aiRunId   String
+  aiRun     AiRun      @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  type      AiEventType
+  message   String
+  metadata  Json?
+  createdAt DateTime   @default(now())
+
+  @@index([aiRunId])
+  @@map("ai_events")
+}
+
+model AiApproval {
+  id          String          @id @default(cuid())
+  aiRunId     String
+  aiRun       AiRun           @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  stepName    String?
+  status      AiApprovalStatus @default(PENDING)
+  approverId  String?
+  comment     String?         @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([aiRunId])
+  @@map("ai_approvals")
+}
+
+model AiCostLog {
+  id         String   @id @default(cuid())
+  aiRunId    String
+  aiRun      AiRun    @relation(fields: [aiRunId], references: [id], onDelete: Cascade)
+  tokensUsed Int?
+  costUsd    Decimal  @db.Decimal(10, 6)
+  model      String?
+  provider   String?
+  createdAt  DateTime @default(now())
+
+  @@index([aiRunId])
+  @@map("ai_cost_logs")
 }
 
 // ==================== AUTH (better-auth) ====================

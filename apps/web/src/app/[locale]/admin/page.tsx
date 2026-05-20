@@ -414,15 +414,15 @@ export default function AdminDashboard() {
           <p className="text-xs text-stone mb-3">إجراءات سريعة</p>
           <div className="flex flex-wrap gap-3">
             <QuickAction
-              href="/admin/operations"
+              href="/admin/ai-os"
               icon="ti-radar-2"
-              label="اكتشاف منتجات"
+              label="تشغيل ذكاء المنتجات عبر AI OS"
               variant="primary"
             />
             <QuickAction
-              href="/admin/operations"
+              href="/admin/ai-os"
               icon="ti-pencil"
-              label="توليد محتوى"
+              label="توليد محتوى عبر AI OS"
               variant="secondary"
             />
             <QuickAction

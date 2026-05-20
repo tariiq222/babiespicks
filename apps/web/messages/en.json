@@ -61,8 +61,8 @@
     "searchPlaceholder": "Search for a baby product...",
     "searchAriaLabel": "Search for a baby product",
     "searchButton": "Search",
-    "productOfWeek": "Product of the Week",
-    "newVerdict": "New Verdict",
+    "productOfWeek": "Featured review",
+    "newVerdict": "Verified verdict",
     "telegramTitle": "Daily verdicts on Telegram",
     "telegramSubtitle": "Join Saudi moms sharing real experiences",
     "telegramButton": "Join",
@@ -73,7 +73,7 @@
     "browseByCategory": "Browse by Category",
     "viewAllCategories": "View All Categories",
     "productCount": "{count} products",
-    "todaysPick": "Today's Picks",
+    "todaysPick": "Recommended picks",
     "archive": "Archive",
     "viewFullReview": "View Full Review",
     "worthIt": "Worth It",
@@ -325,7 +325,7 @@
     "trustTransparent": "Full transparency",
     "trustTransparentDesc": "We disclose every affiliate relationship. Every affiliate link is clearly labeled.",
     "trustAI": "AI-powered",
-    "trustAIDesc": "We use AI to analyze thousands of reviews and surface patterns you can't see manually.",
+    "trustAIDesc": "We use AI to analyze real reviews and surface patterns you can't see manually.",
     "trustMoms": "Real moms' reviews",
     "trustMomsDesc": "We collect reviews from Saudi moms across local stores.",
     "affiliateTitle": "Affiliate Disclosure",
@@ -451,7 +451,7 @@
       },
       "howWeReview": {
         "q": "How do you review products?",
-        "a": "We review each product based on 5 criteria: Safety (25%), Quality (25%), Reviews (20%), Price (15%), and Long-term Value (15%). We use AI to analyze thousands of reviews from real Saudi mothers."
+        "a": "We review each product based on 5 criteria: Safety (25%), Quality (25%), Reviews (20%), Price (15%), and Long-term Value (15%). We use AI to analyze available reviews from real Saudi mothers."
       },
       "trustworthy": {
         "q": "Are your reviews trustworthy?",
@@ -489,9 +489,19 @@
   },
   "admin": {
     "dashboard": "Dashboard",
+    "dashboardSubtitle": "Admin dashboard",
+    "brandInitial": "B",
     "pipeline": "Pipeline",
     "costs": "Costs",
     "backToSite": "Back to Site",
+    "approvals": "Approvals",
+    "channels": "Publishing Channels",
+    "aiOs": "AI OS",
+    "settings": "Settings",
+    "statusHealthy": "System healthy",
+    "statusIssue": "Protection issue detected",
+    "userName": "Tariq",
+    "userInitial": "T",
     "products": "Products",
     "verdicts": "Verdicts",
     "contentPages": "Content Pages",
@@ -583,7 +593,69 @@
     "sprintTypeBestList": "Best Lists",
     "sprintTypeReview": "Product Reviews",
     "sprintTypeGuide": "Buying Guides",
-    "sprintCategoryAll": "All Categories"
+    "sprintCategoryAll": "All Categories",
+    "discoveryNav": "Discovery/Opportunities",
+    "discovery": {
+      "title": "Discovery and opportunities",
+      "eyebrow": "Affiliate AI OS",
+      "refresh": "Refresh",
+      "introKicker": "Product Drafts + Trend Intelligence",
+      "introTitle": "Review product opportunities before approval",
+      "introBody": "This page shows market-discovered product drafts with demand, competition, and seasonality signals. Approval here does not publish a product or connect it to content/social flows yet.",
+      "statsLabel": "Discovery metrics",
+      "stats": {
+        "total": "Total drafts",
+        "needsReview": "Needs review",
+        "averageScore": "Average trend score",
+        "withSignals": "With signals",
+        "topSource": "Top source"
+      },
+      "draftsTitle": "Product Drafts",
+      "draftsSubtitle": "Draft queue from GET /admin/product-drafts",
+      "trendTitle": "Trend Intelligence",
+      "trend": {
+        "reviewQueue": "Review queue",
+        "needsEdit": "Needs edit",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "scopeTitle": "Phase 1 scope",
+      "scopeBody": "Actions here only change the product draft status. No automatic publishing, content linkage, or social linkage is enabled in this phase.",
+      "loadingTitle": "Loading drafts",
+      "loadingBody": "Reading product opportunities from Affiliate AI OS.",
+      "errorTitle": "Could not load drafts",
+      "emptyTitle": "No drafts yet",
+      "emptyBody": "Product discovery opportunities will appear here for review once discovery runs.",
+      "retry": "Try again",
+      "notAvailable": "Not available",
+      "loadFailed": "Failed to load product drafts",
+      "actionFailed": "Could not complete the action",
+      "fields": {
+        "trendScore": "Trend score",
+        "demand": "Demand",
+        "competition": "Competition",
+        "seasonality": "Seasonality",
+        "updatedAt": "Updated"
+      },
+      "actions": {
+        "approve": "Approve",
+        "reject": "Reject",
+        "needsEdit": "Needs edit"
+      },
+      "actionSuccess": {
+        "approve": "Draft approved",
+        "reject": "Draft rejected",
+        "needs-edit": "Draft marked as needs edit"
+      },
+      "status": {
+        "NEEDS_REVIEW": "Needs review",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+        "NEEDS_EDIT": "Needs edit",
+        "PUBLISHED": "Published",
+        "ARCHIVED": "Archived"
+      }
+    }
   },
   "coupons": {
     "heroTitle": "Coupons & Deals",

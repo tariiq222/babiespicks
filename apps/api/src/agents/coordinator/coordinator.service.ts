@@ -12,6 +12,14 @@ import { SEOAuditorService } from '../seo-auditor/seo-auditor.service';
 import { QualityGuardService } from '../quality-guard/quality-guard.service';
 import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
 
+export interface ContentPipelineResult {
+  page: { id: string; [key: string]: any } | null;
+  seoBrief: { primaryKeyword: string; [key: string]: any } | null;
+  seoAudit: { passed: boolean; overallScore: number; [key: string]: any } | null;
+  qualityCheck: { passed: boolean; score: number; [key: string]: any } | null;
+  status: string;
+}
+
 export interface PipelineResult {
   productId: string;
   productName: string;

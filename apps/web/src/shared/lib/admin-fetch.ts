@@ -1,12 +1,3 @@
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY ?? '';
-
-/**
- * Browser-safe admin fetch that routes all requests through the Next.js
- * proxy at /api/admin-proxy to avoid CORS / mixed-content issues.
- *
- * Accepts either an absolute backend URL (e.g. `http://localhost:3001/admin/stats`)
- * or a relative path (e.g. `/admin/stats`). Relative paths are recommended.
- */
 export function adminFetch(url: string, init?: RequestInit): Promise<Response> {
   let pathname: string;
   let finalUrl: string;
@@ -29,24 +20,36 @@ export function adminFetch(url: string, init?: RequestInit): Promise<Response> {
     finalUrl = `/api/admin-proxy${pathname}`;
   }
 
-  const headers: Record<string, string> = {};
+  const headers = new Headers(init?.headers);
 
   // Preserve Content-Type unless the caller is sending FormData
   const isFormData =
-    init?.body instanceof FormData ||
-    (init?.body && typeof init.body === 'object' && Symbol.toStringTag in (init.body as object));
+    (typeof FormData !== 'undefined' && init?.body instanceof FormData) ||
+    (init?.body &&
+      typeof init.body === 'object' &&
+      Symbol.toStringTag in (init.body as object));
 
-  if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
 
-  if (ADMIN_KEY) headers['x-admin-key'] = ADMIN_KEY;
+  if (!headers.has('x-admin-key')) {
+    const storedAdminKey = getStoredAdminKey();
+    if (storedAdminKey) headers.set('x-admin-key', storedAdminKey);
+  }
 
   return fetch(finalUrl, {
     ...init,
-    headers: {
-      ...headers,
-      ...init?.headers,
-    },
+    headers,
   });
+}
+
+function getStoredAdminKey() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return window.localStorage.getItem('babiespicks_admin_key')?.trim() || null;
+  } catch {
+    return null;
+  }
 }

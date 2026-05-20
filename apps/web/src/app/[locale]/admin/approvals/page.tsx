@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
+import { useLocale } from 'next-intl';
 import { adminFetch } from '@/shared/lib/admin-fetch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,6 +56,8 @@ interface TweetContent {
 interface SocialPost {
   id: string;
   status: SocialPostStatus;
+  platform: string;
+  format: string;
   productId: string | null;
   contentPageId: string | null;
   tweetsAr: TweetContent[];
@@ -74,6 +77,14 @@ type MainTab = 'website' | 'social';
 type WebsiteTab = 'PENDING_APPROVAL' | 'QUALITY_CHECK' | 'REVISION_REQUESTED';
 type SocialActiveTab = 'PENDING_APPROVAL' | 'APPROVED' | 'SCHEDULED';
 type BodyLang = 'ar' | 'en';
+
+interface PublishResult {
+  id: string;
+  platform: string;
+  success: boolean;
+  externalId?: string;
+  error?: string;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -239,6 +250,8 @@ function normalizeSocialPost(raw: Partial<SocialPost> & { id: string }): SocialP
   return {
     id: raw.id,
     status: raw.status ?? 'DRAFT',
+    platform: raw.platform ?? 'twitter',
+    format: raw.format ?? '',
     productId: raw.productId ?? null,
     contentPageId: raw.contentPageId ?? null,
     tweetsAr: normalizeContent(rawRecord.contentAr ?? rawRecord.content),
@@ -300,6 +313,9 @@ function TweetCard({ tweet, index }: { tweet: TweetContent; index: number }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ApprovalsPage() {
+  const locale = useLocale();
+  const pageDir = locale === 'ar' ? 'rtl' : 'ltr';
+
   // ── Main tab ───────────────────────────────────────────────────────────────
   const [mainTab, setMainTab] = useState<MainTab>('website');
 
@@ -537,10 +553,46 @@ export default function ApprovalsPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { message?: string }).message ?? `HTTP ${res.status}`);
       }
-      const result = (await res.json()) as { published: number; failed: number };
+      const result = (await res.json()) as {
+        published: number;
+        failed: number;
+        platformBreakdown: { twitter: number; telegram: number };
+      };
+      const breakdown = result.platformBreakdown;
+      const parts: string[] = [];
+      if (breakdown.twitter > 0) parts.push(`X/Twitter: ${breakdown.twitter}`);
+      if (breakdown.telegram > 0) parts.push(`تيليجرام: ${breakdown.telegram}`);
+      const breakdownStr = parts.length > 0 ? ` (${parts.join('، ')})` : '';
       showToast(
         result.failed === 0 ? 'success' : 'error',
-        `نُشر ${result.published} — فشل ${result.failed}`,
+        `نُشر ${result.published}${breakdownStr} — فشل ${result.failed}`,
+      );
+      await fetchSocialItems();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : 'حدث خطأ');
+    } finally {
+      setSocialActionLoading(false);
+    }
+  };
+
+  /** Publish a single selected post (preferred over bulk). */
+  const handlePublishOne = async (postId: string) => {
+    setSocialActionLoading(true);
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/approvals/social/${postId}/publish`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { message?: string }).message ?? `HTTP ${res.status}`);
+      }
+      const result = (await res.json()) as PublishResult;
+      const platformLabel = result.platform === 'telegram' ? 'تيليجرام' : 'X/Twitter';
+      showToast(
+        result.success ? 'success' : 'error',
+        result.success
+          ? `نُشر على ${platformLabel} ✅`
+          : `فشل النشر على ${platformLabel}: ${result.error ?? 'خطأ غير معروف'}`,
       );
       await fetchSocialItems();
     } catch (err) {
@@ -586,7 +638,7 @@ export default function ApprovalsPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col" dir="rtl">
+    <div className="min-h-screen flex flex-col" dir={pageDir}>
       {/* Top bar */}
       <header className="h-14 bg-white border-b border-beige flex items-center justify-between px-6 flex-shrink-0">
         <h1 className="text-sm font-medium text-charcoal">الموافقات</h1>
@@ -651,7 +703,7 @@ export default function ApprovalsPage() {
               className="flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
             >
               <span className="ti ti-send text-xs" />
-              نشر الموافق عليها ({socialTabCounts.APPROVED})
+              نشر الكل ({socialTabCounts.APPROVED})
             </button>
           </div>
         )}
@@ -1097,9 +1149,22 @@ export default function ApprovalsPage() {
                           {firstTweetAr?.text ?? 'بدون نص'}
                         </p>
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${badge.classes}`}>
-                            {badge.label}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded ${badge.classes}`}>
+                              {badge.label}
+                            </span>
+                            {item.platform === 'telegram' ? (
+                              <span className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded bg-[#26A5E4]/10 text-[#26A5E4]">
+                                <span className="ti ti-brand-telegram" />
+                                تيليجرام
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded bg-[#1DA1F2]/10 text-[#1DA1F2]">
+                                <span className="ti ti-brand-twitter-filled" />
+                                X/Twitter
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-stone">{formatDate(item.createdAt)}</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1131,16 +1196,35 @@ export default function ApprovalsPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="ti ti-brand-twitter text-blue-500 text-lg" />
+                        {socialSelected.platform === 'telegram' ? (
+                          <span className="ti ti-brand-telegram text-[#26A5E4] text-lg" />
+                        ) : (
+                          <span className="ti ti-brand-twitter text-[#1DA1F2] text-lg" />
+                        )}
                         <h2 className="text-base font-medium text-charcoal">
-                          خيط تغريدات ({socialSelected.tweetsAr?.length ?? 0} تغريدة)
+                          {socialSelected.platform === 'telegram'
+                            ? 'منشور تيليجرام'
+                            : `خيط تغريدات (${socialSelected.tweetsAr?.length ?? 0} تغريدة)`}
                         </h2>
                       </div>
                       <p className="text-xs font-mono text-stone/70 mt-1">{socialSelected.id}</p>
                     </div>
-                    <span className={`shrink-0 text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded ${socialStatusBadge(socialSelected.status).classes}`}>
-                      {socialStatusBadge(socialSelected.status).label}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {socialSelected.platform === 'telegram' ? (
+                        <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#26A5E4]/10 text-[#26A5E4]">
+                          <span className="ti ti-brand-telegram" />
+                          تيليجرام
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-[#1DA1F2]/10 text-[#1DA1F2]">
+                          <span className="ti ti-brand-twitter-filled" />
+                          X/Twitter
+                        </span>
+                      )}
+                      <span className={`shrink-0 text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded ${socialStatusBadge(socialSelected.status).classes}`}>
+                        {socialStatusBadge(socialSelected.status).label}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Score cards */}
@@ -1324,13 +1408,20 @@ export default function ApprovalsPage() {
                     <div className="bg-white rounded-xl border border-beige p-5">
                       <h3 className="text-xs font-medium text-charcoal mb-4">الإجراءات</h3>
                       <button
-                        onClick={handlePublishAll}
+                        onClick={() => handlePublishOne(socialSelected.id)}
                         disabled={socialActionLoading}
                         className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 transition-colors disabled:opacity-50"
                       >
-                        <span className="ti ti-brand-twitter text-base" />
-                        نشر على تويتر الآن
+                        {socialSelected.platform === 'telegram' ? (
+                          <span className="ti ti-brand-telegram text-base" />
+                        ) : (
+                          <span className="ti ti-brand-twitter text-base" />
+                        )}
+                        نشر {socialSelected.platform === 'telegram' ? 'على تيليجرام' : 'على X/Twitter'} الآن
                       </button>
+                      <p className="text-[10px] text-stone mt-2">
+                        النشر للنوع المحدد فقط — لا يتم نشر جميع الموافقات دفعة واحدة.
+                      </p>
                     </div>
                   )}
 

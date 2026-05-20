@@ -1,5 +1,11 @@
 import { redirect } from 'next/navigation';
 
-export default function Page() {
-  redirect('/admin/operations');
+type PageProps = {
+  params: Promise<{ locale: string }>;
+};
+
+export default async function Page({ params }: PageProps) {
+  const { locale } = await params;
+
+  redirect(`/${locale}/admin/ai-os`);
 }

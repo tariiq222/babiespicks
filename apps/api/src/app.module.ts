@@ -24,6 +24,8 @@ import { AuthModule } from './features/auth/auth.module';
 import { CircuitBreakerModule } from './infrastructure/circuit-breaker/circuit-breaker.module';
 import { NotificationsModule } from './infrastructure/notifications/notifications.module';
 import { SocialModule } from './agents/social/social.module';
+import { AiOsModule } from './features/ai-os/ai-os.module';
+import { AffiliateAiOsModule } from './features/affiliate-ai-os/affiliate-ai-os.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { SocialModule } from './agents/social/social.module';
     CircuitBreakerModule,
     NotificationsModule,
     SocialModule,
+    AiOsModule,
+    AffiliateAiOsModule,
   ],
   controllers: [AppController],
   providers: [

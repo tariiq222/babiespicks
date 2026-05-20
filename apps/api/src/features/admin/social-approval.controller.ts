@@ -13,7 +13,16 @@ import {
 import { SocialPostStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { TwitterPublisherService, TweetContent } from '../../infrastructure/publishing/twitter-publisher.service';
+import { TelegramPublisherService } from '../../infrastructure/publishing/telegram-publisher.service';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
+
+interface PublishResult {
+  id: string;
+  platform: string;
+  success: boolean;
+  externalId?: string;
+  error?: string;
+}
 
 @Controller('admin/approvals/social')
 @UseGuards(AdminApiKeyGuard)
@@ -23,6 +32,7 @@ export class SocialApprovalController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly twitter: TwitterPublisherService,
+    private readonly telegram: TelegramPublisherService,
   ) {}
 
   /**
@@ -72,35 +82,37 @@ export class SocialApprovalController {
   }
 
   /**
-   * Publish all APPROVED social posts via Twitter.
-   * POST /admin/approvals/social/publish-approved
+   * Publish a single APPROVED social post by ID.
+   * POST /admin/approvals/social/:id/publish
    *
-   * NOTE: Must be declared before /:id routes to avoid NestJS treating
-   * "publish-approved" as a dynamic :id segment.
+   * Validates the post exists and is APPROVED before publishing.
+   * Publishes only the targeted post — never affects other posts.
    */
-  @Post('publish-approved')
+  @Post(':id/publish')
   @HttpCode(200)
-  async publishApproved() {
-    const approved = await this.prisma.socialPost.findMany({
-      where: { status: SocialPostStatus.APPROVED },
-    });
+  async publishOne(@Param('id') id: string): Promise<PublishResult> {
+    const post = await this.prisma.socialPost.findUniqueOrThrow({ where: { id } });
 
-    const results: Array<{ id: string; success: boolean; tweetId?: string; error?: string }> = [];
+    if (post.status !== SocialPostStatus.APPROVED) {
+      throw new BadRequestException(
+        `Cannot publish: status is ${post.status}, expected APPROVED`,
+      );
+    }
 
-    for (const post of approved) {
+    const platform = post.platform ?? 'twitter';
+
+    if (platform === 'twitter') {
       const tweets = (post.content ?? []) as unknown as TweetContent[];
 
       if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
-        this.logger.warn(`SocialPost ${post.id} has no tweets — skipping`);
-        results.push({ id: post.id, success: false, error: 'No tweets to publish' });
-        continue;
+        throw new BadRequestException('No tweets to publish');
       }
 
       const result = await this.twitter.postThread(tweets);
 
       if (result.success) {
         await this.prisma.socialPost.update({
-          where: { id: post.id },
+          where: { id },
           data: {
             status: SocialPostStatus.PUBLISHED,
             publishedAt: new Date(),
@@ -110,7 +122,7 @@ export class SocialApprovalController {
         });
       } else {
         await this.prisma.socialPost.update({
-          where: { id: post.id },
+          where: { id },
           data: {
             status: SocialPostStatus.REJECTED,
             metadata: { error: result.error } as any,
@@ -118,19 +130,174 @@ export class SocialApprovalController {
         });
       }
 
-      results.push({
+      return {
         id: post.id,
+        platform: 'twitter',
         success: result.success,
-        tweetId: result.tweetIds?.[0],
+        externalId: result.tweetIds?.[0],
         error: result.error,
-      });
+      };
+    }
+
+    if (platform === 'telegram') {
+      const content = post.content as { text?: string } | null;
+
+      if (!content || !content.text) {
+        throw new BadRequestException('No text content to publish to Telegram');
+      }
+
+      const result = await this.telegram.postMessage(content.text);
+
+      if (result.success) {
+        await this.prisma.socialPost.update({
+          where: { id },
+          data: {
+            status: SocialPostStatus.PUBLISHED,
+            publishedAt: new Date(),
+            externalId: result.messageId?.toString() ?? null,
+          },
+        });
+      } else {
+        await this.prisma.socialPost.update({
+          where: { id },
+          data: {
+            status: SocialPostStatus.REJECTED,
+            metadata: { error: result.error } as any,
+          },
+        });
+      }
+
+      return {
+        id: post.id,
+        platform: 'telegram',
+        success: result.success,
+        externalId: result.messageId?.toString(),
+        error: result.error,
+      };
+    }
+
+    throw new BadRequestException(`Unsupported platform: ${platform}`);
+  }
+
+  /**
+   * Publish all APPROVED social posts via the appropriate platform publisher.
+   * POST /admin/approvals/social/publish-approved
+   *
+   * NOTE: Must be declared before /:id routes to avoid NestJS treating
+   * "publish-approved" as a dynamic :id segment.
+   */
+  @Post('publish-approved')
+  @HttpCode(200)
+  async publishApproved(): Promise<{
+    published: number;
+    failed: number;
+    platformBreakdown: { twitter: number; telegram: number };
+    results: PublishResult[];
+  }> {
+    const approved = await this.prisma.socialPost.findMany({
+      where: { status: SocialPostStatus.APPROVED },
+    });
+
+    const results: PublishResult[] = [];
+    let twitterPublished = 0;
+    let telegramPublished = 0;
+
+    for (const post of approved) {
+      const platform = post.platform ?? 'twitter';
+
+      if (platform === 'twitter') {
+        const tweets = (post.content ?? []) as unknown as TweetContent[];
+
+        if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
+          this.logger.warn(`SocialPost ${post.id} has no tweets — skipping`);
+          results.push({ id: post.id, platform: 'twitter', success: false, error: 'No tweets to publish' });
+          continue;
+        }
+
+        const result = await this.twitter.postThread(tweets);
+
+        if (result.success) {
+          await this.prisma.socialPost.update({
+            where: { id: post.id },
+            data: {
+              status: SocialPostStatus.PUBLISHED,
+              publishedAt: new Date(),
+              externalId: result.tweetIds?.[0] ?? null,
+              metadata: { tweetIds: result.tweetIds } as any,
+            },
+          });
+          twitterPublished++;
+        } else {
+          await this.prisma.socialPost.update({
+            where: { id: post.id },
+            data: {
+              status: SocialPostStatus.REJECTED,
+              metadata: { error: result.error } as any,
+            },
+          });
+        }
+
+        results.push({
+          id: post.id,
+          platform: 'twitter',
+          success: result.success,
+          externalId: result.tweetIds?.[0],
+          error: result.error,
+        });
+      } else if (platform === 'telegram') {
+        const content = post.content as { text?: string } | null;
+
+        if (!content || !content.text) {
+          this.logger.warn(`SocialPost ${post.id} has no text content for Telegram — skipping`);
+          results.push({ id: post.id, platform: 'telegram', success: false, error: 'No text content to publish' });
+          continue;
+        }
+
+        const result = await this.telegram.postMessage(content.text);
+
+        if (result.success) {
+          await this.prisma.socialPost.update({
+            where: { id: post.id },
+            data: {
+              status: SocialPostStatus.PUBLISHED,
+              publishedAt: new Date(),
+              externalId: result.messageId?.toString() ?? null,
+            },
+          });
+          telegramPublished++;
+        } else {
+          await this.prisma.socialPost.update({
+            where: { id: post.id },
+            data: {
+              status: SocialPostStatus.REJECTED,
+              metadata: { error: result.error } as any,
+            },
+          });
+        }
+
+        results.push({
+          id: post.id,
+          platform: 'telegram',
+          success: result.success,
+          externalId: result.messageId?.toString(),
+          error: result.error,
+        });
+      } else {
+        this.logger.warn(`SocialPost ${post.id} has unsupported platform '${platform}' — skipping`);
+        results.push({ id: post.id, platform, success: false, error: `Unsupported platform: ${platform}` });
+      }
     }
 
     const published = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
 
-    this.logger.log(`publish-approved: ${published} published, ${failed} failed`);
-    return { published, failed, results };
+    this.logger.log(`publish-approved: ${published} published (twitter=${twitterPublished}, telegram=${telegramPublished}), ${failed} failed`);
+    return {
+      published,
+      failed,
+      platformBreakdown: { twitter: twitterPublished, telegram: telegramPublished },
+      results,
+    };
   }
 
   /**

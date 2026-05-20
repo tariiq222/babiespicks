@@ -1,5 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useState, useEffect } from 'react';
 import { adminFetch } from '@/shared/lib/admin-fetch';
@@ -22,6 +23,11 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const locale = useLocale();
+  const t = useTranslations('admin');
+  const brandT = useTranslations('brand');
+  const isRtl = locale === 'ar';
+  const dir = isRtl ? 'rtl' : 'ltr';
 
   const [breakers, setBreakers] = useState<CircuitBreaker[]>([]);
   const [pendingCount, setPendingCount] = useState<number>(0);
@@ -72,25 +78,26 @@ export default function AdminLayout({
     : breakers.length > 0
     ? 'bg-emerald-400'
     : 'bg-stone/30';
+  const sidebarBorderClass = isRtl ? 'border-l' : 'border-r';
 
   return (
-    <div className="min-h-screen bg-cream flex" dir="rtl">
+    <div className="min-h-screen bg-cream flex" dir={dir}>
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 bg-white border-l border-beige flex flex-col">
+      <aside className={`w-56 flex-shrink-0 bg-white ${sidebarBorderClass} border-beige flex flex-col`}>
         {/* Logo + Status */}
         <div className="px-4 py-4 border-b border-beige">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-sage flex items-center justify-center flex-shrink-0 shadow-sm">
-                <span className="text-cream font-semibold text-sm">ب</span>
+                <span className="text-cream font-semibold text-sm">{t('brandInitial')}</span>
               </div>
               <div>
-                <p className="text-sm font-semibold text-charcoal leading-none">BabiesPicks</p>
-                <p className="text-[10px] text-stone mt-0.5">لوحة التحكم</p>
+                <p className="text-sm font-semibold text-charcoal leading-none">{brandT('name')}</p>
+                <p className="text-[10px] text-stone mt-0.5">{t('dashboardSubtitle')}</p>
               </div>
             </div>
             {/* Pipeline status dot */}
-            <div className="flex items-center gap-1.5" title={anyTripped ? 'يوجد خلل في الحماية' : 'النظام سليم'}>
+            <div className="flex items-center gap-1.5" title={anyTripped ? t('statusIssue') : t('statusHealthy')}>
               <span className={`w-2 h-2 rounded-full ${statusDot}`} />
             </div>
           </div>
@@ -98,23 +105,25 @@ export default function AdminLayout({
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <NavItem href="/admin" icon="ti-layout-dashboard" label="لوحة القيادة" pathname={pathname} exact />
+          <NavItem href="/admin" icon="ti-layout-dashboard" label={t('dashboard')} pathname={pathname} exact />
           <NavItem
             href="/admin/approvals"
             icon="ti-clipboard-check"
-            label="الموافقات"
+            label={t('approvals')}
             pathname={pathname}
             badge={pendingCount > 0 ? pendingCount : undefined}
           />
-          <NavItem href="/admin/operations" icon="ti-player-play" label="التشغيل" pathname={pathname} />
-          <NavItem href="/admin/settings" icon="ti-settings-2" label="الإعدادات" pathname={pathname} />
+          <NavItem href="/admin/channels" icon="ti-share" label={t('channels')} pathname={pathname} />
+          <NavItem href="/admin/ai-os" icon="ti-brain" label={t('aiOs')} pathname={pathname} />
+          <NavItem href="/admin/discovery" icon="ti-radar-2" label={t('discoveryNav')} pathname={pathname} />
+          <NavItem href="/admin/settings" icon="ti-settings-2" label={t('settings')} pathname={pathname} />
 
           <div className="h-px bg-beige my-2.5 mx-1" />
 
           <NavItem
             href="/"
-            icon="ti-arrow-right"
-            label="العودة للموقع"
+            icon={isRtl ? 'ti-arrow-right' : 'ti-arrow-left'}
+            label={t('backToSite')}
             external
             pathname={pathname}
           />
@@ -124,9 +133,9 @@ export default function AdminLayout({
         <div className="px-4 py-3.5 border-t border-beige">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-sage/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-sage text-xs font-semibold">ط</span>
+              <span className="text-sage text-xs font-semibold">{t('userInitial')}</span>
             </div>
-            <p className="text-sm font-medium text-charcoal">طارق</p>
+            <p className="text-sm font-medium text-charcoal">{t('userName')}</p>
           </div>
         </div>
       </aside>

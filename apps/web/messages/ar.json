@@ -61,8 +61,8 @@
     "searchPlaceholder": "ابحثي عن منتج لطفلكِ...",
     "searchAriaLabel": "ابحثي عن منتج لطفلكِ",
     "searchButton": "ابحثي",
-    "productOfWeek": "منتج الأسبوع",
-    "newVerdict": "رأي جديد",
+    "productOfWeek": "مراجعة مختارة",
+    "newVerdict": "رأي موثّق",
     "telegramTitle": "آراء يومية على تيليجرام",
     "telegramSubtitle": "انضمي لأمهات سعوديات يشاركن تجاربهن",
     "telegramButton": "انضمي",
@@ -73,7 +73,7 @@
     "browseByCategory": "تصفّحي حسب الفئة",
     "viewAllCategories": "عرض كل الفئات",
     "productCount": "{count} منتج",
-    "todaysPick": "اختيارات اليوم",
+    "todaysPick": "مختارات موصى بها",
     "archive": "الأرشيف",
     "viewFullReview": "عرض المراجعة الكاملة",
     "worthIt": "يستاهل",
@@ -325,7 +325,7 @@
     "trustTransparent": "شفافية كاملة",
     "trustTransparentDesc": "نفصح عن كل علاقة عمولة. كل رابط affiliate مُعلّم بوضوح.",
     "trustAI": "مدعوم بالذكاء الاصطناعي",
-    "trustAIDesc": "نستخدم AI لتحليل آلاف المراجعات واستخراج أنماط لا تراها العين.",
+    "trustAIDesc": "نستخدم الذكاء الاصطناعي لتحليل مراجعات حقيقية واستخراج أنماط لا تراها العين.",
     "trustMoms": "آراء أمهات حقيقيات",
     "trustMomsDesc": "نجمع تقييمات من أمهات سعوديات عبر المتاجر المحلية.",
     "affiliateTitle": "إفصاح العمولات",
@@ -451,7 +451,7 @@
       },
       "howWeReview": {
         "q": "كيف تراجعين المنتجات؟",
-        "a": "نراجع كل منتج بناءً على 5 معايير: الأمان (25%)، الجودة (25%)، التقييمات (20%)، السعر (15%)، والقيمة طويلة المدى (15%). نستخدم الذكاء الاصطناعي لتحليل آلاف المراجعات من أمهات سعوديات حقيقيات."
+        "a": "نراجع كل منتج بناءً على 5 معايير: الأمان (25%)، الجودة (25%)، التقييمات (20%)، السعر (15%)، والقيمة طويلة المدى (15%). نستخدم الذكاء الاصطناعي لتحليل المراجعات المتاحة من أمهات سعوديات حقيقيات."
       },
       "trustworthy": {
         "q": "هل مراجعاتكم موثوقة؟",
@@ -489,9 +489,19 @@
   },
   "admin": {
     "dashboard": "لوحة التحكم",
+    "dashboardSubtitle": "لوحة التحكم",
+    "brandInitial": "ب",
     "pipeline": "خط الإنتاج",
     "costs": "التكاليف",
     "backToSite": "العودة للموقع",
+    "approvals": "الموافقات",
+    "channels": "قنوات النشر",
+    "aiOs": "منظومة الذكاء",
+    "settings": "الإعدادات",
+    "statusHealthy": "النظام سليم",
+    "statusIssue": "يوجد خلل في الحماية",
+    "userName": "طارق",
+    "userInitial": "ط",
     "products": "المنتجات",
     "verdicts": "التقييمات",
     "contentPages": "صفحات المحتوى",
@@ -583,7 +593,69 @@
     "sprintTypeBestList": "قوائم أفضل",
     "sprintTypeReview": "مراجعات منتجات",
     "sprintTypeGuide": "أدلة الشراء",
-    "sprintCategoryAll": "جميع الفئات"
+    "sprintCategoryAll": "جميع الفئات",
+    "discoveryNav": "الاكتشاف/الفرص",
+    "discovery": {
+      "title": "الاكتشاف والفرص",
+      "eyebrow": "Affiliate AI OS",
+      "refresh": "تحديث",
+      "introKicker": "Product Drafts + Trend Intelligence",
+      "introTitle": "مراجعة فرص المنتجات قبل اعتمادها",
+      "introBody": "تعرض هذه الصفحة مسودات المنتجات المكتشفة من السوق مع إشارات الطلب والمنافسة والموسمية. الاعتماد هنا لا ينشر المنتج ولا يربطه بالمحتوى أو السوشيال حالياً.",
+      "statsLabel": "مؤشرات الاكتشاف",
+      "stats": {
+        "total": "إجمالي المسودات",
+        "needsReview": "بانتظار المراجعة",
+        "averageScore": "متوسط Trend Score",
+        "withSignals": "تملك إشارات",
+        "topSource": "أعلى مصدر"
+      },
+      "draftsTitle": "Product Drafts",
+      "draftsSubtitle": "قائمة المسودات من GET /admin/product-drafts",
+      "trendTitle": "Trend Intelligence",
+      "trend": {
+        "reviewQueue": "طابور المراجعة",
+        "needsEdit": "تحتاج تعديل",
+        "approved": "معتمدة",
+        "rejected": "مرفوضة"
+      },
+      "scopeTitle": "نطاق Phase 1",
+      "scopeBody": "الإجراءات هنا تغيّر حالة مسودة المنتج فقط. لا يوجد نشر تلقائي، ولا ربط مع المحتوى أو السوشيال في هذه المرحلة.",
+      "loadingTitle": "جارٍ تحميل المسودات",
+      "loadingBody": "نقرأ فرص المنتجات من لوحة Affiliate AI OS.",
+      "errorTitle": "تعذّر تحميل المسودات",
+      "emptyTitle": "لا توجد مسودات حالياً",
+      "emptyBody": "عند تشغيل اكتشاف المنتجات ستظهر الفرص هنا للمراجعة.",
+      "retry": "إعادة المحاولة",
+      "notAvailable": "غير متوفر",
+      "loadFailed": "فشل تحميل مسودات المنتجات",
+      "actionFailed": "تعذّر تنفيذ الإجراء",
+      "fields": {
+        "trendScore": "Trend Score",
+        "demand": "الطلب",
+        "competition": "المنافسة",
+        "seasonality": "الموسمية",
+        "updatedAt": "آخر تحديث"
+      },
+      "actions": {
+        "approve": "اعتماد",
+        "reject": "رفض",
+        "needsEdit": "يحتاج تعديل"
+      },
+      "actionSuccess": {
+        "approve": "تم اعتماد المسودة",
+        "reject": "تم رفض المسودة",
+        "needs-edit": "تم تحويل المسودة للتعديل"
+      },
+      "status": {
+        "NEEDS_REVIEW": "بانتظار المراجعة",
+        "APPROVED": "معتمدة",
+        "REJECTED": "مرفوضة",
+        "NEEDS_EDIT": "تحتاج تعديل",
+        "PUBLISHED": "منشورة",
+        "ARCHIVED": "مؤرشفة"
+      }
+    }
   },
   "coupons": {
     "heroTitle": "كوبونات وخصومات",
