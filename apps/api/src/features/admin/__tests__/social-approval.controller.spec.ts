@@ -87,11 +87,15 @@ describe('SocialApprovalController', () => {
     const enhancedPrisma = prisma as {
       $transaction?: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
       approvalAuditEvent?: { create: ReturnType<typeof vi.fn> };
+      socialPost?: { findFirst?: ReturnType<typeof vi.fn> };
     };
 
     enhancedPrisma.approvalAuditEvent ??= {
       create: vi.fn().mockResolvedValue({ id: 'audit_default' }),
     };
+    if (enhancedPrisma.socialPost) {
+      enhancedPrisma.socialPost.findFirst ??= vi.fn().mockResolvedValue(null);
+    }
     enhancedPrisma.$transaction ??= async <T,>(fn: (tx: unknown) => Promise<T>) =>
       fn(enhancedPrisma);
 
@@ -114,9 +118,11 @@ describe('SocialApprovalController', () => {
       const mockPrisma = {
         socialPost: {
           findUniqueOrThrow: vi.fn().mockResolvedValue(pendingPost),
+          findMany: vi.fn().mockResolvedValue([]),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
           update: vi.fn().mockResolvedValue({
             ...pendingPost,
-            status: SocialPostStatus.APPROVED,
+            status: SocialPostStatus.SCHEDULED,
             metadata: { approvedBy: 'admin-api-key' },
           }),
         },
@@ -129,21 +135,21 @@ describe('SocialApprovalController', () => {
 
       controller = createController(mockPrisma, mockTwitter, mockTelegram);
 
-      await controller.approve('post_pending_1', { approvedBy: 'spoofed-admin' });
+      const result = await controller.approve('post_pending_1', { approvedBy: 'spoofed-admin' });
 
-      expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
-        where: { id: 'post_pending_1' },
+      expect(result).toEqual(expect.objectContaining({ action: 'scheduled', status: 'SCHEDULED' }));
+      expect(mockPrisma.socialPost.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'post_pending_1',
+          status: { in: [SocialPostStatus.PENDING_APPROVAL, SocialPostStatus.APPROVED] },
+        },
         data: expect.objectContaining({
+          status: SocialPostStatus.SCHEDULED,
+          scheduledAt: expect.any(Date),
           metadata: expect.objectContaining({ approvedBy: 'admin-api-key' }),
         }),
       });
-      expect(mockPrisma.socialPost.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            metadata: expect.objectContaining({ approvedBy: 'spoofed-admin' }),
-          }),
-        }),
-      );
+      expect(mockPrisma.socialPost.updateMany.mock.calls[0][0].data.metadata.approvedBy).not.toBe('spoofed-admin');
       expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           actorType: 'ADMIN_API_KEY',
@@ -153,6 +159,15 @@ describe('SocialApprovalController', () => {
           entityId: 'post_pending_1',
         }),
       });
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'SCHEDULED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'post_pending_1',
+        }),
+      });
+      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+      expect(mockTelegram.postMessage).not.toHaveBeenCalled();
     });
 
     it('rolls back social approval when audit creation fails', async () => {
@@ -164,9 +179,10 @@ describe('SocialApprovalController', () => {
       const txStore = { ...store };
       const tx = {
         socialPost: {
-          update: vi.fn(async ({ data }: any) => {
+          findFirst: vi.fn().mockResolvedValue(null),
+          updateMany: vi.fn(async ({ data }: any) => {
             Object.assign(txStore, data);
-            return txStore;
+            return { count: 1 };
           }),
         },
         approvalAuditEvent: {
@@ -176,6 +192,7 @@ describe('SocialApprovalController', () => {
       const mockPrisma = {
         socialPost: {
           findUniqueOrThrow: vi.fn().mockResolvedValue(store),
+          findMany: vi.fn().mockResolvedValue([]),
         },
         $transaction: vi.fn(async (fn: (transaction: typeof tx) => Promise<unknown>) => {
           try {
@@ -196,716 +213,145 @@ describe('SocialApprovalController', () => {
 
       expect(store.status).toBe(SocialPostStatus.PENDING_APPROVAL);
       expect(store.metadata).toBeNull();
-      expect(tx.socialPost.update).toHaveBeenCalled();
+      expect(tx.socialPost.updateMany).toHaveBeenCalled();
       expect(tx.approvalAuditEvent.create).toHaveBeenCalled();
     });
-  });
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // publishOne — single-target publish
-  // ══════════════════════════════════════════════════════════════════════════
-  describe('publishOne', () => {
-    it('throws BadRequestException when post status is not APPROVED', async () => {
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue({
-            id: 'post_1',
-            status: SocialPostStatus.PENDING_APPROVAL,
-            platform: 'twitter',
-            content: [],
-          }),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      await expect(controller.publishOne('post_1')).rejects.toThrow(
-        /Cannot publish: status is PENDING_APPROVAL, expected APPROVED/,
-      );
-    });
-
-    it('publishes APPROVED Twitter post and marks it PUBLISHED', async () => {
-      const twitterPost = makeTwitterPost();
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(twitterPost),
-          update: vi.fn().mockResolvedValue({ ...twitterPost, status: SocialPostStatus.PUBLISHED }),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_123'] }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishOne('post_twitter_1');
-
-      expect(result.success).toBe(true);
-      expect(result.platform).toBe('twitter');
-      expect(result.externalId).toBe('tweet_123');
-      expect(mockTwitter.postThread).toHaveBeenCalledWith([{ text: 'Test tweet text' }]);
-      expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
-        where: { id: 'post_twitter_1' },
-        data: expect.objectContaining({ status: SocialPostStatus.PUBLISHED }),
+    it('approval is idempotent when the social post is already scheduled', async () => {
+      const scheduledPost = makeTwitterPost({
+        id: 'post_already_scheduled',
+        status: SocialPostStatus.SCHEDULED,
+        scheduledAt: new Date('2026-05-20T08:00:00.000Z'),
       });
-    });
-
-    it('records a PUBLISHED audit event for manual social publishing', async () => {
-      const twitterPost = makeTwitterPost({ id: 'post_audit_manual' });
-
       const mockPrisma = {
         socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(twitterPost),
-          update: vi.fn().mockResolvedValue({ ...twitterPost, status: SocialPostStatus.PUBLISHED }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue(scheduledPost),
+          findMany: vi.fn(),
+          updateMany: vi.fn(),
         },
         approvalAuditEvent: {
-          create: vi.fn().mockResolvedValue({ id: 'audit_manual' }),
+          create: vi.fn(),
         },
       };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_manual'] }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      await controller.publishOne('post_audit_manual');
-
-      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          actorType: 'ADMIN_API_KEY',
-          actorId: 'admin-api-key',
-          action: 'PUBLISHED',
-          entityType: 'SOCIAL_POST',
-          entityId: 'post_audit_manual',
-          metadata: expect.objectContaining({
-            phase: 'PUBLISH_SUCCESS',
-            platform: 'twitter',
-            externalId: 'tweet_manual',
-          }),
-        }),
-      });
-      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          actorType: 'ADMIN_API_KEY',
-          actorId: 'admin-api-key',
-          action: 'PUBLISHED',
-          entityType: 'SOCIAL_POST',
-          entityId: 'post_audit_manual',
-          metadata: expect.objectContaining({
-            phase: 'PUBLISH_ATTEMPT',
-            result: 'INTENT_RECORDED',
-            trigger: 'manual',
-            platform: 'twitter',
-          }),
-        }),
-      });
-    });
-
-    it('does not call the external publisher when pre-publish audit creation fails', async () => {
-      const store = makeTwitterPost({ id: 'post_publish_audit_blocked' });
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(store),
-          update: vi.fn(),
-        },
-        approvalAuditEvent: {
-          create: vi.fn().mockRejectedValue(new Error('audit write failed')),
-        },
-      };
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_blocked'] }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      await expect(controller.publishOne('post_publish_audit_blocked')).rejects.toThrow(
-        'audit write failed',
-      );
-
-      expect(store.status).toBe(SocialPostStatus.APPROVED);
-      expect(store.externalId).toBeNull();
-      expect(mockTwitter.postThread).not.toHaveBeenCalled();
-      expect(mockPrisma.socialPost.update).not.toHaveBeenCalled();
-      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          action: 'PUBLISHED',
-          entityType: 'SOCIAL_POST',
-          entityId: 'post_publish_audit_blocked',
-          metadata: expect.objectContaining({
-            phase: 'PUBLISH_ATTEMPT',
-            result: 'INTENT_RECORDED',
-            trigger: 'manual',
-            platform: 'twitter',
-          }),
-        }),
-      });
-    });
-
-    it('publishes APPROVED Telegram post and marks it PUBLISHED', async () => {
-      const telegramPost = makeTelegramPost();
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(telegramPost),
-          update: vi.fn().mockResolvedValue({ ...telegramPost, status: SocialPostStatus.PUBLISHED }),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = {
-        postMessage: vi.fn().mockResolvedValue({ success: true, messageId: 42 }),
-      };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishOne('post_telegram_1');
-
-      expect(result.success).toBe(true);
-      expect(result.platform).toBe('telegram');
-      expect(result.externalId).toBe('42');
-      expect(mockTelegram.postMessage).toHaveBeenCalledWith('Test telegram message text');
-      expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
-        where: { id: 'post_telegram_1' },
-        data: expect.objectContaining({ status: SocialPostStatus.PUBLISHED }),
-      });
-    });
-
-    it('marks Twitter post REJECTED when Twitter API fails', async () => {
-      const twitterPost = makeTwitterPost();
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(twitterPost),
-          update: vi.fn().mockResolvedValue({ ...twitterPost, status: SocialPostStatus.REJECTED }),
-        },
-        approvalAuditEvent: {
-          create: vi.fn().mockResolvedValue({ id: 'audit_twitter_failure' }),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: false, tweetIds: [], error: 'Rate limited' }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishOne('post_twitter_1');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Rate limited');
-      expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
-        where: { id: 'post_twitter_1' },
-        data: expect.objectContaining({ status: SocialPostStatus.REJECTED }),
-      });
-      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          action: 'REJECTED',
-          entityType: 'SOCIAL_POST',
-          entityId: 'post_twitter_1',
-          reason: 'Rate limited',
-          metadata: expect.objectContaining({
-            phase: 'PUBLISH_FAILURE',
-            result: 'EXTERNAL_FAILURE',
-            trigger: 'manual',
-            platform: 'twitter',
-            error: 'Rate limited',
-          }),
-        }),
-      });
-    });
-
-    it('marks Telegram post REJECTED when Telegram API fails', async () => {
-      const telegramPost = makeTelegramPost();
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(telegramPost),
-          update: vi.fn().mockResolvedValue({ ...telegramPost, status: SocialPostStatus.REJECTED }),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = {
-        postMessage: vi.fn().mockResolvedValue({ success: false, error: 'Chat not found' }),
-      };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishOne('post_telegram_1');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Chat not found');
-      expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
-        where: { id: 'post_telegram_1' },
-        data: expect.objectContaining({ status: SocialPostStatus.REJECTED }),
-      });
-    });
-
-    it('throws BadRequestException when Twitter post has no tweets', async () => {
-      const badPost = makeTwitterPost({ content: [] });
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(badPost),
-        },
-      };
-
       const mockTwitter = { postThread: vi.fn() };
       const mockTelegram = { postMessage: vi.fn() };
 
       controller = createController(mockPrisma, mockTwitter, mockTelegram);
 
-      await expect(controller.publishOne('post_twitter_1')).rejects.toThrow('No tweets to publish');
-    });
+      const result = await controller.approve('post_already_scheduled', {});
 
-    it('throws BadRequestException when Telegram post has no text content', async () => {
-      const badPost = makeTelegramPost({ content: { text: '' } });
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(badPost),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      await expect(controller.publishOne('post_telegram_1')).rejects.toThrow(
-        'No text content to publish to Telegram',
-      );
-    });
-
-    it('throws BadRequestException for unsupported platform', async () => {
-      const badPost = makeTwitterPost({ platform: 'facebook' as any });
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(badPost),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      await expect(controller.publishOne('post_twitter_1')).rejects.toThrow('Unsupported platform: facebook');
-    });
-
-    it('Telegram post with stale comments field publishes only content.text — comments are ignored', async () => {
-      // Regression: Telegram content objects historically contained a `comments` array field
-      // that was used in the now-removed thread-mode implementation. The controller must
-      // publish ONLY content.text and must NOT pass comments to TelegramPublisherService.
-      const telegramPostWithStaleComments = makeTelegramPost({
-        id: 'post_telegram_stale_comments',
-        content: {
-          text: 'Primary message text',
-          comments: ['Stale reply 1', 'Stale reply 2', 'Stale reply 3'],
-        } as any,
-      });
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue(telegramPostWithStaleComments),
-          update: vi.fn().mockResolvedValue({ ...telegramPostWithStaleComments, status: SocialPostStatus.PUBLISHED }),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = {
-        postMessage: vi.fn().mockResolvedValue({ success: true, messageId: 123 }),
-      };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishOne('post_telegram_stale_comments');
-
-      expect(result.success).toBe(true);
-      expect(result.platform).toBe('telegram');
-      // Verify postMessage was called with ONLY the text content
-      expect(mockTelegram.postMessage).toHaveBeenCalledTimes(1);
-      expect(mockTelegram.postMessage).toHaveBeenCalledWith('Primary message text');
-      // Verify postMessage was NOT called with an array or comments
-      expect(mockTelegram.postMessage).not.toHaveBeenCalledWith(
-        expect.arrayContaining(['Stale reply 1']),
-      );
-      // Twitter should never be called for a Telegram post
-      expect(mockTwitter.postThread).not.toHaveBeenCalled();
-    });
-
-    it('publishOne affects only the targeted post — other APPROVED post remains APPROVED', async () => {
-      // Stateful mock: track multiple posts in a mutable store
-      const postStore = new Map<string, SocialPost>([
-        ['post_target', makeTwitterPost({ id: 'post_target' })],
-        ['post_other', makeTwitterPost({ id: 'post_other', status: SocialPostStatus.APPROVED })],
-      ]);
-
-      const mockPrisma = {
-        socialPost: {
-          findUniqueOrThrow: vi.fn(async ({ where }: any) => {
-            const post = postStore.get(where.id);
-            if (!post) throw new Error('Post not found');
-            return post;
-          }),
-          update: vi.fn(async ({ where, data }: any) => {
-            const post = postStore.get(where.id);
-            if (!post) throw new Error('Post not found');
-            const updated = { ...post, ...data, updatedAt: new Date() };
-            postStore.set(where.id, updated);
-            return updated;
-          }),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_123'] }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      await controller.publishOne('post_target');
-
-      // Target should be PUBLISHED
-      expect(postStore.get('post_target')?.status).toBe(SocialPostStatus.PUBLISHED);
-
-      // Other post should still be APPROVED
-      expect(postStore.get('post_other')?.status).toBe(SocialPostStatus.APPROVED);
-
-      // Only one update call (for target)
-      expect(mockPrisma.socialPost.update).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.socialPost.findUniqueOrThrow).toHaveBeenCalledTimes(1);
-      expect(mockTwitter.postThread).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // publishApproved — bulk publish all APPROVED posts
-  // ══════════════════════════════════════════════════════════════════════════
-  describe('publishApproved', () => {
-    it('publishes all APPROVED posts across Twitter and Telegram', async () => {
-      const approvedPosts = [
-        makeTwitterPost({ id: 'tw_1', status: SocialPostStatus.APPROVED }),
-        makeTelegramPost({ id: 'tg_1', status: SocialPostStatus.APPROVED }),
-        makeTwitterPost({ id: 'tw_2', status: SocialPostStatus.APPROVED }),
-      ];
-
-      const mockPrisma = {
-        socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn().mockResolvedValue({}),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_x'] }),
-      };
-      const mockTelegram = {
-        postMessage: vi.fn().mockResolvedValue({ success: true, messageId: 99 }),
-      };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(3);
-      expect(result.failed).toBe(0);
-      expect(result.platformBreakdown.twitter).toBe(2);
-      expect(result.platformBreakdown.telegram).toBe(1);
-      expect(result.results).toHaveLength(3);
-    });
-
-    it('records PUBLISHED audit events for bulk social publishing', async () => {
-      const approvedPosts = [
-        makeTwitterPost({ id: 'tw_bulk', status: SocialPostStatus.APPROVED }),
-        makeTelegramPost({ id: 'tg_bulk', status: SocialPostStatus.APPROVED }),
-      ];
-
-      const mockPrisma = {
-        socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn().mockResolvedValue({}),
-        },
-        approvalAuditEvent: {
-          create: vi.fn().mockResolvedValue({ id: 'audit_bulk' }),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_bulk'] }),
-      };
-      const mockTelegram = {
-        postMessage: vi.fn().mockResolvedValue({ success: true, messageId: 321 }),
-      };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(2);
-      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          actorType: 'ADMIN_API_KEY',
-          actorId: 'admin-api-key',
-          action: 'PUBLISHED',
-          entityType: 'SOCIAL_POST',
-          entityId: 'tw_bulk',
-        }),
-      });
-      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          actorType: 'ADMIN_API_KEY',
-          actorId: 'admin-api-key',
-          action: 'PUBLISHED',
-          entityType: 'SOCIAL_POST',
-          entityId: 'tg_bulk',
-        }),
-      });
-    });
-
-    it('does not call external publishers for bulk items when pre-publish audit creation fails', async () => {
-      const approvedPosts = [makeTwitterPost({ id: 'tw_bulk_audit_blocked' })];
-
-      const mockPrisma = {
-        socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn(),
-        },
-        approvalAuditEvent: {
-          create: vi.fn().mockRejectedValue(new Error('audit write failed')),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_never'] }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(0);
-      expect(result.failed).toBe(1);
-      expect(result.results[0]).toEqual(
-        expect.objectContaining({
-          id: 'tw_bulk_audit_blocked',
-          platform: 'twitter',
-          success: false,
-          error: 'audit write failed',
-        }),
-      );
+      expect(result).toEqual(expect.objectContaining({
+        success: true,
+        status: 'SCHEDULED',
+        idempotent: true,
+      }));
+      expect(mockPrisma.socialPost.updateMany).not.toHaveBeenCalled();
       expect(mockTwitter.postThread).not.toHaveBeenCalled();
       expect(mockTelegram.postMessage).not.toHaveBeenCalled();
-      expect(mockPrisma.socialPost.update).not.toHaveBeenCalled();
     });
 
-    it('counts Twitter and Telegram publish failures separately', async () => {
-      const approvedPosts = [
-        makeTwitterPost({ id: 'tw_ok' }),
-        makeTwitterPost({ id: 'tw_fail' }),
-        makeTelegramPost({ id: 'tg_ok' }),
-        makeTelegramPost({ id: 'tg_fail' }),
-      ];
-
+    it('chooses the next safe Riyadh-time slot by platform capacity', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-05-20T07:30:00.000Z')); // 10:30 Riyadh
+      const pendingPost = makeTwitterPost({
+        id: 'post_schedule_policy',
+        status: SocialPostStatus.PENDING_APPROVAL,
+      });
       const mockPrisma = {
         socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn().mockResolvedValue({}),
+          findUniqueOrThrow: vi.fn().mockResolvedValue(pendingPost),
+          findMany: vi.fn().mockResolvedValue([
+            { scheduledAt: new Date('2026-05-20T08:00:00.000Z') }, // 11:00 Riyadh occupied
+          ]),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_policy' }),
         },
       };
-
-      const mockTwitter = {
-        postThread: vi
-          .fn()
-          .mockResolvedValueOnce({ success: true, tweetIds: ['tweet_1'] })
-          .mockResolvedValueOnce({ success: false, tweetIds: [], error: 'Auth error' }),
-      };
-      const mockTelegram = {
-        postMessage: vi
-          .fn()
-          .mockResolvedValueOnce({ success: true, messageId: 1 })
-          .mockResolvedValueOnce({ success: false, error: 'Blocked' }),
-      };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(2);
-      expect(result.failed).toBe(2);
-      expect(result.platformBreakdown.twitter).toBe(1);
-      expect(result.platformBreakdown.telegram).toBe(1);
-
-      const failedResults = result.results.filter((r) => !r.success);
-      expect(failedResults).toHaveLength(2);
-      expect(failedResults.find((r) => r.id === 'tw_fail')?.error).toBe('Auth error');
-      expect(failedResults.find((r) => r.id === 'tg_fail')?.error).toBe('Blocked');
-    });
-
-    it('skips Twitter posts with no tweets and reports them as failed', async () => {
-      const approvedPosts = [makeTwitterPost({ id: 'tw_empty', content: [] })];
-
-      const mockPrisma = {
-        socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn().mockResolvedValue({}),
-        },
-      };
-
       const mockTwitter = { postThread: vi.fn() };
       const mockTelegram = { postMessage: vi.fn() };
 
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+      try {
+        controller = createController(mockPrisma, mockTwitter, mockTelegram);
+        const result = await controller.approve('post_schedule_policy', {});
 
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(0);
-      expect(result.failed).toBe(1);
-      expect(result.results[0].error).toBe('No tweets to publish');
-      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+        expect(result.scheduledAt).toEqual(new Date('2026-05-20T16:00:00.000Z')); // 19:00 Riyadh
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it('skips Telegram posts with no text content and reports them as failed', async () => {
-      const approvedPosts = [makeTelegramPost({ id: 'tg_empty', content: { text: '' } })];
-
+    it('approve-and-schedule alias uses the same safe scheduling logic as approve', async () => {
+      const pendingPost = makeTelegramPost({
+        id: 'post_alias_schedule',
+        status: SocialPostStatus.PENDING_APPROVAL,
+      });
       const mockPrisma = {
         socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn().mockResolvedValue({}),
-        },
-      };
-
-      const mockTwitter = { postThread: vi.fn() };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(0);
-      expect(result.failed).toBe(1);
-      expect(result.results[0].error).toBe('No text content to publish');
-      expect(mockTelegram.postMessage).not.toHaveBeenCalled();
-    });
-
-    it('skips unsupported platforms and reports them as failed', async () => {
-      const approvedPosts = [
-        makeTwitterPost({ id: 'tw_ok' }),
-        { ...makeTwitterPost(), id: 'fb_bad', platform: 'facebook' as any },
-      ];
-
-      const mockPrisma = {
-        socialPost: {
-          findMany: vi.fn().mockResolvedValue(approvedPosts),
-          update: vi.fn().mockResolvedValue({}),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_1'] }),
-      };
-      const mockTelegram = { postMessage: vi.fn() };
-
-      controller = createController(mockPrisma, mockTwitter, mockTelegram);
-
-      const result = await controller.publishApproved();
-
-      expect(result.published).toBe(1);
-      expect(result.failed).toBe(1);
-      expect(result.results.find((r) => r.id === 'fb_bad')?.error).toContain('Unsupported platform');
-    });
-
-    it('returns empty results when no APPROVED posts exist', async () => {
-      const mockPrisma = {
-        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(pendingPost),
           findMany: vi.fn().mockResolvedValue([]),
+          findFirst: vi.fn().mockResolvedValue(null),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_alias' }),
         },
       };
-
       const mockTwitter = { postThread: vi.fn() };
       const mockTelegram = { postMessage: vi.fn() };
 
       controller = createController(mockPrisma, mockTwitter, mockTelegram);
 
-      const result = await controller.publishApproved();
+      const result = await controller.approveAndSchedule('post_alias_schedule', { approvedBy: 'spoofed' });
 
-      expect(result.published).toBe(0);
-      expect(result.failed).toBe(0);
-      expect(result.results).toHaveLength(0);
+      expect(result).toEqual(expect.objectContaining({ action: 'scheduled', status: 'SCHEDULED' }));
+      expect(mockPrisma.socialPost.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: {
+          id: 'post_alias_schedule',
+          status: { in: [SocialPostStatus.PENDING_APPROVAL, SocialPostStatus.APPROVED] },
+        },
+      }));
+      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+      expect(mockTelegram.postMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('disabled immediate publish endpoints', () => {
+    it('returns 410 for single-post immediate publish without calling providers', async () => {
+      const mockPrisma = { socialPost: { findUniqueOrThrow: vi.fn() } };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      await expect(controller.publishOne('post_target')).rejects.toMatchObject({
+        status: 410,
+        response: expect.objectContaining({
+          error: expect.stringContaining('Immediate social publishing is disabled'),
+        }),
+      });
+      expect(mockPrisma.socialPost.findUniqueOrThrow).not.toHaveBeenCalled();
       expect(mockTwitter.postThread).not.toHaveBeenCalled();
       expect(mockTelegram.postMessage).not.toHaveBeenCalled();
     });
 
-    it('does not touch non-APPROVED posts — only APPROVED posts are returned by findMany filter', async () => {
-      // Stateful mock: mix of APPROVED and non-APPROVED posts
-      const allPosts = [
-        makeTwitterPost({ id: 'tw_approved', status: SocialPostStatus.APPROVED }),
-        makeTwitterPost({ id: 'tw_pending', status: SocialPostStatus.PENDING_APPROVAL }),
-        makeTelegramPost({ id: 'tg_rejected', status: SocialPostStatus.REJECTED }),
-        makeTelegramPost({ id: 'tg_approved', status: SocialPostStatus.APPROVED }),
-      ];
-
-      const postStore = new Map<string, SocialPost>(allPosts.map((p) => [p.id, p]));
-
-      const mockPrisma = {
-        socialPost: {
-          findMany: vi.fn(async ({ where }: any) => {
-            // Simulate Prisma filter: only return APPROVED posts
-            return allPosts.filter((p) => p.status === where?.status);
-          }),
-          update: vi.fn(async ({ where, data }: any) => {
-            const post = postStore.get(where.id);
-            if (!post) throw new Error('Post not found');
-            const updated = { ...post, ...data, updatedAt: new Date() };
-            postStore.set(where.id, updated);
-            return updated;
-          }),
-        },
-      };
-
-      const mockTwitter = {
-        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_x'] }),
-      };
-      const mockTelegram = {
-        postMessage: vi.fn().mockResolvedValue({ success: true, messageId: 99 }),
-      };
+    it('returns 410 for bulk immediate publish without calling providers', async () => {
+      const mockPrisma = { socialPost: { findMany: vi.fn() } };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
 
       controller = createController(mockPrisma, mockTwitter, mockTelegram);
 
-      const result = await controller.publishApproved();
-
-      // Only 2 APPROVED posts should be processed
-      expect(result.published).toBe(2);
-      expect(result.failed).toBe(0);
-      expect(result.results).toHaveLength(2);
-      expect(result.platformBreakdown.twitter).toBe(1);
-      expect(result.platformBreakdown.telegram).toBe(1);
-
-      // APPROVED posts should now be PUBLISHED
-      expect(postStore.get('tw_approved')?.status).toBe(SocialPostStatus.PUBLISHED);
-      expect(postStore.get('tg_approved')?.status).toBe(SocialPostStatus.PUBLISHED);
-
-      // Non-APPROVED posts should remain untouched
-      expect(postStore.get('tw_pending')?.status).toBe(SocialPostStatus.PENDING_APPROVAL);
-      expect(postStore.get('tg_rejected')?.status).toBe(SocialPostStatus.REJECTED);
-
-      // Verify findMany was called with the APPROVED filter
-      expect(mockPrisma.socialPost.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ status: SocialPostStatus.APPROVED }) }),
-      );
+      await expect(controller.publishApproved()).rejects.toMatchObject({
+        status: 410,
+        response: expect.objectContaining({
+          error: expect.stringContaining('Immediate bulk social publishing is disabled'),
+        }),
+      });
+      expect(mockPrisma.socialPost.findMany).not.toHaveBeenCalled();
+      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+      expect(mockTelegram.postMessage).not.toHaveBeenCalled();
     });
   });
 });

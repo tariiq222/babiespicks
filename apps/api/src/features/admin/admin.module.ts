@@ -8,9 +8,10 @@ import { ContentPagesController } from './content-pages.controller';
 import { CoordinatorModule } from '../../agents/coordinator/coordinator.module';
 import { PublishingModule } from '../../infrastructure/publishing/publishing.module';
 import { AiOsModule } from '../ai-os/ai-os.module';
+import { PublisherModule } from '../../agents/publisher/publisher.module';
 
 @Module({
-  imports: [CoordinatorModule, PublishingModule, AiOsModule],
+  imports: [CoordinatorModule, PublishingModule, AiOsModule, PublisherModule],
   controllers: [
     AdminController,
     AnalyticsController,

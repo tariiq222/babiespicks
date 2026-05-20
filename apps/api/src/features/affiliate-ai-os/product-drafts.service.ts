@@ -291,11 +291,13 @@ export class ProductDraftsService {
   async listDrafts(query: ListProductDraftsQuery = {}) {
     const db = this.prisma as unknown as AffiliateAiOsPrisma;
     const take = this.normalizeLimit(query.limit);
+    const skip = this.normalizeOffset(query.offset);
 
     return db.productDraft.findMany({
       where: query.status ? { status: query.status } : undefined,
       select: PRODUCT_DRAFT_LIST_SELECT,
       orderBy: { createdAt: 'desc' },
+      skip,
       take,
     });
   }
@@ -436,6 +438,76 @@ export class ProductDraftsService {
   }
 
   /**
+   * Human approval automation: approve using the normal audited transition,
+   * ensure a safe READY evaluation exists, then publish. Deterministic keys make
+   * retries and double-clicks idempotent without trusting any request-body actor.
+   */
+  async approveEvaluateAndPublishDraft(
+    id: string,
+    options: ProductDraftPublishInput = {},
+  ) {
+    const db = this.prisma as unknown as AffiliateAiOsPrisma;
+    const automationKey = this.automationKeyForDraft(id, options.idempotencyKey);
+    const keys = {
+      transition: `${automationKey}:approve`,
+      evaluation: `${automationKey}:evaluate`,
+      publish: `${automationKey}:publish`,
+    };
+    const initialDraft = await db.productDraft.findUnique({ where: { id } });
+
+    if (!initialDraft) {
+      throw new NotFoundException(`ProductDraft ${id} was not found`);
+    }
+
+    if (initialDraft.status === PRODUCT_DRAFT_STATUS_PUBLISHED) {
+      const published = await this.publishApprovedDraft(id, {
+        actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+        idempotencyKey: keys.publish,
+      });
+      return { success: true, action: 'approved_evaluated_published', idempotent: true, ...published };
+    }
+
+    try {
+      if (initialDraft.status !== PRODUCT_DRAFT_STATUS_APPROVED) {
+        await this.transitionDraft(id, {
+          action: 'approve',
+          reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+          idempotencyKey: keys.transition,
+        });
+      }
+
+      let score = await db.productScore.findFirst({
+        where: { productDraftId: id },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      if (!this.isApprovedReadyScore(score)) {
+        score = await this.evaluateDraft(id, { idempotencyKey: keys.evaluation });
+      }
+
+      if (!this.isApprovedReadyScore(score)) {
+        throw this.automationConflict(
+          'evaluate',
+          'Evaluation did not produce an APPROVED READY ProductScore with a safe safety score',
+        );
+      }
+
+      const published = await this.publishApprovedDraft(id, {
+        actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+        idempotencyKey: keys.publish,
+      });
+
+      return { success: true, action: 'approved_evaluated_published', ...published };
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error;
+      }
+
+      throw this.automationConflict('publish', safeAutomationError(error));
+    }
+  }
+
+  /**
    * Publishes an explicitly APPROVED draft into the public product tables.
    * Publishing is separate from approval and requires an APPROVED/READY score.
    */
@@ -476,6 +548,25 @@ export class ProductDraftsService {
     const publishedAt = new Date();
 
     return db.$transaction(async (tx) => {
+      const publishClaim = await tx.productDraft.updateMany({
+        where: {
+          id: draft.id,
+          status: PRODUCT_DRAFT_STATUS_APPROVED,
+        },
+        data: { status: PRODUCT_DRAFT_STATUS_PUBLISHED },
+      });
+
+      if (publishClaim.count !== 1) {
+        const currentDraft = await tx.productDraft.findUnique({ where: { id: draft.id } });
+        if (currentDraft?.status === PRODUCT_DRAFT_STATUS_PUBLISHED && idempotencyKey) {
+          return this.findPublishedDraftResult(tx, currentDraft, idempotencyKey);
+        }
+
+        throw new ConflictException(
+          `Cannot publish draft from ${currentDraft?.status ?? 'UNKNOWN'}; expected APPROVED`,
+        );
+      }
+
       const store = await tx.store.upsert(this.buildStoreUpsertArgs(draft));
       const product = await tx.product.upsert(
         this.buildProductUpsertArgs(draft, store.id),
@@ -500,10 +591,7 @@ export class ProductDraftsService {
           status: PRODUCT_SCORE_STATUS_PUBLISHED,
         },
       });
-      const updatedDraft = await tx.productDraft.update({
-        where: { id: draft.id },
-        data: { status: PRODUCT_DRAFT_STATUS_PUBLISHED },
-      });
+      const updatedDraft = await tx.productDraft.findUnique({ where: { id: draft.id } });
 
       await recordApprovalAuditEvent(tx, {
         action: 'PUBLISHED',
@@ -523,7 +611,7 @@ export class ProductDraftsService {
         price,
         verdict,
         score: updatedScore,
-        draft: updatedDraft,
+        draft: updatedDraft ?? { ...draft, status: PRODUCT_DRAFT_STATUS_PUBLISHED },
       };
     });
   }
@@ -596,6 +684,19 @@ export class ProductDraftsService {
     return typeof value === 'object' && value !== null
       ? (value as Record<string, unknown>)
       : {};
+  }
+
+  private automationKeyForDraft(id: string, idempotencyKey?: string): string {
+    const key = idempotencyKey?.trim() || `product-draft:${id}:approval-automation:v1`;
+    return key.slice(0, 96);
+  }
+
+  private automationConflict(stage: 'approve' | 'evaluate' | 'publish', message: string): ConflictException {
+    return new ConflictException({
+      success: false,
+      stage,
+      error: message,
+    });
   }
 
   private buildTransitionData(
@@ -1146,6 +1247,17 @@ export class ProductDraftsService {
     return Math.min(100, Math.max(1, parsed));
   }
 
+  private normalizeOffset(value?: number | string): number {
+    const parsed =
+      typeof value === 'number' ? value : Number.parseInt(value ?? '0', 10);
+
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+
+    return Math.min(10_000, Math.max(0, parsed));
+  }
+
   private isUniqueConstraintViolation(error: unknown): boolean {
     return (
       typeof error === 'object' &&
@@ -1154,4 +1266,12 @@ export class ProductDraftsService {
       error.code === 'P2002'
     );
   }
+}
+
+function safeAutomationError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? 'Automation failed');
+  if (/credential|secret|token|api[_ -]?key|access[_ -]?token/i.test(message)) {
+    return 'Automation failed due to an upstream configuration error';
+  }
+  return message || 'Automation failed';
 }

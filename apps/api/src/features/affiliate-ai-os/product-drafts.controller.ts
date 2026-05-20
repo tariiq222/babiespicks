@@ -29,16 +29,18 @@ export class ProductDraftsController {
     return this.drafts.listDrafts(query);
   }
 
-  /** POST /admin/product-drafts/:id/approve — mark a draft approved without publishing. */
+  /**
+   * POST /admin/product-drafts/:id/approve — human approval gate.
+   * After approval the backend evaluates if needed and publishes idempotently.
+   */
   @Post(':id/approve')
   @HttpCode(200)
   async approve(
     @Param('id') id: string,
     @Body() body: ProductDraftTransitionBodyDto = {},
   ): Promise<unknown> {
-    return this.drafts.transitionDraft(id, {
-      action: 'approve',
-      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+    return this.drafts.approveEvaluateAndPublishDraft(id, {
+      actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       idempotencyKey: body.idempotencyKey,
     });
   }

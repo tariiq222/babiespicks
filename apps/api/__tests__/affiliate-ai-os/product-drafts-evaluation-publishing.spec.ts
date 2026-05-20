@@ -83,7 +83,7 @@ function createPrismaMock() {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
-      updateMany: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     productScore: {
       create: vi.fn(),
@@ -377,9 +377,9 @@ describe('ProductDraftsService phase 3 publishing contract', () => {
         }),
       }),
     );
-    expect(prisma.productDraft.update).toHaveBeenCalledWith(
+    expect(prisma.productDraft.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: baseDraft.id },
+        where: { id: baseDraft.id, status: 'APPROVED' },
         data: expect.objectContaining({ status: 'PUBLISHED' }),
       }),
     );
@@ -498,9 +498,12 @@ describe('ProductDraftsService phase 3 publishing contract', () => {
 });
 
 describe('ProductDraftsController publishing contract', () => {
-  it('approve delegates only to transitionDraft and never calls publish', async () => {
+  it('approve delegates to the approval automation path', async () => {
     const service = {
-      transitionDraft: vi.fn().mockResolvedValue({ ...baseDraft, status: 'APPROVED' }),
+      approveEvaluateAndPublishDraft: vi.fn().mockResolvedValue({
+        success: true,
+        action: 'approved_evaluated_published',
+      }),
       publishApprovedDraft: vi.fn(),
     };
     const controller = new ProductDraftsController(
@@ -509,12 +512,10 @@ describe('ProductDraftsController publishing contract', () => {
 
     await controller.approve(baseDraft.id, { idempotencyKey: 'approve:controller' });
 
-    expect(service.transitionDraft).toHaveBeenCalledWith(baseDraft.id, {
-      action: 'approve',
-      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+    expect(service.approveEvaluateAndPublishDraft).toHaveBeenCalledWith(baseDraft.id, {
+      actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       idempotencyKey: 'approve:controller',
     });
-    expect(service.publishApprovedDraft).not.toHaveBeenCalled();
   });
 
   it('does not trust actor values from the publish request body', async () => {

@@ -9,9 +9,11 @@ import {
   UseGuards,
   HttpCode,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { PublisherService } from '../../agents/publisher/publisher.service';
 import {
   recordApprovalAuditEvent,
   SERVER_DERIVED_APPROVAL_ACTOR_ID,
@@ -21,7 +23,10 @@ import { AdminApiKeyGuard } from './admin-api-key.guard';
 @Controller('admin/approvals')
 @UseGuards(AdminApiKeyGuard)
 export class ApprovalController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly publisher?: PublisherService,
+  ) {}
 
   /**
    * List content pages pending approval
@@ -117,15 +122,23 @@ export class ApprovalController {
 
     const results: Array<{ id: string; slug: string }> = [];
     for (const page of scheduled) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.contentPage.update({
-          where: { id: page.id },
+      const claimed = await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.contentPage.updateMany({
+          where: {
+            id: page.id,
+            status: ContentStatus.SCHEDULED,
+            scheduledAt: { lte: now },
+          },
           data: {
             status: ContentStatus.PUBLISHED,
             isPublished: true,
             publishedAt: now,
           },
         });
+
+        if (claim.count !== 1) {
+          return false;
+        }
 
         await tx.publishedPost.create({
           data: {
@@ -144,9 +157,13 @@ export class ApprovalController {
             publishedVia: 'scheduled',
           },
         });
+
+        return true;
       });
 
-      results.push({ id: page.id, slug: page.slug });
+      if (claimed) {
+        results.push({ id: page.id, slug: page.slug });
+      }
     }
 
     return { published: results.length, items: results };
@@ -214,16 +231,87 @@ export class ApprovalController {
   ) {
     const page = await this.prisma.contentPage.findUniqueOrThrow({ where: { id } });
 
-    if (page.status !== ContentStatus.PENDING_APPROVAL) {
+    if (page.status === ContentStatus.PUBLISHED) {
+      return {
+        success: true,
+        action: 'approved',
+        status: 'PUBLISHED',
+        publishedAt: page.publishedAt,
+        idempotent: true,
+      };
+    }
+
+    if (page.status !== ContentStatus.PENDING_APPROVAL && page.status !== ContentStatus.APPROVED) {
       throw new BadRequestException(
-        `Cannot approve: status is ${page.status}, expected PENDING_APPROVAL`,
+        `Cannot approve: status is ${page.status}, expected PENDING_APPROVAL or APPROVED`,
       );
     }
 
-    const now = new Date();
+    const approvedAt = new Date();
+
+    if (this.publisher) {
+      if (page.status === ContentStatus.PENDING_APPROVAL) {
+        const claimed = await this.prisma.$transaction(async (tx) => {
+          const claim = await tx.contentPage.updateMany({
+            where: { id, status: ContentStatus.PENDING_APPROVAL },
+            data: {
+              status: ContentStatus.APPROVED,
+              approvedAt,
+              approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+            },
+          });
+
+          if (claim.count !== 1) {
+            return false;
+          }
+
+          await recordApprovalAuditEvent(tx, {
+            action: 'APPROVED',
+            entityType: 'CONTENT_PAGE',
+            entityId: id,
+            metadata: {
+              seoScore: page.seoScore,
+              qualityScore: page.qualityScore,
+              approvedAt: approvedAt.toISOString(),
+            },
+          });
+
+          return true;
+        });
+
+        if (!claimed) {
+          const current = await this.prisma.contentPage.findUniqueOrThrow({ where: { id } });
+          if (current.status === ContentStatus.PUBLISHED) {
+            return {
+              success: true,
+              action: 'approved',
+              status: 'PUBLISHED',
+              publishedAt: current.publishedAt,
+              idempotent: true,
+            };
+          }
+
+          throw new BadRequestException(`Cannot approve: status is ${current.status}`);
+        }
+      }
+
+      const result = await this.publisher.approveAndPublish(id);
+      if (!result.published) {
+        throw new BadRequestException({
+          success: false,
+          stage: 'publish',
+          error: result.reason ?? 'Content publish failed',
+        });
+      }
+
+      const publishedAt = new Date();
+      return { success: true, action: 'approved', status: 'PUBLISHED', publishedAt, idempotent: result.idempotent };
+    }
+
+    const now = approvedAt;
     await this.prisma.$transaction(async (tx) => {
-      await tx.contentPage.update({
-        where: { id },
+      const claim = await tx.contentPage.updateMany({
+        where: { id, status: ContentStatus.PENDING_APPROVAL },
         data: {
           status: ContentStatus.PUBLISHED,
           approvedAt: now,
@@ -232,6 +320,10 @@ export class ApprovalController {
           publishedAt: now,
         },
       });
+
+      if (claim.count !== 1) {
+        throw new BadRequestException('Content approval is already being processed');
+      }
 
       await tx.publishedPost.create({
         data: {

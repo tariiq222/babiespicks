@@ -40,4 +40,37 @@ describe('CronService social legacy publish hardening', () => {
     }));
     expect(scheduler.publishScheduledSocialPosts).toHaveBeenCalledOnce();
   });
+
+  it('publishes scheduled content through PublisherService so claim/idempotency is centralized', async () => {
+    const prisma = {
+      contentPage: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'page_due', slug: 'due-content' }]),
+        update: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      publishedPost: { create: vi.fn() },
+    };
+    const publisher = {
+      approveAndPublish: vi.fn().mockResolvedValue({ published: true }),
+    };
+    const service = new CronService(
+      prisma as unknown as PrismaService,
+      {} as CoordinatorService,
+      {} as CouponsService,
+      {} as SitemapService,
+      publisher as unknown as PublisherService,
+      {} as AiOsService,
+      {} as SchedulerService,
+    );
+
+    await service.publishScheduledContent();
+
+    expect(prisma.contentPage.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: 'SCHEDULED', isPublished: false }),
+    }));
+    expect(publisher.approveAndPublish).toHaveBeenCalledWith('page_due');
+    expect(prisma.contentPage.update).not.toHaveBeenCalled();
+    expect(prisma.contentPage.updateMany).not.toHaveBeenCalled();
+    expect(prisma.publishedPost.create).not.toHaveBeenCalled();
+  });
 });

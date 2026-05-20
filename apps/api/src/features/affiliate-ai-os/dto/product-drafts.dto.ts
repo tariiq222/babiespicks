@@ -13,6 +13,7 @@ export const PRODUCT_DRAFT_REVIEWER_ID_MAX_LENGTH = 128;
 export const PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 export const PRODUCT_DRAFT_REASON_MAX_LENGTH = 1_000;
 export const PRODUCT_DRAFT_NOTES_MAX_LENGTH = 2_000;
+export const PRODUCT_DRAFT_LIST_OFFSET_MAX = 10_000;
 
 export const PRODUCT_DRAFT_STATUSES = [
   'NEEDS_REVIEW',
@@ -110,6 +111,13 @@ export class ListProductDraftsQueryDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(PRODUCT_DRAFT_LIST_OFFSET_MAX)
+  offset?: number;
 }
 
 export type ListProductDraftsQuery = ListProductDraftsQueryDto;

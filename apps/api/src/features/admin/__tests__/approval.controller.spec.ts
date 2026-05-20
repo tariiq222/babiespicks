@@ -25,6 +25,7 @@ describe('ApprovalController security decisions', () => {
     const mockPrisma = {
       contentPage: {
         findUniqueOrThrow: vi.fn().mockResolvedValue(mockPage),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn().mockResolvedValue({
           ...mockPage,
           status: ContentStatus.PUBLISHED,
@@ -44,12 +45,13 @@ describe('ApprovalController security decisions', () => {
 
     await controller.approve('page_1', { approvedBy: 'spoofed-admin' });
 
-    expect(mockPrisma.contentPage.update).toHaveBeenCalledWith(
+    expect(mockPrisma.contentPage.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 'page_1', status: ContentStatus.PENDING_APPROVAL },
         data: expect.objectContaining({ approvedBy: 'admin-api-key' }),
       }),
     );
-    expect(mockPrisma.contentPage.update).not.toHaveBeenCalledWith(
+    expect(mockPrisma.contentPage.updateMany).not.toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ approvedBy: 'spoofed-admin' }),
       }),
@@ -94,9 +96,9 @@ describe('ApprovalController security decisions', () => {
     const txStore = { ...store };
     const tx = {
       contentPage: {
-        update: vi.fn(async ({ data }: any) => {
+        updateMany: vi.fn(async ({ data }: any) => {
           Object.assign(txStore, data);
-          return txStore;
+          return { count: 1 };
         }),
       },
       publishedPost: {
@@ -126,7 +128,7 @@ describe('ApprovalController security decisions', () => {
 
     expect(store.status).toBe(ContentStatus.PENDING_APPROVAL);
     expect(store.approvedBy).toBeNull();
-    expect(tx.contentPage.update).toHaveBeenCalled();
+    expect(tx.contentPage.updateMany).toHaveBeenCalled();
     expect(tx.approvalAuditEvent.create).toHaveBeenCalled();
   });
 
@@ -140,6 +142,7 @@ describe('ApprovalController security decisions', () => {
     const mockPrisma = {
       contentPage: {
         findMany: vi.fn().mockResolvedValue([duePage]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn().mockResolvedValue({ ...duePage, status: ContentStatus.PUBLISHED }),
       },
       publishedPost: {
@@ -164,5 +167,45 @@ describe('ApprovalController security decisions', () => {
         entityId: 'page_scheduled',
       }),
     });
+  });
+
+  it('routes content approval through PublisherService so post-publish actions can run', async () => {
+    const mockPage = {
+      id: 'page_auto_publish',
+      slug: 'auto-publish',
+      status: ContentStatus.PENDING_APPROVAL,
+      seoScore: 92,
+      qualityScore: 90,
+    };
+    const mockPrisma = {
+      contentPage: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue(mockPage),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        update: vi.fn().mockResolvedValue({ ...mockPage, status: ContentStatus.APPROVED }),
+      },
+      approvalAuditEvent: {
+        create: vi.fn().mockResolvedValue({ id: 'audit_auto_publish' }),
+      },
+    };
+    const prismaWithTransaction = attachImmediateTransaction(mockPrisma);
+    const publisher = {
+      approveAndPublish: vi.fn().mockResolvedValue({ published: true }),
+    };
+    const controller = new ApprovalController(
+      prismaWithTransaction as unknown as PrismaService,
+      publisher as never,
+    );
+
+    const result = await controller.approve('page_auto_publish', { approvedBy: 'spoofed-admin' });
+
+    expect(result).toEqual(expect.objectContaining({ success: true, status: 'PUBLISHED' }));
+    expect(mockPrisma.contentPage.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'page_auto_publish', status: ContentStatus.PENDING_APPROVAL },
+      data: expect.objectContaining({
+        status: ContentStatus.APPROVED,
+        approvedBy: 'admin-api-key',
+      }),
+    }));
+    expect(publisher.approveAndPublish).toHaveBeenCalledWith('page_auto_publish');
   });
 });

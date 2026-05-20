@@ -4,6 +4,7 @@ import { QualityGuardService } from '../quality-guard/quality-guard.service';
 import { IndexNowService } from '../../infrastructure/publishing/indexnow.service';
 import { GscIndexingService } from '../../infrastructure/publishing/gsc-indexing.service';
 import { SocialCoordinatorService } from '../social/social-coordinator.service';
+import { recordApprovalAuditEvent } from '../../infrastructure/approval/approval-audit';
 
 @Injectable()
 export class PublisherService {
@@ -89,10 +90,14 @@ export class PublisherService {
    * Approve and publish a content page that has been through the full pipeline.
    * Only pages with status APPROVED or SCHEDULED can be published via this method.
    */
-  async approveAndPublish(contentPageId: string): Promise<{ published: boolean; reason?: string }> {
+  async approveAndPublish(contentPageId: string): Promise<{ published: boolean; reason?: string; idempotent?: boolean }> {
     const page = await this.prisma.contentPage.findUniqueOrThrow({
       where: { id: contentPageId },
     });
+
+    if (page.status === 'PUBLISHED' || page.isPublished) {
+      return { published: true, idempotent: true };
+    }
 
     if (page.status !== 'APPROVED' && page.status !== 'SCHEDULED') {
       return {
@@ -101,25 +106,74 @@ export class PublisherService {
       };
     }
 
-    await this.prisma.contentPage.update({
-      where: { id: contentPageId },
-      data: {
-        isPublished: true,
-        publishedAt: new Date(),
-        status: 'PUBLISHED',
-      },
-    });
+    const publishedAt = new Date();
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.contentPage.updateMany({
+        where: {
+          id: contentPageId,
+          status: { in: ['APPROVED', 'SCHEDULED'] },
+          isPublished: false,
+        },
+        data: {
+          isPublished: true,
+          publishedAt,
+          status: 'PUBLISHED',
+        },
+      });
 
-    await this.prisma.publishedPost.create({
-      data: {
-        contentPageId,
-        channel: 'website',
+      if (claim.count !== 1) {
+        return false;
+      }
+
+      const existingWebsitePost = await tx.publishedPost.findFirst({
+        where: { contentPageId, channel: 'website' },
+        select: { id: true },
+      });
+
+      if (!existingWebsitePost) {
+        await tx.publishedPost.create({
+          data: {
+            contentPageId,
+            channel: 'website',
+            publishedAt,
+            metadata: {
+              seoScore: page.seoScore,
+              qualityScore: page.qualityScore,
+              publishedVia: 'publisher_service',
+            },
+          },
+        });
+      }
+
+      await recordApprovalAuditEvent(tx, {
+        action: 'PUBLISHED',
+        entityType: 'CONTENT_PAGE',
+        entityId: contentPageId,
         metadata: {
           seoScore: page.seoScore,
           qualityScore: page.qualityScore,
+          publishedAt: publishedAt.toISOString(),
+          publishedVia: 'publisher_service',
         },
-      },
+      });
+
+      return true;
     });
+
+    if (!claimed) {
+      const current = await this.prisma.contentPage.findUniqueOrThrow({
+        where: { id: contentPageId },
+      });
+
+      if (current.status === 'PUBLISHED' || current.isPublished) {
+        return { published: true, idempotent: true };
+      }
+
+      return {
+        published: false,
+        reason: `Cannot publish: status is ${current.status}, expected APPROVED or SCHEDULED`,
+      };
+    }
 
     this.logger.log(`Published via approval: ${page.slug}`);
     await this.postPublishActions(page.slug, page.type);

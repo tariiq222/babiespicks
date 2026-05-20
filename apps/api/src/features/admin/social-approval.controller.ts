@@ -8,11 +8,12 @@ import {
   UseGuards,
   HttpCode,
   BadRequestException,
+  GoneException,
   Logger,
 } from '@nestjs/common';
 import { SocialPostStatus } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { TwitterPublisherService, TweetContent } from '../../infrastructure/publishing/twitter-publisher.service';
+import { TwitterPublisherService } from '../../infrastructure/publishing/twitter-publisher.service';
 import { TelegramPublisherService } from '../../infrastructure/publishing/telegram-publisher.service';
 import {
   recordApprovalAuditEvent,
@@ -33,6 +34,13 @@ interface PublishAttemptAudit {
   attemptedAt: Date;
   trigger: 'manual' | 'bulk' | 'scheduled';
 }
+
+const RIYADH_TIMEZONE = 'Asia/Riyadh';
+const RIYADH_UTC_OFFSET_HOURS = 3;
+const SOCIAL_SCHEDULE_POLICY = {
+  twitter: { slots: [11, 19], maxPerDay: 2 },
+  telegram: { slots: [20], maxPerDay: 1 },
+} as const;
 
 @Controller('admin/approvals/social')
 @UseGuards(AdminApiKeyGuard)
@@ -215,88 +223,11 @@ export class SocialApprovalController {
   @Post(':id/publish')
   @HttpCode(200)
   async publishOne(@Param('id') id: string): Promise<PublishResult> {
-    const post = await this.prisma.socialPost.findUniqueOrThrow({ where: { id } });
-
-    if (post.status !== SocialPostStatus.APPROVED) {
-      throw new BadRequestException(
-        `Cannot publish: status is ${post.status}, expected APPROVED`,
-      );
-    }
-
-    const platform = post.platform ?? 'twitter';
-
-    if (platform === 'twitter') {
-      const tweets = (post.content ?? []) as unknown as TweetContent[];
-
-      if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
-        throw new BadRequestException('No tweets to publish');
-      }
-
-      const attempt = await this.recordPublishAttemptAudit(post, 'manual');
-      const result = await this.twitter.postThread(tweets);
-
-      if (result.success) {
-        await this.recordPublishSuccess({
-          postId: id,
-          platform: 'twitter',
-          attempt,
-          externalId: result.tweetIds?.[0] ?? null,
-          externalIds: result.tweetIds ?? [],
-        });
-      } else {
-        await this.recordPublishFailure({
-          postId: id,
-          platform: 'twitter',
-          attempt,
-          error: result.error,
-        });
-      }
-
-      return {
-        id: post.id,
-        platform: 'twitter',
-        success: result.success,
-        externalId: result.tweetIds?.[0],
-        error: result.error,
-      };
-    }
-
-    if (platform === 'telegram') {
-      const content = post.content as { text?: string } | null;
-
-      if (!content || !content.text) {
-        throw new BadRequestException('No text content to publish to Telegram');
-      }
-
-      const attempt = await this.recordPublishAttemptAudit(post, 'manual');
-      const result = await this.telegram.postMessage(content.text);
-
-      if (result.success) {
-        await this.recordPublishSuccess({
-          postId: id,
-          platform: 'telegram',
-          attempt,
-          externalId: result.messageId?.toString() ?? null,
-        });
-      } else {
-        await this.recordPublishFailure({
-          postId: id,
-          platform: 'telegram',
-          attempt,
-          error: result.error,
-        });
-      }
-
-      return {
-        id: post.id,
-        platform: 'telegram',
-        success: result.success,
-        externalId: result.messageId?.toString(),
-        error: result.error,
-      };
-    }
-
-    throw new BadRequestException(`Unsupported platform: ${platform}`);
+    void id;
+    throw new GoneException({
+      success: false,
+      error: 'Immediate social publishing is disabled. Approve the social post to schedule it automatically.',
+    });
   }
 
   /**
@@ -314,130 +245,10 @@ export class SocialApprovalController {
     platformBreakdown: { twitter: number; telegram: number };
     results: PublishResult[];
   }> {
-    const approved = await this.prisma.socialPost.findMany({
-      where: { status: SocialPostStatus.APPROVED },
+    throw new GoneException({
+      success: false,
+      error: 'Immediate bulk social publishing is disabled. Approve each social post to schedule it automatically.',
     });
-
-    const results: PublishResult[] = [];
-    let twitterPublished = 0;
-    let telegramPublished = 0;
-
-    for (const post of approved) {
-      const platform = post.platform ?? 'twitter';
-
-      if (platform === 'twitter') {
-        const tweets = (post.content ?? []) as unknown as TweetContent[];
-
-        if (!tweets || !Array.isArray(tweets) || tweets.length === 0) {
-          this.logger.warn(`SocialPost ${post.id} has no tweets — skipping`);
-          results.push({ id: post.id, platform: 'twitter', success: false, error: 'No tweets to publish' });
-          continue;
-        }
-
-        let attempt: PublishAttemptAudit;
-        try {
-          attempt = await this.recordPublishAttemptAudit(post, 'bulk');
-        } catch (error) {
-          results.push({
-            id: post.id,
-            platform: 'twitter',
-            success: false,
-            error: error instanceof Error ? error.message : 'Audit creation failed',
-          });
-          continue;
-        }
-
-        const result = await this.twitter.postThread(tweets);
-
-        if (result.success) {
-          await this.recordPublishSuccess({
-            postId: post.id,
-            platform: 'twitter',
-            attempt,
-            externalId: result.tweetIds?.[0] ?? null,
-            externalIds: result.tweetIds ?? [],
-          });
-          twitterPublished++;
-        } else {
-          await this.recordPublishFailure({
-            postId: post.id,
-            platform: 'twitter',
-            attempt,
-            error: result.error,
-          });
-        }
-
-        results.push({
-          id: post.id,
-          platform: 'twitter',
-          success: result.success,
-          externalId: result.tweetIds?.[0],
-          error: result.error,
-        });
-      } else if (platform === 'telegram') {
-        const content = post.content as { text?: string } | null;
-
-        if (!content || !content.text) {
-          this.logger.warn(`SocialPost ${post.id} has no text content for Telegram — skipping`);
-          results.push({ id: post.id, platform: 'telegram', success: false, error: 'No text content to publish' });
-          continue;
-        }
-
-        let attempt: PublishAttemptAudit;
-        try {
-          attempt = await this.recordPublishAttemptAudit(post, 'bulk');
-        } catch (error) {
-          results.push({
-            id: post.id,
-            platform: 'telegram',
-            success: false,
-            error: error instanceof Error ? error.message : 'Audit creation failed',
-          });
-          continue;
-        }
-
-        const result = await this.telegram.postMessage(content.text);
-
-        if (result.success) {
-          await this.recordPublishSuccess({
-            postId: post.id,
-            platform: 'telegram',
-            attempt,
-            externalId: result.messageId?.toString() ?? null,
-          });
-          telegramPublished++;
-        } else {
-          await this.recordPublishFailure({
-            postId: post.id,
-            platform: 'telegram',
-            attempt,
-            error: result.error,
-          });
-        }
-
-        results.push({
-          id: post.id,
-          platform: 'telegram',
-          success: result.success,
-          externalId: result.messageId?.toString(),
-          error: result.error,
-        });
-      } else {
-        this.logger.warn(`SocialPost ${post.id} has unsupported platform '${platform}' — skipping`);
-        results.push({ id: post.id, platform, success: false, error: `Unsupported platform: ${platform}` });
-      }
-    }
-
-    const published = results.filter((r) => r.success).length;
-    const failed = results.filter((r) => !r.success).length;
-
-    this.logger.log(`publish-approved: ${published} published (twitter=${twitterPublished}, telegram=${telegramPublished}), ${failed} failed`);
-    return {
-      published,
-      failed,
-      platformBreakdown: { twitter: twitterPublished, telegram: telegramPublished },
-      results,
-    };
   }
 
   /**
@@ -451,9 +262,19 @@ export class SocialApprovalController {
   }
 
   /**
-   * Approve social post.
-   * POST /admin/approvals/social/:id/approve
+   * Human approval gate for social posts. Approval automatically schedules the
+   * post into a safe Riyadh-time slot; it never publishes immediately.
    */
+  @Post(':id/approve-and-schedule')
+  @HttpCode(200)
+  async approveAndSchedule(
+    @Param('id') id: string,
+    @Body() body: { approvedBy?: string },
+  ) {
+    return this.approve(id, body);
+  }
+
+  /** Compatibility alias for approve-and-schedule. */
   @Post(':id/approve')
   @HttpCode(200)
   async approve(
@@ -462,33 +283,133 @@ export class SocialApprovalController {
   ) {
     const post = await this.prisma.socialPost.findUniqueOrThrow({ where: { id } });
 
-    if (post.status !== SocialPostStatus.PENDING_APPROVAL) {
+    if (post.status === SocialPostStatus.SCHEDULED) {
+      return {
+        success: true,
+        action: 'scheduled',
+        status: 'SCHEDULED',
+        scheduledAt: post.scheduledAt,
+        idempotent: true,
+      };
+    }
+
+    if (post.status !== SocialPostStatus.PENDING_APPROVAL && post.status !== SocialPostStatus.APPROVED) {
       throw new BadRequestException(
-        `Cannot approve: status is ${post.status}, expected PENDING_APPROVAL`,
+        `Cannot approve: status is ${post.status}, expected PENDING_APPROVAL or APPROVED`,
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.socialPost.update({
-        where: { id },
-        data: {
-          status: SocialPostStatus.APPROVED,
-          metadata: {
-            approvedAt: new Date().toISOString(),
-            approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-          } as any,
-        },
-      });
-
-      await recordApprovalAuditEvent(tx, {
-        action: 'APPROVED',
-        entityType: 'SOCIAL_POST',
-        entityId: id,
-        metadata: { platform: post.platform, format: post.format },
-      });
+    const approvedAt = new Date();
+    const scheduleResult = await this.scheduleApprovedPostWithRetry({
+      id,
+      platform: post.platform ?? 'twitter',
+      format: post.format,
+      metadata: post.metadata,
+      approvedAt,
     });
 
-    return { success: true, action: 'approved', status: 'APPROVED' };
+    if (!scheduleResult.scheduled) {
+      const current = await this.prisma.socialPost.findUniqueOrThrow({ where: { id } });
+      if (current.status === SocialPostStatus.SCHEDULED) {
+        return {
+          success: true,
+          action: 'scheduled',
+          status: 'SCHEDULED',
+          scheduledAt: current.scheduledAt,
+          idempotent: true,
+        };
+      }
+      throw new BadRequestException(`Cannot approve: status is ${current.status}`);
+    }
+
+    return { success: true, action: 'scheduled', status: 'SCHEDULED', scheduledAt: scheduleResult.scheduledAt };
+  }
+
+  private async scheduleApprovedPostWithRetry(input: {
+    id: string;
+    platform: string;
+    format?: string | null;
+    metadata: unknown;
+    approvedAt: Date;
+  }): Promise<{ scheduled: boolean; scheduledAt?: Date }> {
+    let cursor = new Date();
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const scheduledAt = await this.nextSafeSocialSlot(input.platform, cursor, input.id);
+      const scheduled = await this.prisma.$transaction(async (tx) => {
+        const occupied = await tx.socialPost.findFirst({
+          where: {
+            id: { not: input.id },
+            platform: this.platformWhereForScheduling(input.platform),
+            status: SocialPostStatus.SCHEDULED,
+            scheduledAt,
+          },
+          select: { id: true },
+        });
+
+        if (occupied) {
+          return false;
+        }
+
+        const updateResult = await tx.socialPost.updateMany({
+          where: {
+            id: input.id,
+            status: { in: [SocialPostStatus.PENDING_APPROVAL, SocialPostStatus.APPROVED] },
+          },
+          data: {
+            status: SocialPostStatus.SCHEDULED,
+            scheduledAt,
+            metadata: {
+              ...safeMetadataRecord(input.metadata),
+              approvedAt: input.approvedAt.toISOString(),
+              approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+              scheduledAt: scheduledAt.toISOString(),
+              schedulingPolicy: {
+                timezone: RIYADH_TIMEZONE,
+                automatedAfterApproval: true,
+                raceGuard: 'best_effort_transaction_recheck',
+              },
+            } as any,
+          },
+        });
+
+        if (updateResult.count !== 1) {
+          return null;
+        }
+
+        await recordApprovalAuditEvent(tx, {
+          action: 'APPROVED',
+          entityType: 'SOCIAL_POST',
+          entityId: input.id,
+          metadata: { platform: input.platform, format: input.format, approvedAt: input.approvedAt.toISOString() },
+        });
+
+        await recordApprovalAuditEvent(tx, {
+          action: 'SCHEDULED',
+          entityType: 'SOCIAL_POST',
+          entityId: input.id,
+          metadata: {
+            platform: input.platform,
+            format: input.format,
+            scheduledAt: scheduledAt.toISOString(),
+            timezone: RIYADH_TIMEZONE,
+          },
+        });
+
+        return true;
+      });
+
+      if (scheduled === true) {
+        return { scheduled: true, scheduledAt };
+      }
+      if (scheduled === null) {
+        return { scheduled: false };
+      }
+
+      cursor = new Date(scheduledAt.getTime() + 1_000);
+    }
+
+    throw new BadRequestException('No safe social schedule slot is available');
   }
 
   /**
@@ -545,6 +466,56 @@ export class SocialApprovalController {
     return { success: true, action: 'scheduled', status: 'SCHEDULED', scheduledAt };
   }
 
+  private async nextSafeSocialSlot(platform: string, now: Date, postId: string): Promise<Date> {
+    const normalizedPlatform = platform === 'x' ? 'twitter' : platform;
+    const policy = SOCIAL_SCHEDULE_POLICY[normalizedPlatform as keyof typeof SOCIAL_SCHEDULE_POLICY];
+
+    if (!policy) {
+      throw new BadRequestException(`Unsupported platform for scheduling: ${platform}`);
+    }
+
+    const startDay = riyadhDateParts(now);
+    for (let dayOffset = 0; dayOffset < 366; dayOffset++) {
+      const day = addRiyadhDays(startDay, dayOffset);
+      const dayStart = riyadhLocalToUtc(day.year, day.month, day.day, 0);
+      const dayEnd = riyadhLocalToUtc(day.year, day.month, day.day + 1, 0);
+      const scheduledPosts = await this.prisma.socialPost.findMany({
+        where: {
+          id: { not: postId },
+          platform: this.platformWhereForScheduling(normalizedPlatform),
+          status: SocialPostStatus.SCHEDULED,
+          scheduledAt: { gte: dayStart, lt: dayEnd },
+        },
+        select: { scheduledAt: true },
+      });
+
+      if (scheduledPosts.length >= policy.maxPerDay) {
+        continue;
+      }
+
+      const occupiedTimes = new Set(
+        scheduledPosts
+          .map((scheduledPost) => scheduledPost.scheduledAt?.getTime())
+          .filter((value): value is number => typeof value === 'number'),
+      );
+
+      for (const hour of policy.slots) {
+        const candidate = riyadhLocalToUtc(day.year, day.month, day.day, hour);
+        if (candidate <= now || occupiedTimes.has(candidate.getTime())) {
+          continue;
+        }
+        return candidate;
+      }
+    }
+
+    throw new BadRequestException('No safe social schedule slot is available');
+  }
+
+  private platformWhereForScheduling(platform: string): string | { in: string[] } {
+    const normalizedPlatform = platform === 'x' ? 'twitter' : platform;
+    return normalizedPlatform === 'twitter' ? { in: ['twitter', 'x'] } : normalizedPlatform;
+  }
+
   /**
    * Reject social post.
    * POST /admin/approvals/social/:id/reject
@@ -584,4 +555,39 @@ export class SocialApprovalController {
 
     return { success: true, action: 'rejected', status: 'REJECTED' };
   }
+}
+
+interface RiyadhDateParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+function safeMetadataRecord(metadata: unknown): Record<string, unknown> {
+  if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>;
+  }
+  return {};
+}
+
+function riyadhDateParts(date: Date): RiyadhDateParts {
+  const shifted = new Date(date.getTime() + RIYADH_UTC_OFFSET_HOURS * 60 * 60 * 1000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function addRiyadhDays(parts: RiyadhDateParts, days: number): RiyadhDateParts {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
+function riyadhLocalToUtc(year: number, month: number, day: number, hour: number): Date {
+  return new Date(Date.UTC(year, month - 1, day, hour - RIYADH_UTC_OFFSET_HOURS, 0, 0, 0));
 }
