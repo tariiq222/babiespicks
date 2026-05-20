@@ -5,6 +5,7 @@ import { PrismaService } from '../../src/infrastructure/database/prisma.service'
 
 describe('ProductDraftsService', () => {
   const mockPrisma = {
+    $transaction: vi.fn(),
     trendSignal: {
       findUnique: vi.fn(),
     },
@@ -17,6 +18,9 @@ describe('ProductDraftsService', () => {
     product: {
       create: vi.fn(),
       upsert: vi.fn(),
+    },
+    approvalAuditEvent: {
+      create: vi.fn(),
     },
   };
 
@@ -34,6 +38,9 @@ describe('ProductDraftsService', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
+    );
   });
 
   it('converts a TrendSignal into a ProductDraft without creating a Product', async () => {
@@ -192,7 +199,7 @@ describe('ProductDraftsService', () => {
     const approvedDraft = {
       id: 'draft_1',
       status: 'APPROVED',
-      approvedBy: 'admin_1',
+      approvedBy: 'admin-api-key',
       transitionIdempotencyKey: 'approve-draft-1',
     };
 
@@ -215,12 +222,57 @@ describe('ProductDraftsService', () => {
         },
         data: expect.objectContaining({
           status: 'APPROVED',
-          approvedBy: 'admin_1',
+          approvedBy: 'admin-api-key',
           transitionIdempotencyKey: 'approve-draft-1',
         }),
       }),
     );
+    expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorType: 'ADMIN_API_KEY',
+        actorId: 'admin-api-key',
+        action: 'APPROVED',
+        entityType: 'PRODUCT_DRAFT',
+        entityId: 'draft_1',
+      }),
+    });
     expect(result).toEqual(approvedDraft);
+  });
+
+  it('does not trust reviewerId passed into transition options', async () => {
+    const service = new ProductDraftsService(
+      mockPrisma as unknown as PrismaService,
+    );
+
+    mockPrisma.productDraft.findUnique
+      .mockResolvedValueOnce({
+        id: 'draft_1',
+        status: 'NEEDS_REVIEW',
+        transitionIdempotencyKey: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'draft_1',
+        status: 'APPROVED',
+        approvedBy: 'admin-api-key',
+        transitionIdempotencyKey: null,
+      });
+    mockPrisma.productDraft.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.transitionDraft('draft_1', {
+      action: 'approve',
+      reviewerId: 'spoofed-admin',
+    });
+
+    expect(mockPrisma.productDraft.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvedBy: 'admin-api-key' }),
+      }),
+    );
+    expect(mockPrisma.productDraft.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvedBy: 'spoofed-admin' }),
+      }),
+    );
   });
 
   it('rejects invalid draft transitions before updating', async () => {

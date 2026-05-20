@@ -12,6 +12,10 @@ import {
 } from '@nestjs/common';
 import { ContentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import {
+  recordApprovalAuditEvent,
+  SERVER_DERIVED_APPROVAL_ACTOR_ID,
+} from '../../infrastructure/approval/approval-audit';
 import { AdminApiKeyGuard } from './admin-api-key.guard';
 
 @Controller('admin/approvals')
@@ -113,21 +117,33 @@ export class ApprovalController {
 
     const results: Array<{ id: string; slug: string }> = [];
     for (const page of scheduled) {
-      await this.prisma.contentPage.update({
-        where: { id: page.id },
-        data: {
-          status: ContentStatus.PUBLISHED,
-          isPublished: true,
-          publishedAt: now,
-        },
-      });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.contentPage.update({
+          where: { id: page.id },
+          data: {
+            status: ContentStatus.PUBLISHED,
+            isPublished: true,
+            publishedAt: now,
+          },
+        });
 
-      await this.prisma.publishedPost.create({
-        data: {
-          contentPageId: page.id,
-          channel: 'website',
-          metadata: { publishedVia: 'scheduled' },
-        },
+        await tx.publishedPost.create({
+          data: {
+            contentPageId: page.id,
+            channel: 'website',
+            metadata: { publishedVia: 'scheduled' },
+          },
+        });
+
+        await recordApprovalAuditEvent(tx, {
+          action: 'PUBLISHED',
+          entityType: 'CONTENT_PAGE',
+          entityId: page.id,
+          metadata: {
+            publishedAt: now.toISOString(),
+            publishedVia: 'scheduled',
+          },
+        });
       });
 
       results.push({ id: page.id, slug: page.slug });
@@ -194,7 +210,7 @@ export class ApprovalController {
   @HttpCode(200)
   async approve(
     @Param('id') id: string,
-    @Body() body: { approvedBy?: string },
+    @Body() _body: { approvedBy?: string } = {},
   ) {
     const page = await this.prisma.contentPage.findUniqueOrThrow({ where: { id } });
 
@@ -205,27 +221,52 @@ export class ApprovalController {
     }
 
     const now = new Date();
-    await this.prisma.contentPage.update({
-      where: { id },
-      data: {
-        status: ContentStatus.PUBLISHED,
-        approvedAt: now,
-        approvedBy: body.approvedBy ?? 'admin',
-        isPublished: true,
-        publishedAt: now,
-      },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contentPage.update({
+        where: { id },
+        data: {
+          status: ContentStatus.PUBLISHED,
+          approvedAt: now,
+          approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+          isPublished: true,
+          publishedAt: now,
+        },
+      });
 
-    await this.prisma.publishedPost.create({
-      data: {
-        contentPageId: id,
-        channel: 'website',
+      await tx.publishedPost.create({
+        data: {
+          contentPageId: id,
+          channel: 'website',
+          metadata: {
+            seoScore: page.seoScore,
+            qualityScore: page.qualityScore,
+            approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+          },
+        },
+      });
+
+      await recordApprovalAuditEvent(tx, {
+        action: 'APPROVED',
+        entityType: 'CONTENT_PAGE',
+        entityId: id,
         metadata: {
           seoScore: page.seoScore,
           qualityScore: page.qualityScore,
-          approvedBy: body.approvedBy ?? 'admin',
+          publishedAt: now.toISOString(),
         },
-      },
+      });
+
+      await recordApprovalAuditEvent(tx, {
+        action: 'PUBLISHED',
+        entityType: 'CONTENT_PAGE',
+        entityId: id,
+        metadata: {
+          seoScore: page.seoScore,
+          qualityScore: page.qualityScore,
+          publishedAt: now.toISOString(),
+          publishedVia: 'manual_approval',
+        },
+      });
     });
 
     return { success: true, action: 'approved', status: 'PUBLISHED', publishedAt: now };
@@ -261,14 +302,23 @@ export class ApprovalController {
       throw new BadRequestException('scheduledAt must be in the future');
     }
 
-    await this.prisma.contentPage.update({
-      where: { id },
-      data: {
-        status: ContentStatus.SCHEDULED,
-        scheduledAt,
-        approvedAt: new Date(),
-        approvedBy: body.approvedBy ?? 'admin',
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contentPage.update({
+        where: { id },
+        data: {
+          status: ContentStatus.SCHEDULED,
+          scheduledAt,
+          approvedAt: new Date(),
+          approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+        },
+      });
+
+      await recordApprovalAuditEvent(tx, {
+        action: 'SCHEDULED',
+        entityType: 'CONTENT_PAGE',
+        entityId: id,
+        metadata: { scheduledAt: scheduledAt.toISOString() },
+      });
     });
 
     return { success: true, action: 'scheduled', status: 'SCHEDULED', scheduledAt };
@@ -298,12 +348,22 @@ export class ApprovalController {
       throw new BadRequestException('Revision notes are required');
     }
 
-    await this.prisma.contentPage.update({
-      where: { id },
-      data: {
-        status: ContentStatus.REVISION_REQUESTED,
-        revisionNotes: body.notes,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contentPage.update({
+        where: { id },
+        data: {
+          status: ContentStatus.REVISION_REQUESTED,
+          revisionNotes: body.notes,
+        },
+      });
+
+      await recordApprovalAuditEvent(tx, {
+        action: 'REVISION_REQUESTED',
+        entityType: 'CONTENT_PAGE',
+        entityId: id,
+        reason: body.notes,
+        metadata: { previousStatus: page.status },
+      });
     });
 
     return { success: true, action: 'revision_requested', status: 'REVISION_REQUESTED' };
@@ -328,12 +388,22 @@ export class ApprovalController {
       throw new BadRequestException(`Cannot reject: status is ${page.status}`);
     }
 
-    await this.prisma.contentPage.update({
-      where: { id },
-      data: {
-        status: ContentStatus.REJECTED,
-        rejectionReason: body.reason ?? null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contentPage.update({
+        where: { id },
+        data: {
+          status: ContentStatus.REJECTED,
+          rejectionReason: body.reason ?? null,
+        },
+      });
+
+      await recordApprovalAuditEvent(tx, {
+        action: 'REJECTED',
+        entityType: 'CONTENT_PAGE',
+        entityId: id,
+        reason: body.reason ?? null,
+        metadata: { previousStatus: page.status },
+      });
     });
 
     return { success: true, action: 'rejected', status: 'REJECTED' };

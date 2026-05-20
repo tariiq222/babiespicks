@@ -83,12 +83,123 @@ describe('SocialApprovalController', () => {
     prisma: unknown,
     twitter: unknown,
     telegram: unknown,
-  ): SocialApprovalController =>
-    new SocialApprovalController(
-      prisma as PrismaService,
+  ): SocialApprovalController => {
+    const enhancedPrisma = prisma as {
+      $transaction?: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+      approvalAuditEvent?: { create: ReturnType<typeof vi.fn> };
+    };
+
+    enhancedPrisma.approvalAuditEvent ??= {
+      create: vi.fn().mockResolvedValue({ id: 'audit_default' }),
+    };
+    enhancedPrisma.$transaction ??= async <T,>(fn: (tx: unknown) => Promise<T>) =>
+      fn(enhancedPrisma);
+
+    return new SocialApprovalController(
+      enhancedPrisma as unknown as PrismaService,
       twitter as TwitterPublisherService,
       telegram as TelegramPublisherService,
     );
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // approval decisions — actor spoofing protection
+  // ══════════════════════════════════════════════════════════════════════════
+  describe('approval decisions', () => {
+    it('ignores approvedBy body spoofing and stores the server-derived actor in metadata/audit', async () => {
+      const pendingPost = makeTwitterPost({
+        id: 'post_pending_1',
+        status: SocialPostStatus.PENDING_APPROVAL,
+      });
+      const mockPrisma = {
+        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(pendingPost),
+          update: vi.fn().mockResolvedValue({
+            ...pendingPost,
+            status: SocialPostStatus.APPROVED,
+            metadata: { approvedBy: 'admin-api-key' },
+          }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_1' }),
+        },
+      };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      await controller.approve('post_pending_1', { approvedBy: 'spoofed-admin' });
+
+      expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
+        where: { id: 'post_pending_1' },
+        data: expect.objectContaining({
+          metadata: expect.objectContaining({ approvedBy: 'admin-api-key' }),
+        }),
+      });
+      expect(mockPrisma.socialPost.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: expect.objectContaining({ approvedBy: 'spoofed-admin' }),
+          }),
+        }),
+      );
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorType: 'ADMIN_API_KEY',
+          actorId: 'admin-api-key',
+          action: 'APPROVED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'post_pending_1',
+        }),
+      });
+    });
+
+    it('rolls back social approval when audit creation fails', async () => {
+      const store = makeTwitterPost({
+        id: 'post_rollback',
+        status: SocialPostStatus.PENDING_APPROVAL,
+        metadata: null,
+      });
+      const txStore = { ...store };
+      const tx = {
+        socialPost: {
+          update: vi.fn(async ({ data }: any) => {
+            Object.assign(txStore, data);
+            return txStore;
+          }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockRejectedValue(new Error('audit write failed')),
+        },
+      };
+      const mockPrisma = {
+        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(store),
+        },
+        $transaction: vi.fn(async (fn: (transaction: typeof tx) => Promise<unknown>) => {
+          try {
+            const result = await fn(tx);
+            Object.assign(store, txStore);
+            return result;
+          } catch (error) {
+            return Promise.reject(error);
+          }
+        }),
+      };
+      const mockTwitter = { postThread: vi.fn() };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      await expect(controller.approve('post_rollback', {})).rejects.toThrow('audit write failed');
+
+      expect(store.status).toBe(SocialPostStatus.PENDING_APPROVAL);
+      expect(store.metadata).toBeNull();
+      expect(tx.socialPost.update).toHaveBeenCalled();
+      expect(tx.approvalAuditEvent.create).toHaveBeenCalled();
+    });
+  });
 
   // ══════════════════════════════════════════════════════════════════════════
   // publishOne — single-target publish
@@ -145,6 +256,100 @@ describe('SocialApprovalController', () => {
       });
     });
 
+    it('records a PUBLISHED audit event for manual social publishing', async () => {
+      const twitterPost = makeTwitterPost({ id: 'post_audit_manual' });
+
+      const mockPrisma = {
+        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(twitterPost),
+          update: vi.fn().mockResolvedValue({ ...twitterPost, status: SocialPostStatus.PUBLISHED }),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_manual' }),
+        },
+      };
+
+      const mockTwitter = {
+        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_manual'] }),
+      };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      await controller.publishOne('post_audit_manual');
+
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorType: 'ADMIN_API_KEY',
+          actorId: 'admin-api-key',
+          action: 'PUBLISHED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'post_audit_manual',
+          metadata: expect.objectContaining({
+            phase: 'PUBLISH_SUCCESS',
+            platform: 'twitter',
+            externalId: 'tweet_manual',
+          }),
+        }),
+      });
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorType: 'ADMIN_API_KEY',
+          actorId: 'admin-api-key',
+          action: 'PUBLISHED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'post_audit_manual',
+          metadata: expect.objectContaining({
+            phase: 'PUBLISH_ATTEMPT',
+            result: 'INTENT_RECORDED',
+            trigger: 'manual',
+            platform: 'twitter',
+          }),
+        }),
+      });
+    });
+
+    it('does not call the external publisher when pre-publish audit creation fails', async () => {
+      const store = makeTwitterPost({ id: 'post_publish_audit_blocked' });
+      const mockPrisma = {
+        socialPost: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue(store),
+          update: vi.fn(),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockRejectedValue(new Error('audit write failed')),
+        },
+      };
+      const mockTwitter = {
+        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_blocked'] }),
+      };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      await expect(controller.publishOne('post_publish_audit_blocked')).rejects.toThrow(
+        'audit write failed',
+      );
+
+      expect(store.status).toBe(SocialPostStatus.APPROVED);
+      expect(store.externalId).toBeNull();
+      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+      expect(mockPrisma.socialPost.update).not.toHaveBeenCalled();
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'PUBLISHED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'post_publish_audit_blocked',
+          metadata: expect.objectContaining({
+            phase: 'PUBLISH_ATTEMPT',
+            result: 'INTENT_RECORDED',
+            trigger: 'manual',
+            platform: 'twitter',
+          }),
+        }),
+      });
+    });
+
     it('publishes APPROVED Telegram post and marks it PUBLISHED', async () => {
       const telegramPost = makeTelegramPost();
 
@@ -182,6 +387,9 @@ describe('SocialApprovalController', () => {
           findUniqueOrThrow: vi.fn().mockResolvedValue(twitterPost),
           update: vi.fn().mockResolvedValue({ ...twitterPost, status: SocialPostStatus.REJECTED }),
         },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_twitter_failure' }),
+        },
       };
 
       const mockTwitter = {
@@ -198,6 +406,21 @@ describe('SocialApprovalController', () => {
       expect(mockPrisma.socialPost.update).toHaveBeenCalledWith({
         where: { id: 'post_twitter_1' },
         data: expect.objectContaining({ status: SocialPostStatus.REJECTED }),
+      });
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'REJECTED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'post_twitter_1',
+          reason: 'Rate limited',
+          metadata: expect.objectContaining({
+            phase: 'PUBLISH_FAILURE',
+            result: 'EXTERNAL_FAILURE',
+            trigger: 'manual',
+            platform: 'twitter',
+            error: 'Rate limited',
+          }),
+        }),
       });
     });
 
@@ -402,6 +625,91 @@ describe('SocialApprovalController', () => {
       expect(result.platformBreakdown.twitter).toBe(2);
       expect(result.platformBreakdown.telegram).toBe(1);
       expect(result.results).toHaveLength(3);
+    });
+
+    it('records PUBLISHED audit events for bulk social publishing', async () => {
+      const approvedPosts = [
+        makeTwitterPost({ id: 'tw_bulk', status: SocialPostStatus.APPROVED }),
+        makeTelegramPost({ id: 'tg_bulk', status: SocialPostStatus.APPROVED }),
+      ];
+
+      const mockPrisma = {
+        socialPost: {
+          findMany: vi.fn().mockResolvedValue(approvedPosts),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockResolvedValue({ id: 'audit_bulk' }),
+        },
+      };
+
+      const mockTwitter = {
+        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_bulk'] }),
+      };
+      const mockTelegram = {
+        postMessage: vi.fn().mockResolvedValue({ success: true, messageId: 321 }),
+      };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      const result = await controller.publishApproved();
+
+      expect(result.published).toBe(2);
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorType: 'ADMIN_API_KEY',
+          actorId: 'admin-api-key',
+          action: 'PUBLISHED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'tw_bulk',
+        }),
+      });
+      expect(mockPrisma.approvalAuditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorType: 'ADMIN_API_KEY',
+          actorId: 'admin-api-key',
+          action: 'PUBLISHED',
+          entityType: 'SOCIAL_POST',
+          entityId: 'tg_bulk',
+        }),
+      });
+    });
+
+    it('does not call external publishers for bulk items when pre-publish audit creation fails', async () => {
+      const approvedPosts = [makeTwitterPost({ id: 'tw_bulk_audit_blocked' })];
+
+      const mockPrisma = {
+        socialPost: {
+          findMany: vi.fn().mockResolvedValue(approvedPosts),
+          update: vi.fn(),
+        },
+        approvalAuditEvent: {
+          create: vi.fn().mockRejectedValue(new Error('audit write failed')),
+        },
+      };
+
+      const mockTwitter = {
+        postThread: vi.fn().mockResolvedValue({ success: true, tweetIds: ['tweet_never'] }),
+      };
+      const mockTelegram = { postMessage: vi.fn() };
+
+      controller = createController(mockPrisma, mockTwitter, mockTelegram);
+
+      const result = await controller.publishApproved();
+
+      expect(result.published).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(result.results[0]).toEqual(
+        expect.objectContaining({
+          id: 'tw_bulk_audit_blocked',
+          platform: 'twitter',
+          success: false,
+          error: 'audit write failed',
+        }),
+      );
+      expect(mockTwitter.postThread).not.toHaveBeenCalled();
+      expect(mockTelegram.postMessage).not.toHaveBeenCalled();
+      expect(mockPrisma.socialPost.update).not.toHaveBeenCalled();
     });
 
     it('counts Twitter and Telegram publish failures separately', async () => {

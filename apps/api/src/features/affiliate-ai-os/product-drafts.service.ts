@@ -4,6 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import {
+  recordApprovalAuditEvent,
+  SERVER_DERIVED_APPROVAL_ACTOR_ID,
+} from '../../infrastructure/approval/approval-audit';
 import type {
   ListProductDraftsQuery,
   ProductDraftStatusValue,
@@ -38,6 +42,7 @@ export interface ProductDraftRecord {
 }
 
 interface AffiliateAiOsPrisma {
+  $transaction<T>(fn: (tx: AffiliateAiOsPrisma) => Promise<T>): Promise<T>;
   trendSignal: {
     findUnique(args: unknown): Promise<TrendSignalRecord | null>;
   };
@@ -47,6 +52,9 @@ interface AffiliateAiOsPrisma {
     findMany(args: unknown): Promise<ProductDraftRecord[]>;
     findUnique(args: unknown): Promise<ProductDraftRecord | null>;
     updateMany(args: unknown): Promise<{ count: number }>;
+  };
+  approvalAuditEvent: {
+    create(args: unknown): Promise<unknown>;
   };
 }
 
@@ -196,33 +204,50 @@ export class ProductDraftsService {
       );
     }
 
-    const updateResult = await db.productDraft.updateMany({
-      where: {
-        id,
-        status: { in: [...TRANSITIONABLE_DRAFT_STATUSES] },
-      },
-      data: this.buildTransitionData(options, transitionIdempotencyKey),
+    const transitionResult = await db.$transaction(async (tx) => {
+      const updateResult = await tx.productDraft.updateMany({
+        where: {
+          id,
+          status: { in: [...TRANSITIONABLE_DRAFT_STATUSES] },
+        },
+        data: this.buildTransitionData(options, transitionIdempotencyKey),
+      });
+
+      const updatedDraft = await tx.productDraft.findUnique({ where: { id } });
+
+      if (!updatedDraft) {
+        throw new NotFoundException(`ProductDraft ${id} was not found`);
+      }
+
+      if (updateResult.count === 1) {
+        await recordApprovalAuditEvent(tx, {
+          action: this.auditActionForTransition(options.action),
+          entityType: 'PRODUCT_DRAFT',
+          entityId: id,
+          reason: options.reason?.trim() || options.notes?.trim() || null,
+          metadata: transitionIdempotencyKey ? { transitionIdempotencyKey } : {},
+        });
+      }
+
+      return {
+        updateCount: updateResult.count,
+        updatedDraft,
+      };
     });
 
-    const updatedDraft = await db.productDraft.findUnique({ where: { id } });
-
-    if (!updatedDraft) {
-      throw new NotFoundException(`ProductDraft ${id} was not found`);
-    }
-
-    if (updateResult.count === 1) {
-      return updatedDraft;
+    if (transitionResult.updateCount === 1) {
+      return transitionResult.updatedDraft;
     }
 
     if (
       transitionIdempotencyKey &&
-      updatedDraft.transitionIdempotencyKey === transitionIdempotencyKey
+      transitionResult.updatedDraft.transitionIdempotencyKey === transitionIdempotencyKey
     ) {
-      return updatedDraft;
+      return transitionResult.updatedDraft;
     }
 
     throw new ConflictException(
-      `Cannot transition draft from ${updatedDraft.status} to ${options.action}`,
+      `Cannot transition draft from ${transitionResult.updatedDraft.status} to ${options.action}`,
     );
   }
 
@@ -233,7 +258,7 @@ export class ProductDraftsService {
     if (options.action === 'approve') {
       return {
         status: PRODUCT_DRAFT_STATUS_APPROVED,
-        approvedBy: options.reviewerId?.trim() || null,
+        approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
         approvedAt: new Date(),
         transitionIdempotencyKey,
       };
@@ -242,7 +267,7 @@ export class ProductDraftsService {
     if (options.action === 'reject') {
       return {
         status: PRODUCT_DRAFT_STATUS_REJECTED,
-        rejectedBy: options.reviewerId?.trim() || null,
+        rejectedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
         rejectedAt: new Date(),
         rejectionReason: options.reason?.trim() || null,
         transitionIdempotencyKey,
@@ -268,6 +293,20 @@ export class ProductDraftsService {
     }
 
     return action === 'approve' || action === 'reject' || action === 'needs_edit';
+  }
+
+  private auditActionForTransition(
+    action: ProductDraftTransitionInput['action'],
+  ): 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED' {
+    if (action === 'approve') {
+      return 'APPROVED';
+    }
+
+    if (action === 'reject') {
+      return 'REJECTED';
+    }
+
+    return 'REVISION_REQUESTED';
   }
 
   private normalizeLimit(value?: number | string): number {

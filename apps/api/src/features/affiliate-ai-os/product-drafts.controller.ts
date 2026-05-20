@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminApiKeyGuard } from '../admin/admin-api-key.guard';
+import { SERVER_DERIVED_APPROVAL_ACTOR_ID } from '../../infrastructure/approval/approval-audit';
 import {
   ListProductDraftsQueryDto,
   ProductDraftTransitionBodyDto,
@@ -35,7 +36,7 @@ export class ProductDraftsController {
   ) {
     return this.drafts.transitionDraft(id, {
       action: 'approve',
-      reviewerId: body.reviewerId,
+      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       idempotencyKey: body.idempotencyKey,
     });
   }
@@ -49,7 +50,7 @@ export class ProductDraftsController {
   ) {
     return this.drafts.transitionDraft(id, {
       action: 'reject',
-      reviewerId: body.reviewerId,
+      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       reason: body.reason,
       idempotencyKey: body.idempotencyKey,
     });
@@ -64,7 +65,7 @@ export class ProductDraftsController {
   ) {
     return this.drafts.transitionDraft(id, {
       action: 'needs_edit',
-      reviewerId: body.reviewerId,
+      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       notes: body.notes,
       idempotencyKey: body.idempotencyKey,
     });
