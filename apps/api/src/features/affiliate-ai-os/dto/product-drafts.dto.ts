@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export const PRODUCT_DRAFT_REVIEWER_ID_MAX_LENGTH = 128;
 export const PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
@@ -35,6 +43,16 @@ export interface ProductDraftTransitionInput {
   idempotencyKey?: string;
 }
 
+export interface ProductDraftEvaluationInput {
+  aiRunId?: string;
+  idempotencyKey?: string;
+}
+
+export interface ProductDraftPublishInput {
+  actorId?: string;
+  idempotencyKey?: string;
+}
+
 export class ProductDraftTransitionBodyDto {
   @IsOptional()
   @IsString()
@@ -50,6 +68,30 @@ export class ProductDraftTransitionBodyDto {
   @IsString()
   @MaxLength(PRODUCT_DRAFT_NOTES_MAX_LENGTH)
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH)
+  idempotencyKey?: string;
+}
+
+export class ProductDraftEvaluationBodyDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH)
+  aiRunId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_IDEMPOTENCY_KEY_MAX_LENGTH)
+  idempotencyKey?: string;
+}
+
+export class ProductDraftPublishBodyDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(PRODUCT_DRAFT_REVIEWER_ID_MAX_LENGTH)
+  actorId?: string;
 
   @IsOptional()
   @IsString()
