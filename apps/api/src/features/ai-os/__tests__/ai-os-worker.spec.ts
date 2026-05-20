@@ -699,6 +699,32 @@ describe('AiOsWorkerService — PRODUCT_PIPELINE real execution', () => {
     expect(warningEvents.length).toBeGreaterThan(0);
   });
 
+  it('redacts PRODUCT_PIPELINE URL query and fragment in AiEvent messages', async () => {
+    const sensitiveUrl = 'https://example.com/product/1?token=secret-token#customer-fragment';
+    const run = await mockDb.service.aiRun.create({
+      data: {
+        name: 'Product Run With Sensitive URL',
+        type: 'PRODUCT_PIPELINE',
+        status: AiRunStatus.PENDING,
+        input: { url: sensitiveUrl },
+      },
+    });
+
+    const { getQueueService } = await import('../../../infrastructure/queue/queue.service');
+    const queue = getQueueService();
+    await queue.enqueue(run.id);
+
+    await worker.pollOnce();
+
+    const warningEvent = mockDb.events.find(
+      (e: any) => e.aiRunId === run.id && e.type === AiEventType.WARNING && e.message.includes('idempotent'),
+    );
+    expect(warningEvent?.message).toContain('https://example.com');
+    expect(warningEvent?.message).not.toContain('token=secret-token');
+    expect(warningEvent?.message).not.toContain('customer-fragment');
+    expect(mockCoordinator.runProductPipeline).toHaveBeenCalledWith(sensitiveUrl, undefined, undefined);
+  });
+
   it('non-product and non-content types still use placeholder and do NOT call coordinator', async () => {
     mockCoordinator = mockCoordinatorService();
     worker = new AiOsWorkerService(mockDb.service as any, mockCoordinator as any, mockSocialCoordinator as any);

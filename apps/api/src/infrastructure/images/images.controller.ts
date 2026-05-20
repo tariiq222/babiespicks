@@ -8,10 +8,25 @@ import {
   NotFoundException,
   BadRequestException,
   StreamableFile,
+  PipeTransform,
+  UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { ImagesService, ImageSize } from './images.service';
+import { AdminApiKeyGuard } from '../../features/admin/admin-api-key.guard';
+import { ImagesService, ImageSize, validateImageSlug } from './images.service';
 import { createReadStream, existsSync } from 'fs';
+
+export class ImageSlugPipe implements PipeTransform<string, string> {
+  constructor(private readonly fieldName: string) {}
+
+  transform(value: string): string {
+    if (!validateImageSlug(value)) {
+      throw new BadRequestException(`${this.fieldName} must be a lowercase kebab-case slug`);
+    }
+
+    return value;
+  }
+}
 
 @Controller('images')
 export class ImagesController {
@@ -19,7 +34,7 @@ export class ImagesController {
 
   @Get(':slug/:size')
   async getImage(
-    @Param('slug') slug: string,
+    @Param('slug', new ImageSlugPipe('slug')) slug: string,
     @Param('size') size: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
@@ -42,9 +57,10 @@ export class ImagesController {
   }
 
   @Post('process')
+  @UseGuards(AdminApiKeyGuard)
   async processImage(
     @Body('sourceUrl') sourceUrl: string,
-    @Body('productSlug') productSlug: string,
+    @Body('productSlug', new ImageSlugPipe('productSlug')) productSlug: string,
   ) {
     if (!sourceUrl || !productSlug) {
       throw new BadRequestException('sourceUrl and productSlug are required');
@@ -60,6 +76,7 @@ export class ImagesController {
   }
 
   @Post('process-all')
+  @UseGuards(AdminApiKeyGuard)
   async processAllProducts() {
     const results = await this.imagesService.processAllProducts();
 

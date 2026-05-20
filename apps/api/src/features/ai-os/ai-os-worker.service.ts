@@ -40,6 +40,7 @@ import {
   type DiscoveryPipelineResult,
 } from '../../agents/coordinator/coordinator.service';
 import { SocialCoordinatorService, type SocialPipelineResult } from '../../agents/social/social-coordinator.service';
+import { getUrlLogTarget } from '../../infrastructure/safety/url-safety';
 
 const WORKER_POLL_INTERVAL_MS = 5_000;
 
@@ -463,8 +464,9 @@ export class AiOsWorkerService implements OnModuleInit, OnModuleDestroy {
     // ── Idempotency warning (retry safety) ─────────────────────────────────
     // CoordinatorService is idempotent for duplicate URLs (upserts product data),
     // but emit a warning so operators can detect repeated retry storms.
+    const urlLogTarget = getUrlLogTarget(url);
     await this.addEvent(runId, AiEventType.WARNING, [
-      `Executing product pipeline for URL: ${url}`,
+      `Executing product pipeline for URL origin: ${urlLogTarget}`,
       'Note: coordinator is idempotent for duplicate URLs — retrying is safe.',
     ].join(' '));
 

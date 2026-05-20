@@ -11,6 +11,7 @@ import { SEOPlannerService } from '../seo-planner/seo-planner.service';
 import { SEOAuditorService } from '../seo-auditor/seo-auditor.service';
 import { QualityGuardService } from '../quality-guard/quality-guard.service';
 import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
+import { getUrlLogTarget } from '../../infrastructure/safety/url-safety';
 
 export interface ContentPipelineResult {
   page: { id: string; [key: string]: any } | null;
@@ -63,7 +64,7 @@ export class CoordinatorService {
    */
   async runProductPipeline(url: string, storeSlug?: string, reviews?: ReviewData[]): Promise<PipelineResult> {
     const start = Date.now();
-    this.logger.log(`=== Pipeline START: ${url} ===`);
+    this.logger.log(`=== Pipeline START: ${getUrlLogTarget(url)} ===`);
 
     // Pre-flight: check all circuit breakers before proceeding
     await this.circuitBreaker.checkAll();
@@ -171,8 +172,9 @@ export class CoordinatorService {
 
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
+      const candidateLogTarget = getUrlLogTarget(candidate.url);
       this.logger.log(
-        `Processing candidate ${i + 1}/${candidates.length}: ${candidate.name} (${candidate.url})`,
+        `Processing candidate ${i + 1}/${candidates.length}: ${candidate.name} (${candidateLogTarget})`,
       );
 
       try {
@@ -181,7 +183,7 @@ export class CoordinatorService {
         succeeded++;
       } catch (error) {
         const message = (error as Error).message;
-        this.logger.error(`Failed to process ${candidate.url}: ${message}`);
+        this.logger.error(`Failed to process ${candidateLogTarget}: ${message}`);
         results.push({ url: candidate.url, name: candidate.name, success: false, error: message });
         failed++;
       }

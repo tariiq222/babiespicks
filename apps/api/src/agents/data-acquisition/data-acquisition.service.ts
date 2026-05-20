@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { fetchAndExtract, extractFromSchemaOrg, type ExtractionResult } from './layers/schema-org';
+import { getTestSafeFetchOptions, getUrlLogTarget, isSafeHttpUrl, safeFetch } from '../../infrastructure/safety/url-safety';
+import { extractFromSchemaOrg, type ExtractionResult } from './layers/schema-org';
 import { extractWithAI, type AIExtractionResult } from './layers/ai-extraction';
+import { readBoundedHtmlResponse } from './html-response';
 
 export type AcquisitionResult = {
   success: boolean;
@@ -21,7 +23,12 @@ export class DataAcquisitionService {
    * Main cascade: Schema.org -> AI Extraction -> Manual
    */
   async acquireProductData(url: string): Promise<AcquisitionResult> {
-    this.logger.log(`Starting acquisition cascade for: ${url}`);
+    if (!isSafeHttpUrl(url)) {
+      this.logger.warn('Rejected unsafe product acquisition URL');
+      return this.manualReviewResult();
+    }
+
+    this.logger.log(`Starting acquisition cascade for origin: ${getUrlLogTarget(url)}`);
 
     // Layer 1: Schema.org
     const schemaResult = await this.extractSchemaOrg(url);
@@ -53,21 +60,26 @@ export class DataAcquisitionService {
     }
 
     // Layer 3: Mark for manual review
-    this.logger.warn(`All layers failed for ${url}. Marking for manual review.`);
-    return {
-      success: false,
-      data: null,
-      confidence: 0,
-      source: 'manual',
-    };
+    this.logger.warn(`All layers failed for origin ${getUrlLogTarget(url)}. Marking for manual review.`);
+    return this.manualReviewResult();
   }
 
   /**
    * Layer 1: Extract product data from Schema.org markup
    */
   async extractSchemaOrg(url: string): Promise<ExtractionResult> {
-    this.logger.log(`Schema.org extraction: ${url}`);
-    const result = await fetchAndExtract(url);
+    if (!isSafeHttpUrl(url)) {
+      this.logger.warn('Rejected unsafe Schema.org extraction URL');
+      return { success: false, data: null, confidence: 0, source: 'schema_org', rawSchemas: [] };
+    }
+
+    this.logger.log(`Schema.org extraction for origin: ${getUrlLogTarget(url)}`);
+    const html = await this.fetchHtml(url);
+    if (!html) {
+      return { success: false, data: null, confidence: 0, source: 'schema_org', rawSchemas: [] };
+    }
+
+    const result = await extractFromSchemaOrg(html, url);
     if (result.success) {
       this.logger.log(`Schema.org: Found "${result.data?.name}" (confidence: ${result.confidence})`);
     }
@@ -78,24 +90,40 @@ export class DataAcquisitionService {
    * Layer 2: AI-based extraction from raw HTML
    */
   async extractAI(html: string, url: string): Promise<AIExtractionResult> {
-    this.logger.log(`AI extraction: ${url}`);
+    this.logger.log(`AI extraction for origin: ${getUrlLogTarget(url)}`);
     return extractWithAI(html, url);
   }
 
   private async fetchHtml(url: string): Promise<string | null> {
+    if (!isSafeHttpUrl(url)) {
+      this.logger.warn('Rejected unsafe HTML fetch URL');
+      return null;
+    }
+
     try {
-      const response = await fetch(url, {
+      const response = await safeFetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; BabiesPicks/1.0; +https://babiespicks.com)',
           'Accept': 'text/html',
           'Accept-Language': 'ar,en;q=0.9',
         },
+      }, {
+        maxRedirects: 5,
+        ...getTestSafeFetchOptions(),
       });
-      if (!response.ok) return null;
-      return response.text();
+      return readBoundedHtmlResponse(response);
     } catch {
       return null;
     }
+  }
+
+  private manualReviewResult(): AcquisitionResult {
+    return {
+      success: false,
+      data: null,
+      confidence: 0,
+      source: 'manual',
+    };
   }
 
   /**

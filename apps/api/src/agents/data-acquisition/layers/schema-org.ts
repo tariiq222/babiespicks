@@ -1,4 +1,6 @@
 import * as cheerio from 'cheerio';
+import { safeFetch, type FetchLike } from '../../../infrastructure/safety/url-safety';
+import { readBoundedHtmlResponse } from '../html-response';
 
 export interface SchemaOrgProduct {
   name?: string;
@@ -189,8 +191,11 @@ function calculateConfidence(product: SchemaOrgProduct): number {
 /**
  * Fetch a URL and extract Schema.org data
  */
-export async function fetchAndExtract(url: string): Promise<ExtractionResult> {
-  const response = await fetch(url, {
+export async function fetchAndExtract(
+  url: string,
+  fetchImpl: FetchLike = safeFetch,
+): Promise<ExtractionResult> {
+  const response = await fetchImpl(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (compatible; BabiesPicks/1.0; +https://babiespicks.com)',
       'Accept': 'text/html',
@@ -198,10 +203,10 @@ export async function fetchAndExtract(url: string): Promise<ExtractionResult> {
     },
   });
 
-  if (!response.ok) {
+  const html = await readBoundedHtmlResponse(response);
+  if (!html) {
     return { success: false, data: null, confidence: 0, source: 'schema_org', rawSchemas: [] };
   }
 
-  const html = await response.text();
   return extractFromSchemaOrg(html, url);
 }
