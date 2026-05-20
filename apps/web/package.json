@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx --config ../../eslint.config.ts",
+    "test": "pnpm --dir ../.. exec vitest run apps/web",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

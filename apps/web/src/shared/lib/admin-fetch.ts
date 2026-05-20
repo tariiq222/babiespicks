@@ -44,11 +44,11 @@ export function adminFetch(url: string, init?: RequestInit): Promise<Response> {
   });
 }
 
-function getStoredAdminKey() {
+function getStoredAdminKey(): string | null {
   if (typeof window === 'undefined') return null;
 
   try {
-    return window.localStorage.getItem('babiespicks_admin_key')?.trim() || null;
+    return window.sessionStorage.getItem('babiespicks_admin_key')?.trim() || null;
   } catch {
     return null;
   }
