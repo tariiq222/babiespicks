@@ -33,23 +33,12 @@ export function adminFetch(url: string, init?: RequestInit): Promise<Response> {
     headers.set('Content-Type', 'application/json');
   }
 
-  if (!headers.has('x-admin-key')) {
-    const storedAdminKey = getStoredAdminKey();
-    if (storedAdminKey) headers.set('x-admin-key', storedAdminKey);
-  }
+  headers.delete('x-admin-key');
+  headers.delete('authorization');
 
   return fetch(finalUrl, {
     ...init,
     headers,
+    credentials: init?.credentials ?? 'same-origin',
   });
-}
-
-function getStoredAdminKey(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    return window.sessionStorage.getItem('babiespicks_admin_key')?.trim() || null;
-  } catch {
-    return null;
-  }
 }

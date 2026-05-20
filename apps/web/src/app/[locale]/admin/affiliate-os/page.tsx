@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { adminFetch } from '@/shared/lib/admin-fetch';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -319,6 +320,7 @@ function canReviewContent(item: ContentApproval): boolean {
 export default function AffiliateOsPage() {
   const t = useTranslations('admin');
   const locale = useLocale();
+  const router = useRouter();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
   const [data, setData] = useState<DashboardData>({
     trendSignals: [],
@@ -364,6 +366,21 @@ export default function AffiliateOsPage() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
+  const markAuthRequired = useCallback(() => {
+    const message = t('adminSessionExpired');
+    setError(message);
+    router.replace(`/${locale}/admin/login?next=${encodeURIComponent(`/${locale}/admin/affiliate-os`)}`);
+    return message;
+  }, [locale, router, t]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/admin-logout', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+      router.replace(`/${locale}/admin/login?next=${encodeURIComponent(`/${locale}/admin/affiliate-os`)}`);
+    }
+  }, [locale, router]);
+
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -402,6 +419,10 @@ export default function AffiliateOsPage() {
       ].find(({ response }) => !response.ok);
 
       if (failedResponse) {
+        if (failedResponse.response.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(
           getErrorMessage(failedResponse.payload, `HTTP ${failedResponse.response.status}`),
         );
@@ -434,7 +455,7 @@ export default function AffiliateOsPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [markAuthRequired, t]);
 
   async function loadMoreDrafts() {
     const nextOffset = draftPagination.offset;
@@ -447,6 +468,10 @@ export default function AffiliateOsPage() {
       const payload: unknown = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
@@ -493,6 +518,10 @@ export default function AffiliateOsPage() {
       const payload: unknown = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
@@ -518,6 +547,10 @@ export default function AffiliateOsPage() {
       const payload: unknown = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
@@ -551,6 +584,10 @@ export default function AffiliateOsPage() {
       const payload: unknown = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
@@ -574,6 +611,10 @@ export default function AffiliateOsPage() {
       const payload: unknown = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
@@ -598,6 +639,10 @@ export default function AffiliateOsPage() {
       const payload: unknown = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+
         throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
       }
 
@@ -620,17 +665,29 @@ export default function AffiliateOsPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sage">{t('singleAdminSurface')}</p>
           <h1 className="text-sm font-medium text-charcoal">{t('affiliateOs')}</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            void fetchAllData();
-          }}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-xs text-stone hover:text-charcoal transition-colors disabled:opacity-50"
-        >
-          <span aria-hidden="true" className={`ti ti-refresh text-sm ${loading ? 'animate-spin' : ''}`} />
-          <span>{t('refresh')}</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              void fetchAllData();
+            }}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs text-stone hover:text-charcoal transition-colors disabled:opacity-50"
+          >
+            <span aria-hidden="true" className={`ti ti-refresh text-sm ${loading ? 'animate-spin' : ''}`} />
+            <span>{t('refresh')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleLogout();
+            }}
+            className="flex items-center gap-1.5 text-xs text-stone hover:text-charcoal transition-colors"
+          >
+            <span aria-hidden="true" className="ti ti-logout text-sm" />
+            <span>{t('adminLogout')}</span>
+          </button>
+        </div>
       </header>
 
       {toast && (
@@ -679,34 +736,35 @@ export default function AffiliateOsPage() {
           </section>
         )}
 
-        <section className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard
-            icon="ti-package-import"
-            label={t('pendingDrafts')}
-            value={formatNumber(pendingDraftsCount, locale)}
-            hint={t('approvalActionsOnly')}
-          />
-          <StatCard
-            icon="ti-file-check"
-            label={t('pendingContent')}
-            value={formatNumber(data.contentApprovals.length, locale)}
-            hint={t('contentApprovalsFromApi')}
-          />
-          <StatCard
-            icon="ti-brand-x"
-            label={t('pendingSocial')}
-            value={formatNumber(pendingSocialCount, locale)}
-            hint={t('socialApprovalSchedules')}
-          />
-          <StatCard
-            icon="ti-click"
-            label={t('totalClicks')}
-            value={formatNumber(data.totalClicks, locale)}
-            hint={data.topProductName ? <>{t('topProduct')}: <bdi dir="auto">{data.topProductName}</bdi></> : undefined}
-          />
-        </section>
+        <>
+            <section className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <StatCard
+                icon="ti-package-import"
+                label={t('pendingDrafts')}
+                value={formatNumber(pendingDraftsCount, locale)}
+                hint={t('approvalActionsOnly')}
+              />
+              <StatCard
+                icon="ti-file-check"
+                label={t('pendingContent')}
+                value={formatNumber(data.contentApprovals.length, locale)}
+                hint={t('contentApprovalsFromApi')}
+              />
+              <StatCard
+                icon="ti-brand-x"
+                label={t('pendingSocial')}
+                value={formatNumber(pendingSocialCount, locale)}
+                hint={t('socialApprovalSchedules')}
+              />
+              <StatCard
+                icon="ti-click"
+                label={t('totalClicks')}
+                value={formatNumber(data.totalClicks, locale)}
+                hint={data.topProductName ? <>{t('topProduct')}: <bdi dir="auto">{data.topProductName}</bdi></> : undefined}
+              />
+            </section>
 
-        <Panel title={`${t('trendSignals')} (${formatNumber(data.trendSignals.length, locale)})`} icon="ti-radar-2">
+            <Panel title={`${t('trendSignals')} (${formatNumber(data.trendSignals.length, locale)})`} icon="ti-radar-2">
           {loading ? (
             <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
           ) : data.trendSignals.length === 0 ? (
@@ -1053,6 +1111,7 @@ export default function AffiliateOsPage() {
             </div>
           </section>
         </section>
+          </>
       </div>
     </div>
   );
