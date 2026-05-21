@@ -626,6 +626,8 @@
     "noConnectors": "No connectors configured",
     "connected": "Connected",
     "disconnected": "Disconnected",
+    "active": "Active",
+    "inactive": "Inactive",
     "publicOfferDraftActionSuccess": {
       "approve": "Public offer approved",
       "reject": "Public offer rejected",

@@ -626,6 +626,8 @@
     "noConnectors": "لا توجد مكاملات مهيأة",
     "connected": "متصل",
     "disconnected": "غير متصل",
+    "active": "نشط",
+    "inactive": "غير نشط",
     "publicOfferDraftActionSuccess": {
       "approve": "تم اعتماد العرض العام",
       "reject": "تم رفض العرض العام",
