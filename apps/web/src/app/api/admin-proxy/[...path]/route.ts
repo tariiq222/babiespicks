@@ -18,6 +18,13 @@ const ALLOWED_ADMIN_PROXY_PREFIXES = [
   'admin/ai-os',
   'admin/analytics',
   'admin/circuit-breakers',
+  'admin/public-offer-drafts',
+  'admin/content-drafts',
+  'admin/offer-enrichments',
+  'admin/trend-signals',
+  'admin/scheduled-jobs',
+  'admin/connectors',
+  'admin/review-workspace',
 ] as const;
 
 export async function GET(
