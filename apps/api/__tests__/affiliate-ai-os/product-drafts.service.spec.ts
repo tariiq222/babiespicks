@@ -61,6 +61,7 @@ describe('ProductDraftsService', () => {
     mockPrisma.trendSignal.findUnique.mockResolvedValue(trendSignal);
     mockPrisma.productDraft.findFirst.mockResolvedValue(null);
     mockPrisma.productDraft.create.mockResolvedValue(createdDraft);
+    mockPrisma.productDraft.findUnique.mockResolvedValue(createdDraft);
 
     const result = await service.createDraftFromSignal('signal_1');
 
@@ -100,6 +101,7 @@ describe('ProductDraftsService', () => {
 
     mockPrisma.trendSignal.findUnique.mockResolvedValue(trendSignal);
     mockPrisma.productDraft.findFirst.mockResolvedValue(existingDraft);
+    mockPrisma.productDraft.findUnique.mockResolvedValue(existingDraft);
 
     const result = await service.createDraftFromSignal('signal_1');
 
@@ -137,6 +139,7 @@ describe('ProductDraftsService', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(createdDraft);
     mockPrisma.productDraft.create.mockResolvedValue(createdDraft);
+    mockPrisma.productDraft.findUnique.mockResolvedValue(createdDraft);
 
     const first = await service.createDraftFromSignal('signal_1');
     const second = await service.createDraftFromSignal('signal_1');
@@ -178,6 +181,7 @@ describe('ProductDraftsService', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(racedDraft);
     mockPrisma.productDraft.create.mockRejectedValue({ code: 'P2002' });
+    mockPrisma.productDraft.findUnique.mockResolvedValue(racedDraft);
 
     const result = await service.createDraftFromSignal('signal_1');
 
@@ -205,6 +209,7 @@ describe('ProductDraftsService', () => {
 
     mockPrisma.productDraft.findUnique
       .mockResolvedValueOnce(existingDraft)
+      .mockResolvedValueOnce(approvedDraft)
       .mockResolvedValueOnce(approvedDraft);
     mockPrisma.productDraft.updateMany.mockResolvedValue({ count: 1 });
 
@@ -248,6 +253,12 @@ describe('ProductDraftsService', () => {
       .mockResolvedValueOnce({
         id: 'draft_1',
         status: 'NEEDS_REVIEW',
+        transitionIdempotencyKey: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'draft_1',
+        status: 'APPROVED',
+        approvedBy: 'admin-api-key',
         transitionIdempotencyKey: null,
       })
       .mockResolvedValueOnce({

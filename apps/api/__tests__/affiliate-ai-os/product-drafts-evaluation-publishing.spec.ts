@@ -20,13 +20,7 @@ type ProductDraftsEvaluationPublishingService = ProductDraftsService & {
   publishApprovedDraft(id: string, input?: PublishInput): Promise<unknown>;
 };
 
-type ProductDraftsPublishingController = ProductDraftsController & {
-  publish(id: string, body?: PublishInput): Promise<unknown>;
-};
 
-type ProductDraftsApprovalController = ProductDraftsController & {
-  approve(id: string, body?: { idempotencyKey?: string }): Promise<unknown>;
-};
 
 const baseDraft = {
   id: 'draft_stroller_1',
@@ -302,139 +296,37 @@ describe('ProductDraftsService phase 3 publishing contract', () => {
     expect(prisma.verdict.upsert).not.toHaveBeenCalled();
   });
 
-  it('publishes an APPROVED draft with a valid score into product tables using idempotent upserts', async () => {
+  it('rejects publishing in Phase 1 even with an APPROVED draft and valid score', async () => {
     const { prisma, service } = createService();
-    const publishedProduct = {
-      id: 'product_stroller_1',
-      slug: 'safebaby-light-stroller',
-      sourceUrl: baseDraft.canonicalUrl,
-    };
 
-    prisma.productDraft.findUnique.mockResolvedValue(baseDraft);
-    prisma.productScore.findFirst.mockResolvedValue(approvedReadyScore);
-    prisma.store.upsert.mockResolvedValue({ id: 'store_amazon_sa' });
-    prisma.product.upsert.mockResolvedValue(publishedProduct);
-    prisma.productTranslation.upsert.mockResolvedValue({ id: 'translation_ar_1' });
-    prisma.productPrice.upsert.mockResolvedValue({ id: 'price_1' });
-    prisma.verdict.upsert.mockResolvedValue({ id: 'verdict_1' });
-    prisma.productScore.update.mockResolvedValue({
-      ...approvedReadyScore,
-      productId: publishedProduct.id,
-      status: 'PUBLISHED',
-    });
-    prisma.productDraft.update.mockResolvedValue({ ...baseDraft, status: 'PUBLISHED' });
-    prisma.approvalAuditEvent.create.mockResolvedValue({ id: 'audit_publish_1' });
-
-    const result = await service.publishApprovedDraft(baseDraft.id, {
-      idempotencyKey: 'publish:draft_stroller_1',
-    });
+    await expect(
+      service.publishApprovedDraft(baseDraft.id, {
+        idempotencyKey: 'publish:draft_stroller_1',
+      }),
+    ).rejects.toThrow(
+      new ConflictException('Direct product draft publishing is disabled in Affiliate AI OS Phase 1'),
+    );
 
     expect(prisma.product.create).not.toHaveBeenCalled();
-    expect(prisma.product.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.any(Object),
-        create: expect.objectContaining({
-          name: baseDraft.title,
-          sourceUrl: baseDraft.canonicalUrl,
-          dataSource: 'AI_EXTRACTION',
-          status: expect.stringMatching(/^(READY|ACTIVE)$/),
-        }),
-        update: expect.objectContaining({
-          sourceUrl: baseDraft.canonicalUrl,
-        }),
-      }),
-    );
-    expect(prisma.productTranslation.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.any(Object),
-        create: expect.objectContaining({
-          productId: publishedProduct.id,
-          locale: 'ar',
-          name: baseDraft.title,
-        }),
-        update: expect.objectContaining({ name: baseDraft.title }),
-      }),
-    );
-    expect(prisma.productPrice.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          productId: publishedProduct.id,
-          storeId: 'store_amazon_sa',
-          price: baseDraft.price,
-          currency: 'SAR',
-          url: baseDraft.affiliateUrl,
-        }),
-      }),
-    );
-    expect(prisma.verdict.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          productId: publishedProduct.id,
-          overallScore: approvedReadyScore.scores.overall,
-          safetyScore: approvedReadyScore.scores.safety,
-          reasoningAr: approvedReadyScore.reasoning.ar,
-          isPublished: true,
-        }),
-      }),
-    );
-    expect(prisma.productDraft.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: baseDraft.id, status: 'APPROVED' },
-        data: expect.objectContaining({ status: 'PUBLISHED' }),
-      }),
-    );
-    expect(result).toEqual(expect.objectContaining({ product: publishedProduct }));
+    expect(prisma.product.upsert).not.toHaveBeenCalled();
+    expect(prisma.productTranslation.upsert).not.toHaveBeenCalled();
+    expect(prisma.productPrice.upsert).not.toHaveBeenCalled();
+    expect(prisma.verdict.upsert).not.toHaveBeenCalled();
+    expect(prisma.productDraft.updateMany).not.toHaveBeenCalled();
   });
 
-  it('returns the previously published product for the same publish idempotencyKey without new audit writes', async () => {
+  it('rejects retry publishing in Phase 1 even with a previously used idempotencyKey', async () => {
     const { prisma, service } = createService();
-    const publishedProduct = {
-      id: 'product_stroller_1',
-      slug: 'safebaby-light-stroller',
-      sourceUrl: baseDraft.canonicalUrl,
-    };
-    const publishedDraft = {
-      ...baseDraft,
-      status: 'PUBLISHED',
-    };
 
-    prisma.productDraft.findUnique.mockResolvedValue(publishedDraft);
-    prisma.approvalAuditEvent.findFirst.mockResolvedValue({
-      id: 'audit_publish_1',
-      metadata: {
+    await expect(
+      service.publishApprovedDraft(baseDraft.id, {
         idempotencyKey: 'publish:draft_stroller_1',
-        productId: publishedProduct.id,
-        productScoreId: approvedReadyScore.id,
-      },
-    });
-    prisma.productScore.findFirst.mockResolvedValue({
-      ...approvedReadyScore,
-      productId: publishedProduct.id,
-      status: 'PUBLISHED',
-    });
-    prisma.product.findFirst.mockResolvedValue(publishedProduct);
-
-    const result = await service.publishApprovedDraft(baseDraft.id, {
-      idempotencyKey: 'publish:draft_stroller_1',
-    });
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        product: publishedProduct,
-        draft: publishedDraft,
       }),
+    ).rejects.toThrow(
+      new ConflictException('Direct product draft publishing is disabled in Affiliate AI OS Phase 1'),
     );
+
     expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(prisma.approvalAuditEvent.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          action: 'PUBLISHED',
-          entityType: 'PRODUCT_DRAFT',
-          entityId: baseDraft.id,
-          metadata: { path: ['idempotencyKey'], equals: 'publish:draft_stroller_1' },
-        }),
-      }),
-    );
     expect(prisma.store.upsert).not.toHaveBeenCalled();
     expect(prisma.product.upsert).not.toHaveBeenCalled();
     expect(prisma.productTranslation.upsert).not.toHaveBeenCalled();
@@ -459,85 +351,69 @@ describe('ProductDraftsService phase 3 publishing contract', () => {
     },
   );
 
-  it('records a PUBLISHED ApprovalAuditEvent with the server actor when publishing', async () => {
+  it('rejects publishing in Phase 1 and never records a PUBLISHED audit event', async () => {
     const { prisma, service } = createService();
-    prisma.productDraft.findUnique.mockResolvedValue(baseDraft);
-    prisma.productScore.findFirst.mockResolvedValue(approvedReadyScore);
-    prisma.store.upsert.mockResolvedValue({ id: 'store_amazon_sa' });
-    prisma.product.upsert.mockResolvedValue({ id: 'product_stroller_1' });
-    prisma.productTranslation.upsert.mockResolvedValue({ id: 'translation_ar_1' });
-    prisma.productPrice.upsert.mockResolvedValue({ id: 'price_1' });
-    prisma.verdict.upsert.mockResolvedValue({ id: 'verdict_1' });
-    prisma.productScore.update.mockResolvedValue({ id: approvedReadyScore.id });
-    prisma.productDraft.update.mockResolvedValue({ ...baseDraft, status: 'PUBLISHED' });
-    prisma.approvalAuditEvent.create.mockResolvedValue({ id: 'audit_publish_1' });
 
-    await service.publishApprovedDraft(baseDraft.id, {
-      actorId: 'spoofed-body-actor',
-      idempotencyKey: 'publish:audit',
-    });
-
-    expect(prisma.approvalAuditEvent.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        actorType: 'ADMIN_API_KEY',
-        actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-        action: 'PUBLISHED',
-        entityType: 'PRODUCT_DRAFT',
-        entityId: baseDraft.id,
-        metadata: expect.objectContaining({
-          idempotencyKey: 'publish:audit',
-          productId: 'product_stroller_1',
-          productScoreId: approvedReadyScore.id,
-        }),
+    await expect(
+      service.publishApprovedDraft(baseDraft.id, {
+        actorId: 'spoofed-body-actor',
+        idempotencyKey: 'publish:audit',
       }),
-    });
-    expect(prisma.approvalAuditEvent.create).not.toHaveBeenCalledWith({
-      data: expect.objectContaining({ actorId: 'spoofed-body-actor' }),
-    });
+    ).rejects.toThrow(
+      new ConflictException('Direct product draft publishing is disabled in Affiliate AI OS Phase 1'),
+    );
+
+    expect(prisma.approvalAuditEvent.create).not.toHaveBeenCalled();
   });
 });
 
 describe('ProductDraftsController publishing contract', () => {
-  it('approve delegates to the approval automation path', async () => {
+  it('approve delegates to transitionDraft with server-derived actor', async () => {
     const service = {
-      approveEvaluateAndPublishDraft: vi.fn().mockResolvedValue({
-        success: true,
-        action: 'approved_evaluated_published',
+      transitionDraft: vi.fn().mockResolvedValue({
+        id: baseDraft.id,
+        status: 'APPROVED',
+        approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       }),
-      publishApprovedDraft: vi.fn(),
     };
     const controller = new ProductDraftsController(
       service as unknown as ProductDraftsService,
-    ) as ProductDraftsApprovalController;
+    );
 
     await controller.approve(baseDraft.id, { idempotencyKey: 'approve:controller' });
 
-    expect(service.approveEvaluateAndPublishDraft).toHaveBeenCalledWith(baseDraft.id, {
-      actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+    expect(service.transitionDraft).toHaveBeenCalledWith(baseDraft.id, {
+      action: 'approve',
+      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
       idempotencyKey: 'approve:controller',
     });
   });
 
-  it('does not trust actor values from the publish request body', async () => {
+  it('does not trust actor values from the approve request body', async () => {
     const service = {
-      publishApprovedDraft: vi.fn().mockResolvedValue({ product: { id: 'product_1' } }),
+      transitionDraft: vi.fn().mockResolvedValue({
+        id: baseDraft.id,
+        status: 'APPROVED',
+        approvedBy: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+      }),
     };
     const controller = new ProductDraftsController(
       service as unknown as ProductDraftsService,
-    ) as ProductDraftsPublishingController;
+    );
 
-    await controller.publish(baseDraft.id, {
-      actorId: 'spoofed-admin-from-body',
-      idempotencyKey: 'publish:controller',
+    await controller.approve(baseDraft.id, {
+      reviewerId: 'spoofed-admin-from-body',
+      idempotencyKey: 'approve:controller',
     });
 
-    expect(service.publishApprovedDraft).toHaveBeenCalledWith(baseDraft.id, {
-      actorId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
-      idempotencyKey: 'publish:controller',
+    expect(service.transitionDraft).toHaveBeenCalledWith(baseDraft.id, {
+      action: 'approve',
+      reviewerId: SERVER_DERIVED_APPROVAL_ACTOR_ID,
+      idempotencyKey: 'approve:controller',
     });
-    expect(service.publishApprovedDraft).not.toHaveBeenCalledWith(
+    expect(service.transitionDraft).not.toHaveBeenCalledWith(
       baseDraft.id,
-      expect.objectContaining({ actorId: 'spoofed-admin-from-body' }),
+      expect.objectContaining({ reviewerId: 'spoofed-admin-from-body' }),
     );
   });
 });

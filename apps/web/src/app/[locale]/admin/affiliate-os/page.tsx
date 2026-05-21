@@ -1005,7 +1005,7 @@ export default function AffiliateOsPage() {
               <div className="flex items-center gap-3">
                 <StatusBadge status={selectedReviewItem.reviewStatus} />
                 {selectedReviewItem.reviewNotes && (
-                  <p className="text-sm text-stone italic">"{selectedReviewItem.reviewNotes}"</p>
+                  <p className="text-sm text-stone italic">&quot;{selectedReviewItem.reviewNotes}&quot;</p>
                 )}
               </div>
               {selectedReviewItem.reviewedAt && (

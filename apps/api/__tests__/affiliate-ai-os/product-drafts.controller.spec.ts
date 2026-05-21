@@ -5,7 +5,6 @@ import { ProductDraftsService } from '../../src/features/affiliate-ai-os/product
 
 describe('ProductDraftsController', () => {
   const mockDraftsService = {
-    approveEvaluateAndPublishDraft: vi.fn(),
     transitionDraft: vi.fn(),
   };
 
@@ -23,15 +22,16 @@ describe('ProductDraftsController', () => {
       approvedBy: 'admin-api-key',
     };
 
-    mockDraftsService.approveEvaluateAndPublishDraft.mockResolvedValue(approved);
+    mockDraftsService.transitionDraft.mockResolvedValue(approved);
 
     const result = await controller.approve('draft_1', {
       reviewerId: 'admin_1',
       idempotencyKey: 'approve-draft-1',
     });
 
-    expect(mockDraftsService.approveEvaluateAndPublishDraft).toHaveBeenCalledWith('draft_1', {
-      actorId: 'admin-api-key',
+    expect(mockDraftsService.transitionDraft).toHaveBeenCalledWith('draft_1', {
+      action: 'approve',
+      reviewerId: 'admin-api-key',
       idempotencyKey: 'approve-draft-1',
     });
     expect(result).toEqual(approved);
@@ -119,7 +119,7 @@ describe('ProductDraftsController', () => {
       transitionIdempotencyKey: 'approve-draft-1',
     };
 
-    mockDraftsService.approveEvaluateAndPublishDraft.mockResolvedValue(approved);
+    mockDraftsService.transitionDraft.mockResolvedValue(approved);
 
     const first = await controller.approve('draft_1', {
       reviewerId: 'admin_1',
@@ -130,9 +130,10 @@ describe('ProductDraftsController', () => {
       idempotencyKey: 'approve-draft-1',
     });
 
-    expect(mockDraftsService.approveEvaluateAndPublishDraft).toHaveBeenCalledTimes(2);
-    expect(mockDraftsService.approveEvaluateAndPublishDraft).toHaveBeenNthCalledWith(1, 'draft_1', {
-      actorId: 'admin-api-key',
+    expect(mockDraftsService.transitionDraft).toHaveBeenCalledTimes(2);
+    expect(mockDraftsService.transitionDraft).toHaveBeenNthCalledWith(1, 'draft_1', {
+      action: 'approve',
+      reviewerId: 'admin-api-key',
       idempotencyKey: 'approve-draft-1',
     });
     expect(retry).toEqual(first);
@@ -143,7 +144,7 @@ describe('ProductDraftsController', () => {
       mockDraftsService as unknown as ProductDraftsService,
     );
 
-    mockDraftsService.approveEvaluateAndPublishDraft.mockResolvedValue({
+    mockDraftsService.transitionDraft.mockResolvedValue({
       id: 'draft_1',
       status: 'APPROVED',
       approvedBy: 'admin-api-key',
@@ -154,8 +155,9 @@ describe('ProductDraftsController', () => {
       idempotencyKey: 'approve-draft-1',
     });
 
-    expect(mockDraftsService.approveEvaluateAndPublishDraft).toHaveBeenCalledWith('draft_1', {
-      actorId: 'admin-api-key',
+    expect(mockDraftsService.transitionDraft).toHaveBeenCalledWith('draft_1', {
+      action: 'approve',
+      reviewerId: 'admin-api-key',
       idempotencyKey: 'approve-draft-1',
     });
   });
