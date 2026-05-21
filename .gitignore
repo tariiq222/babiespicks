@@ -57,3 +57,7 @@ agent-os/
 apps/api/test-*.js
 apps/api/batch-pipeline.js
 apps/api/verify-db.js
+
+# Graphify local knowledge graph
+graphify-out/
+.graphify_*.json

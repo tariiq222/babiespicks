@@ -15,8 +15,9 @@ import { PublisherModule } from '../../agents/publisher/publisher.module';
   controllers: [
     AdminController,
     AnalyticsController,
-    ApprovalController,
+    // Register nested/static approval routes before the generic admin/approvals/:id route.
     SocialApprovalController,
+    ApprovalController,
     SocialChannelsController,
     ContentPagesController,
   ],

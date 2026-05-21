@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from '@/shared/lib/admin-auth';
+
 const BACKEND_BASE =
   process.env.API_INTERNAL_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
@@ -8,6 +10,15 @@ const BACKEND_BASE =
 const ADMIN_KEY = process.env.ADMIN_API_KEY || '';
 
 const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'HEAD'];
+const ADMIN_PROXY_ROUTE_PREFIX = '/api/admin-proxy/';
+const ENCODED_PATH_SEPARATOR_PATTERN = /(?:%2f|%5c|%252f|%255c)/i;
+const ALLOWED_ADMIN_PROXY_PREFIXES = [
+  'admin/product-drafts',
+  'admin/approvals',
+  'admin/ai-os',
+  'admin/analytics',
+  'admin/circuit-breakers',
+] as const;
 
 export async function GET(
   request: NextRequest,
@@ -56,13 +67,23 @@ async function proxy(
   method: string,
   params: Promise<{ path: string[] }>,
 ) {
-  if (!isAuthorizedAdminRequest(request)) {
+  const sessionToken = request.cookies.get(ADMIN_SESSION_COOKIE_NAME)?.value;
+  if (!verifyAdminSessionToken(sessionToken)) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
   const { path } = await params;
+  if (!isAllowedAdminProxyPath(path, request.nextUrl.pathname)) {
+    return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  }
+
+  if (!ADMIN_KEY) {
+    return NextResponse.json({ message: 'Admin backend key is not configured' }, { status: 500 });
+  }
+
   const search = request.nextUrl.search;
-  const backendUrl = `${BACKEND_BASE}/${path.join('/')}${search}`;
+  const backendPath = path.map((segment) => encodeURIComponent(segment)).join('/');
+  const backendUrl = `${BACKEND_BASE}/${backendPath}${search}`;
 
   const headers: Record<string, string> = {};
 
@@ -115,21 +136,27 @@ async function proxy(
   });
 }
 
-function isAuthorizedAdminRequest(request: NextRequest) {
-  if (!ADMIN_KEY) return false;
+function isAllowedAdminProxyPath(path: string[], pathname: string) {
+  const encodedProxyPath = pathname.startsWith(ADMIN_PROXY_ROUTE_PREFIX)
+    ? pathname.slice(ADMIN_PROXY_ROUTE_PREFIX.length)
+    : '';
 
-  const incomingAdminKey = request.headers.get('x-admin-key')?.trim();
-  if (incomingAdminKey === ADMIN_KEY) return true;
+  if (!encodedProxyPath || ENCODED_PATH_SEPARATOR_PATTERN.test(encodedProxyPath)) {
+    return false;
+  }
 
-  const bearerToken = parseBearerToken(request.headers.get('authorization'));
-  return bearerToken === ADMIN_KEY;
-}
+  if (
+    path.length === 0 ||
+    path.some(
+      (segment) =>
+        !segment || segment === '..' || segment.includes('/') || segment.includes('\\'),
+    )
+  ) {
+    return false;
+  }
 
-function parseBearerToken(authorization: string | null) {
-  if (!authorization) return null;
-
-  const [scheme, token] = authorization.trim().split(/\s+/, 2);
-  if (scheme?.toLowerCase() !== 'bearer' || !token) return null;
-
-  return token.trim();
+  const joinedPath = path.join('/');
+  return ALLOWED_ADMIN_PROXY_PREFIXES.some(
+    (prefix) => joinedPath === prefix || joinedPath.startsWith(`${prefix}/`),
+  );
 }

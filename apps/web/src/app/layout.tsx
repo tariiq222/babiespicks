@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { getLocale } from 'next-intl/server';
 import { IBM_Plex_Sans_Arabic, Inter } from 'next/font/google';
 import './globals.css';
@@ -36,7 +36,6 @@ export const metadata: Metadata = {
   authors: [{ name: 'BabiesPicks' }],
   creator: 'BabiesPicks',
   publisher: 'BabiesPicks',
-  themeColor: '#6B8E7F',
   icons: {
     icon: '/babiespicks-logo.png?v=1',
     shortcut: '/babiespicks-logo.png?v=1',
@@ -49,12 +48,16 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: '#6B8E7F',
+};
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
 
   return (
-    <html lang={locale} dir={dir}>
+    <html lang={locale} dir={dir} data-scroll-behavior="smooth">
       <head>
         <meta name="verify-admitad" content="ff8299968f" />
         <link

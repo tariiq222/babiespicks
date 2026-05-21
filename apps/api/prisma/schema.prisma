@@ -66,6 +66,13 @@ enum ProductStatus {
   REJECTED
 }
 
+enum ReviewItemStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVISION_REQUESTED
+}
+
 enum TrendSignalStatus {
   NEW
   PROMOTED_TO_DRAFT
@@ -623,6 +630,121 @@ model ProductScore {
   @@index([productId, status])
   @@index([aiRunId])
   @@map("product_scores")
+}
+
+// OfferEnrichment - Phase 2 affiliate AI OS offer enrichment data
+model OfferEnrichment {
+  id                    String    @id @default(cuid())
+  sourceProductDraftId   String
+  offerTitle            String?
+  targetAudience        String?
+  keyBenefits           String?
+  painPoints            String?
+  objections            String?
+  positioningAngle      String?
+  contentAngles         String?
+  suggestedHooks        String?
+  keywords              String?
+  confidenceScore       Float?
+  enrichmentReason      String?   @db.Text
+  status                String    @default("PENDING") // PENDING | COMPLETED | FAILED
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  contentDrafts         ContentDraft[]
+
+  @@index([sourceProductDraftId])
+  @@index([status])
+  @@map("offer_enrichments")
+}
+
+// ContentDraft - Phase 2 affiliate AI OS content drafts
+model ContentDraft {
+  id                      String    @id @default(cuid())
+  sourceOfferEnrichmentId String
+  sourceOfferEnrichment   OfferEnrichment @relation(fields: [sourceOfferEnrichmentId], references: [id])
+  contentType             String    // article | social_post | email | ad_copy
+  title                   String?
+  body                    String?   @db.Text
+  angle                   String?
+  callToAction            String?
+  status                  String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | APPROVED | REJECTED
+  idempotencyKey          String?   @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  reviewItems             ReviewItem[]
+  publicOfferDraft       PublicOfferDraft?
+
+  @@index([sourceOfferEnrichmentId])
+  @@index([status])
+  @@map("content_drafts")
+}
+
+// ReviewItem - Phase 3 content review workspace
+model ReviewItem {
+  id               String          @id @default(cuid())
+  contentDraftId   String
+  contentDraft     ContentDraft    @relation(fields: [contentDraftId], references: [id], onDelete: Cascade)
+  reviewStatus     ReviewItemStatus @default(PENDING)
+  reviewNotes      String?         @db.Text
+  revisionRequested Boolean         @default(false)
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([reviewStatus])
+  @@index([contentDraftId])
+  @@index([createdAt])
+  @@map("review_items")
+}
+
+enum PublicOfferDraftStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model PublicOfferDraft {
+  id                   String                   @id @default(cuid())
+  sourceContentDraftId String                   @unique
+  sourceContentDraft   ContentDraft             @relation(fields: [sourceContentDraftId], references: [id])
+  slug                 String?                  @unique
+  publicOffer          PublicOffer?
+  title                String?
+  summary              String?                  @db.Text
+  heroCopy             String?                  @db.Text
+  benefits             Json?                    
+  faq                  Json?                    
+  seoTitle             String?
+  seoDescription       String?                  @db.Text
+  status               PublicOfferDraftStatus   @default(DRAFT)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@index([status])
+  @@index([sourceContentDraftId])
+  @@map("public_offer_drafts")
+}
+
+model PublicOffer {
+  id                      String       @id @default(cuid())
+  sourcePublicOfferDraftId String       @unique
+  sourcePublicOfferDraft   PublicOfferDraft @relation(fields: [sourcePublicOfferDraftId], references: [id])
+  slug                    String       @unique
+  title                   String
+  body                    String       @db.Text
+  seoTitle                String?
+  seoDescription          String?      @db.Text
+  publishedAt             DateTime?
+  unpublishedAt           DateTime?
+  status                  String       @default("DRAFT")
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  @@map("public_offers")
 }
 
 model ArticleDraft {

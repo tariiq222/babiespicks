@@ -51,6 +51,26 @@ interface SocialPost {
   createdAt?: string | null;
 }
 
+interface ScheduledJob {
+  id: string;
+  key: string;
+  name: string;
+  handler: string;
+  status: string;
+  cronExpression?: string | null;
+  timezone?: string | null;
+  nextRunAt?: string | null;
+  lastRunAt?: string | null;
+  createdAt?: string | null;
+  _count?: { runs: number };
+}
+
+interface Connector {
+  platform: string;
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+}
+
 interface ContentApproval {
   id: string;
   slug?: string | null;
@@ -71,11 +91,86 @@ interface AiRun {
   createdAt?: string | null;
 }
 
+interface OfferEnrichment {
+  id: string;
+  sourceProductDraftId: string;
+  offerTitle: string | null;
+  targetAudience: string | null;
+  keyBenefits: unknown | null;
+  painPoints: unknown | null;
+  objections: unknown | null;
+  positioningAngle: string | null;
+  contentAngles: unknown | null;
+  suggestedHooks: unknown | null;
+  keywords: unknown | null;
+  confidenceScore: number | null;
+  enrichmentReason: string | null;
+  status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+interface ContentDraft {
+  id: string;
+  sourceOfferEnrichmentId: string;
+  contentType: string;
+  title: string | null;
+  body: string | null;
+  angle: string | null;
+  callToAction: string | null;
+  status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+interface PublicOfferDraft {
+  id: string;
+  sourceContentDraftId: string;
+  slug: string;
+  title: string;
+  summary?: string | null;
+  heroCopy?: string | null;
+  benefits?: string[] | null;
+  faq?: Array<{ question: string; answer: string }> | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  status: string;
+  readyForNextPhase: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+interface ReviewItem {
+  id: string;
+  contentDraftId: string;
+  reviewStatus: string;
+  reviewNotes: string | null;
+  revisionRequested: boolean;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  contentDraft?: {
+    id: string;
+    contentType: string;
+    title: string | null;
+    body: string | null;
+    angle: string | null;
+    status: string;
+  };
+}
+
 interface DashboardData {
   trendSignals: TrendSignal[];
   drafts: ProductDraft[];
-  contentApprovals: ContentApproval[];
+  offerEnrichments: OfferEnrichment[];
+  contentDrafts: ContentDraft[];
+  reviewItems: ReviewItem[];
+  publicOfferDrafts: PublicOfferDraft[];
   socialPosts: SocialPost[];
+  scheduledJobs: ScheduledJob[];
+  connectors: Connector[];
+  contentApprovals: ContentApproval[];
   aiRuns: AiRun[];
   activeRuns: number;
   totalClicks: number;
@@ -123,11 +218,31 @@ function isSocialPost(value: unknown): value is SocialPost {
   return isRecord(value) && typeof value.id === 'string' && typeof value.platform === 'string';
 }
 
+function isScheduledJob(value: unknown): value is ScheduledJob {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.key === 'string';
+}
+
 function isAiRun(value: unknown): value is AiRun {
   return isRecord(value) && typeof value.id === 'string' && typeof value.name === 'string';
 }
 
 function isContentApproval(value: unknown): value is ContentApproval {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.status === 'string';
+}
+
+function isOfferEnrichment(value: unknown): value is OfferEnrichment {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.status === 'string';
+}
+
+function isContentDraft(value: unknown): value is ContentDraft {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.contentType === 'string';
+}
+
+function isReviewItem(value: unknown): value is ReviewItem {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.reviewStatus === 'string';
+}
+
+function isPublicOfferDraft(value: unknown): value is PublicOfferDraft {
   return isRecord(value) && typeof value.id === 'string' && typeof value.status === 'string';
 }
 
@@ -323,8 +438,14 @@ export default function AffiliateOsPage() {
   const [data, setData] = useState<DashboardData>({
     trendSignals: [],
     drafts: [],
+    offerEnrichments: [],
+    contentDrafts: [],
+    reviewItems: [],
+    publicOfferDrafts: [],
     contentApprovals: [],
     socialPosts: [],
+    scheduledJobs: [],
+    connectors: [],
     aiRuns: [],
     activeRuns: 0,
     totalClicks: 0,
@@ -340,6 +461,10 @@ export default function AffiliateOsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: ToastType; msg: string } | null>(null);
+  const [selectedReviewItem, setSelectedReviewItem] = useState<ReviewItem | null>(null);
+  const [selectedPublicOfferDraft, setSelectedPublicOfferDraft] = useState<PublicOfferDraft | null>(null);
+  const [publicOfferDraftFilter, setPublicOfferDraftFilter] = useState<string>('ALL');
+  const [reviewFilter, setReviewFilter] = useState<string>('ALL');
   const actionIdempotencyKeysRef = useRef<Map<string, string>>(new Map());
 
   const getActionIdempotencyKey = useCallback((draftId: string, action: DraftAction): string => {
@@ -369,36 +494,77 @@ export default function AffiliateOsPage() {
     setError(null);
 
     try {
-      const [trendSignalsRes, draftsRes, contentRes, socialRes, overviewRes, analyticsRes, aiRunsRes] =
-        await Promise.all([
-          adminFetch(`${API_BASE}/admin/trend-signals?limit=50`),
-          adminFetch(`${API_BASE}/admin/product-drafts?limit=${PRODUCT_DRAFT_PAGE_SIZE}&offset=0`),
-          adminFetch(`${API_BASE}/admin/approvals`),
-          adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`),
-          adminFetch(`${API_BASE}/admin/ai-os/overview`),
-          adminFetch(`${API_BASE}/admin/analytics`),
-          adminFetch(`${API_BASE}/admin/ai-os/runs?limit=5`),
-        ]);
+      const [
+        trendSignalsRes,
+        draftsRes,
+        enrichmentsRes,
+        contentDraftsRes,
+        contentRes,
+        socialRes,
+        overviewRes,
+        analyticsRes,
+        aiRunsRes,
+        reviewItemsRes,
+        publicOfferDraftsRes,
+        scheduledJobsRes,
+        connectorsRes,
+      ] = await Promise.all([
+        adminFetch(`${API_BASE}/admin/trend-signals?limit=50`),
+        adminFetch(`${API_BASE}/admin/product-drafts?limit=${PRODUCT_DRAFT_PAGE_SIZE}&offset=0`),
+        adminFetch(`${API_BASE}/admin/offer-enrichments?limit=50`),
+        adminFetch(`${API_BASE}/admin/content-drafts?limit=50`),
+        adminFetch(`${API_BASE}/admin/approvals`),
+        adminFetch(`${API_BASE}/admin/approvals/social?status=PENDING_APPROVAL`),
+        adminFetch(`${API_BASE}/admin/ai-os/overview`),
+        adminFetch(`${API_BASE}/admin/analytics`),
+        adminFetch(`${API_BASE}/admin/ai-os/runs?limit=5`),
+        adminFetch(`${API_BASE}/admin/review-workspace?limit=50`),
+        adminFetch(`${API_BASE}/admin/public-offer-drafts?limit=50`),
+        adminFetch(`${API_BASE}/admin/scheduled-jobs?limit=50`),
+        adminFetch(`${API_BASE}/admin/connectors`),
+      ]);
 
-      const [trendSignalsPayload, draftsPayload, contentPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload] =
-        await Promise.all([
-          trendSignalsRes.json().catch(() => null),
-          draftsRes.json().catch(() => null),
-          contentRes.json().catch(() => null),
-          socialRes.json().catch(() => null),
-          overviewRes.json().catch(() => null),
-          analyticsRes.json().catch(() => null),
-          aiRunsRes.json().catch(() => null),
-        ]);
+      const [
+        trendSignalsPayload,
+        draftsPayload,
+        enrichmentsPayload,
+        contentDraftsPayload,
+        contentPayload,
+        socialPayload,
+        overviewPayload,
+        analyticsPayload,
+        aiRunsPayload,
+        reviewItemsPayload,
+        publicOfferDraftsPayload,
+        scheduledJobsPayload,
+        connectorsPayload,
+      ] = await Promise.all([
+        trendSignalsRes.json().catch(() => null),
+        draftsRes.json().catch(() => null),
+        enrichmentsRes.json().catch(() => null),
+        contentDraftsRes.json().catch(() => null),
+        contentRes.json().catch(() => null),
+        socialRes.json().catch(() => null),
+        overviewRes.json().catch(() => null),
+        analyticsRes.json().catch(() => null),
+        aiRunsRes.json().catch(() => null),
+        reviewItemsRes.json().catch(() => null),
+        publicOfferDraftsRes.json().catch(() => null),
+        scheduledJobsRes.json().catch(() => null),
+        connectorsRes.json().catch(() => null),
+      ]);
 
       const failedResponse = [
         { response: trendSignalsRes, payload: trendSignalsPayload },
         { response: draftsRes, payload: draftsPayload },
+        { response: enrichmentsRes, payload: enrichmentsPayload },
+        { response: contentDraftsRes, payload: contentDraftsPayload },
         { response: contentRes, payload: contentPayload },
         { response: socialRes, payload: socialPayload },
         { response: overviewRes, payload: overviewPayload },
-        { response: analyticsRes, payload: analyticsPayload },
-        { response: aiRunsRes, payload: aiRunsPayload },
+        { response: reviewItemsRes, payload: reviewItemsPayload },
+        { response: publicOfferDraftsRes, payload: publicOfferDraftsPayload },
+        { response: scheduledJobsRes, payload: scheduledJobsPayload },
       ].find(({ response }) => !response.ok);
 
       if (failedResponse) {
@@ -409,9 +575,16 @@ export default function AffiliateOsPage() {
 
       const trendSignals = extractItems(trendSignalsPayload, isTrendSignal);
       const drafts = extractItems(draftsPayload, isProductDraft);
+      const offerEnrichments = extractItems(enrichmentsPayload, isOfferEnrichment);
+      const contentDrafts = extractItems(contentDraftsPayload, isContentDraft);
       const contentApprovals = extractItems(contentPayload, isContentApproval).filter(canReviewContent);
       const socialPosts = extractItems(socialPayload, isSocialPost);
       const aiRuns = extractItems(aiRunsPayload, isAiRun);
+
+      const reviewItems = extractItems(reviewItemsPayload, isReviewItem);
+      const publicOfferDrafts = extractItems(publicOfferDraftsPayload, isPublicOfferDraft);
+      const scheduledJobs = extractItems(scheduledJobsPayload, isScheduledJob);
+      const connectors: Connector[] = Array.isArray(connectorsPayload) ? connectorsPayload : [];
 
       setPendingSocialCount(getResponseTotal(socialPayload, socialPosts.length));
       setDraftPagination({
@@ -422,8 +595,14 @@ export default function AffiliateOsPage() {
       setData({
         trendSignals,
         drafts,
+        offerEnrichments,
+        contentDrafts,
+        reviewItems,
+        publicOfferDrafts,
         contentApprovals,
         socialPosts,
+        scheduledJobs,
+        connectors,
         aiRuns,
         activeRuns: getNumericField(overviewPayload, ['aiOs', 'runsRunning']),
         totalClicks: getNumericField(analyticsPayload, ['affiliate', 'totalClicks']),
@@ -610,8 +789,130 @@ export default function AffiliateOsPage() {
     }
   }
 
+  async function runEnrichmentAction(enrichment: OfferEnrichment, action: 'generate-content') {
+    const actionKey = `enrichment:${enrichment.id}:${action}`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(
+        `${API_BASE}/admin/offer-enrichments/${enrichment.id}/generate-content`,
+        {
+          method: 'POST',
+          body: JSON.stringify({}),
+        },
+      );
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t('contentGenerationStarted'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function runDraftContentAction(draft: ContentDraft, action: 'approve' | 'edit' | 'reject') {
+    const actionKey = `draft:${draft.id}:${action}`;
+    setActionLoading(actionKey);
+
+    const body =
+      action === 'reject'
+        ? { reason: t('defaultRejectReason') }
+        : undefined;
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/content-drafts/${draft.id}/${action}`, {
+        method: 'POST',
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t(`contentDraftSuccess.${action}`));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function runReviewAction(itemId: string, action: 'approve' | 'reject' | 'requestRevision') {
+    const actionKey = `review:${itemId}:${action}`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(
+        `${API_BASE}/admin/review-workspace/${itemId}/${action === 'requestRevision' ? 'request-revision' : action}`,
+        {
+          method: 'POST',
+          body: action === 'reject' ? JSON.stringify({ notes: t('defaultRejectReason') }) : undefined,
+        },
+      );
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t(`reviewActionSuccess.${action}`));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   const pendingDraftsCount = data.drafts.filter(canReviewDraft).length;
   const isBusy = loading || actionLoading !== null;
+
+  const filteredReviewItems =
+    reviewFilter === 'ALL' ? data.reviewItems : data.reviewItems.filter((item) => item.reviewStatus === reviewFilter);
+
+  const filteredPublicOfferDrafts =
+    publicOfferDraftFilter === 'ALL'
+      ? data.publicOfferDrafts
+      : data.publicOfferDrafts.filter((d) => d.status === publicOfferDraftFilter);
+
+  const runPublicOfferDraftAction = async (id: string, action: 'approve' | 'reject') => {
+    if (actionLoading) return;
+    setActionLoading(id);
+    setToast(null);
+    try {
+      const key = `${action}:${id}`;
+      const stored = actionIdempotencyKeysRef.current.get(key);
+      const idempotencyKey = stored ?? crypto.randomUUID();
+      if (!stored) actionIdempotencyKeysRef.current.set(key, idempotencyKey);
+
+      const res = await adminFetch(`${API_BASE}/admin/public-offer-drafts/${id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idempotencyKey }),
+      });
+
+      if (res.ok) {
+        setToast({ type: 'success', msg: t(`publicOfferDraftActionSuccess.${action}`) });
+        await fetchAllData();
+        setSelectedPublicOfferDraft(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setToast({ type: 'error', msg: (data as { message?: string }).message || t('actionFailed') });
+      }
+    } catch {
+      setToast({ type: 'error', msg: t('actionFailed') });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col" dir={dir}>
@@ -642,6 +943,230 @@ export default function AffiliateOsPage() {
         >
           <span aria-hidden="true" className={`ti ${toast.type === 'success' ? 'ti-check' : 'ti-alert-circle'} text-base`} />
           {toast.msg}
+        </div>
+      )}
+
+      {selectedReviewItem && (
+        <div
+          className="fixed inset-0 z-40 bg-charcoal/30 backdrop-blur-sm"
+          onClick={() => { setSelectedReviewItem(null); }}
+          aria-hidden="true"
+        />
+      )}
+      {selectedReviewItem && (
+        <div
+          className={`fixed top-0 right-0 z-50 h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto ${dir === 'rtl' ? 'left-0' : 'right-0'}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="review-drawer-title"
+        >
+          <div className="sticky top-0 z-10 bg-white border-b border-beige px-6 py-4 flex items-center justify-between">
+            <div>
+              <h2 id="review-drawer-title" className="text-base font-semibold text-charcoal">{t('reviewDetails')}</h2>
+              <p className="text-xs text-stone mt-0.5">{selectedReviewItem.contentDraft?.title || '—'}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setSelectedReviewItem(null); }}
+              className="text-stone hover:text-charcoal p-2 rounded-lg hover:bg-linen transition-colors"
+              aria-label={t('close')}
+            >
+              <span aria-hidden="true" className="ti ti-x text-lg" />
+            </button>
+          </div>
+
+          <div className="px-6 py-5 space-y-6">
+            {/* Content Details */}
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-stone">{t('contentDetails')}</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-1">
+                  <p className="text-xs text-stone">{t('contentType')}</p>
+                  <p className="font-medium text-charcoal"><bdi dir="auto">{selectedReviewItem.contentDraft?.contentType || '—'}</bdi></p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-stone">{t('angle')}</p>
+                  <p className="font-medium text-charcoal"><bdi dir="auto">{selectedReviewItem.contentDraft?.angle || '—'}</bdi></p>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <p className="text-xs text-stone">{t('title')}</p>
+                  <p className="font-medium text-charcoal"><bdi dir="auto">{selectedReviewItem.contentDraft?.title || '—'}</bdi></p>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <p className="text-xs text-stone">{t('body')}</p>
+                  <p className="text-charcoal leading-relaxed"><bdi dir="auto">{selectedReviewItem.contentDraft?.body || '—'}</bdi></p>
+                </div>
+              </div>
+            </section>
+
+            {/* Review Status */}
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-stone">{t('reviewStatus')}</h3>
+              <div className="flex items-center gap-3">
+                <StatusBadge status={selectedReviewItem.reviewStatus} />
+                {selectedReviewItem.reviewNotes && (
+                  <p className="text-sm text-stone italic">"{selectedReviewItem.reviewNotes}"</p>
+                )}
+              </div>
+              {selectedReviewItem.reviewedAt && (
+                <p className="text-xs text-stone">
+                  {t('reviewedOn')} {formatDate(selectedReviewItem.reviewedAt, locale)}
+                  {selectedReviewItem.reviewedBy && ` ${t('by')} ${selectedReviewItem.reviewedBy}`}
+                </p>
+              )}
+            </section>
+
+            {/* Revision Notes (if revision requested) */}
+            {selectedReviewItem.reviewStatus === 'REVISION_REQUESTED' && selectedReviewItem.revisionRequested && (
+              <section className="space-y-3 bg-linen/50 rounded-xl p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-stone">{t('revisionRequested')}</h3>
+                <p className="text-sm text-charcoal">{selectedReviewItem.reviewNotes || t('noRevisionNotes')}</p>
+              </section>
+            )}
+
+            {/* Actions */}
+            {selectedReviewItem.reviewStatus === 'PENDING' && (
+              <section className="space-y-3 pt-2">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-stone">{t('takeAction')}</h3>
+                <div className="flex flex-wrap gap-3">
+                  <ActionButton
+                    icon="ti-check"
+                    label={t('approve')}
+                    loading={actionLoading === `review:${selectedReviewItem.id}:approve`}
+                    disabled={isBusy}
+                    variant="primary"
+                    onClick={() => { void runReviewAction(selectedReviewItem.id, 'approve'); setSelectedReviewItem(null); }}
+                  />
+                  <ActionButton
+                    icon="ti-edit"
+                    label={t('requestRevision')}
+                    loading={actionLoading === `review:${selectedReviewItem.id}:requestRevision`}
+                    disabled={isBusy}
+                    onClick={() => { void runReviewAction(selectedReviewItem.id, 'requestRevision'); setSelectedReviewItem(null); }}
+                  />
+                  <ActionButton
+                    icon="ti-x"
+                    label={t('reject')}
+                    loading={actionLoading === `review:${selectedReviewItem.id}:reject`}
+                    disabled={isBusy}
+                    variant="danger"
+                    onClick={() => { void runReviewAction(selectedReviewItem.id, 'reject'); setSelectedReviewItem(null); }}
+                  />
+                </div>
+              </section>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedPublicOfferDraft && (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelectedPublicOfferDraft(null)}>
+          <div className="absolute inset-0 bg-charcoal/40 backdrop-blur-sm" />
+          <div
+            dir={dir}
+            className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-slide-in-right rtl:animate-slide-in-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 bg-white border-b border-beige px-5 py-4 flex items-center justify-between">
+              <h2 className="text-base font-bold text-charcoal">{t('publicOfferDraftDetails')}</h2>
+              <button onClick={() => setSelectedPublicOfferDraft(null)} className="p-1 hover:bg-linen rounded-lg transition-colors">
+                <i className="ti ti-x text-charcoal" />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">{t('title')}</h3>
+                <p className="text-sm text-charcoal">{selectedPublicOfferDraft.title || '—'}</p>
+              </section>
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">{t('slug')}</h3>
+                <p className="text-xs font-mono text-charcoal/60">{selectedPublicOfferDraft.slug || '—'}</p>
+              </section>
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">{t('publicOfferDraftStatus')}</h3>
+                <StatusBadge status={selectedPublicOfferDraft.status} />
+              </section>
+              {selectedPublicOfferDraft.summary && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">Summary</h3>
+                  <p className="text-sm text-charcoal">{selectedPublicOfferDraft.summary}</p>
+                </section>
+              )}
+              {selectedPublicOfferDraft.heroCopy && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">Hero Copy</h3>
+                  <p className="text-sm text-charcoal">{selectedPublicOfferDraft.heroCopy}</p>
+                </section>
+              )}
+              {selectedPublicOfferDraft.seoTitle && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">SEO Title</h3>
+                  <p className="text-sm text-charcoal">{selectedPublicOfferDraft.seoTitle}</p>
+                </section>
+              )}
+              {selectedPublicOfferDraft.seoDescription && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">SEO Description</h3>
+                  <p className="text-sm text-charcoal text-xs">{selectedPublicOfferDraft.seoDescription}</p>
+                </section>
+              )}
+              {selectedPublicOfferDraft.benefits && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">Benefits</h3>
+                  <pre className="text-xs bg-linen rounded-lg p-3 overflow-auto">{JSON.stringify(selectedPublicOfferDraft.benefits, null, 2)}</pre>
+                </section>
+              )}
+              {selectedPublicOfferDraft.faq && (
+                <section>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-sage mb-2">FAQ</h3>
+                  <pre className="text-xs bg-linen rounded-lg p-3 overflow-auto">{JSON.stringify(selectedPublicOfferDraft.faq, null, 2)}</pre>
+                </section>
+              )}
+              <section className="flex flex-wrap gap-2 pt-2 border-t border-beige">
+                {selectedPublicOfferDraft.status !== 'APPROVED' && selectedPublicOfferDraft.status !== 'REJECTED' && (
+                  <ActionButton
+                    icon="ti-check"
+                    label={t('approve')}
+                    loading={actionLoading === `pod:${selectedPublicOfferDraft.id}:approve`}
+                    disabled={isBusy}
+                    onClick={() => { void runPublicOfferDraftAction(selectedPublicOfferDraft.id, 'approve'); }}
+                  />
+                )}
+                {selectedPublicOfferDraft.status === 'APPROVED' && (
+                  <ActionButton
+                    icon="ti-world"
+                    label={t('publish')}
+                    loading={actionLoading === `pod:${selectedPublicOfferDraft.id}:publish`}
+                    disabled={isBusy}
+                    onClick={async () => {
+                      if (actionLoading) return;
+                      setActionLoading(`pod:${selectedPublicOfferDraft.id}:publish`);
+                      setToast(null);
+                      try {
+                        const res = await adminFetch(`${API_BASE}/admin/public-offer-drafts/${selectedPublicOfferDraft.id}/publish`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                        if (res.ok) {
+                          setToast({ type: 'success', msg: t('published') });
+                          await fetchAllData();
+                          setSelectedPublicOfferDraft(null);
+                        } else {
+                          const d = await res.json().catch(() => ({}));
+                          setToast({ type: 'error', msg: (d as { message?: string }).message || t('actionFailed') });
+                        }
+                      } catch { setToast({ type: 'error', msg: t('actionFailed') }); } finally { setActionLoading(null); }
+                    }}
+                  />
+                )}
+                <ActionButton
+                  icon="ti-x"
+                  label={t('reject')}
+                  loading={actionLoading === `pod:${selectedPublicOfferDraft.id}:reject`}
+                  disabled={isBusy || selectedPublicOfferDraft.status === 'REJECTED'}
+                  variant="danger"
+                  onClick={() => { void runPublicOfferDraftAction(selectedPublicOfferDraft.id, 'reject'); }}
+                />
+              </section>
+            </div>
+          </div>
         </div>
       )}
 
@@ -934,7 +1459,292 @@ export default function AffiliateOsPage() {
               </div>
             )}
           </Panel>
+
+          <Panel title={t('offerEnrichments')} icon="ti-sparkles">
+            {loading ? (
+              <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+            ) : data.offerEnrichments.length === 0 ? (
+              <StateBlock icon="ti-sparkles" title={t('noOfferEnrichments')} />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">{t('offerEnrichmentsTableCaption')}</caption>
+                  <thead>
+                    <tr className="border-b border-beige bg-linen/50">
+                      <TableHeader>{t('offerTitle')}</TableHeader>
+                      <TableHeader>{t('targetAudience')}</TableHeader>
+                      <TableHeader>{t('confidence')}</TableHeader>
+                      <TableHeader>{t('status')}</TableHeader>
+                      <TableHeader>{t('enrichmentActions')}</TableHeader>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-beige">
+                    {data.offerEnrichments.map((enrichment) => (
+                      <tr key={enrichment.id} className="hover:bg-linen/40 transition-colors">
+                        <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-md truncate">
+                          <bdi dir="auto">{enrichment.offerTitle || '—'}</bdi>
+                        </td>
+                        <td className="px-4 py-3 text-stone text-xs min-w-48 max-w-sm truncate">
+                          <bdi dir="auto">{enrichment.targetAudience || '—'}</bdi>
+                        </td>
+                        <td className="px-4 py-3 text-stone">
+                          <bdi dir="auto">{formatScore(enrichment.confidenceScore, locale)}</bdi>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={enrichment.status} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <ActionButton
+                              icon="ti-file-text"
+                              label={t('generateContent')}
+                              loading={actionLoading === `enrichment:${enrichment.id}:generate-content`}
+                              disabled={isBusy || enrichment.status !== 'COMPLETED'}
+                              title={enrichment.status !== 'COMPLETED' ? t('actionUnavailable') : undefined}
+                              variant="primary"
+                              onClick={() => {
+                                void runEnrichmentAction(enrichment, 'generate-content');
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          <Panel title={t('contentDrafts')} icon="ti-layout-list">
+            {loading ? (
+              <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+            ) : data.contentDrafts.length === 0 ? (
+              <StateBlock icon="ti-layout-list" title={t('noContentDrafts')} />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">{t('contentDraftsTableCaption')}</caption>
+                  <thead>
+                    <tr className="border-b border-beige bg-linen/50">
+                      <TableHeader>{t('title')}</TableHeader>
+                      <TableHeader>{t('contentType')}</TableHeader>
+                      <TableHeader>{t('angle')}</TableHeader>
+                      <TableHeader>{t('status')}</TableHeader>
+                      <TableHeader>{t('draftActions')}</TableHeader>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-beige">
+                    {data.contentDrafts.map((draft) => (
+                      <tr key={draft.id} className="hover:bg-linen/40 transition-colors">
+                        <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-md truncate">
+                          <bdi dir="auto">{draft.title || '—'}</bdi>
+                        </td>
+                        <td className="px-4 py-3 text-stone"><bdi dir="auto">{draft.contentType ?? '—'}</bdi></td>
+                        <td className="px-4 py-3 text-stone text-xs min-w-48 max-w-sm truncate">
+                          <bdi dir="auto">{draft.angle || '—'}</bdi>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={draft.status} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <ActionButton
+                              icon="ti-check"
+                              label={t('approve')}
+                              loading={actionLoading === `draft:${draft.id}:approve`}
+                              disabled={isBusy || draft.status !== 'PENDING_APPROVAL'}
+                              title={draft.status !== 'PENDING_APPROVAL' ? t('actionUnavailable') : undefined}
+                              variant="primary"
+                              onClick={() => {
+                                void runDraftContentAction(draft, 'approve');
+                              }}
+                            />
+                            <ActionButton
+                              icon="ti-edit"
+                              label={t('edit')}
+                              loading={actionLoading === `draft:${draft.id}:edit`}
+                              disabled={isBusy || (draft.status !== 'DRAFT' && draft.status !== 'PENDING_APPROVAL')}
+                              onClick={() => {
+                                void runDraftContentAction(draft, 'edit');
+                              }}
+                            />
+                            <ActionButton
+                              icon="ti-x"
+                              label={t('reject')}
+                              loading={actionLoading === `draft:${draft.id}:reject`}
+                              disabled={isBusy || draft.status !== 'PENDING_APPROVAL'}
+                              title={draft.status !== 'PENDING_APPROVAL' ? t('actionUnavailable') : undefined}
+                              variant="danger"
+                              onClick={() => {
+                                void runDraftContentAction(draft, 'reject');
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          <Panel title={t('reviewItems')} icon="ti-clipboard-check">
+            {loading ? (
+              <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+            ) : data.reviewItems.length === 0 ? (
+              <StateBlock icon="ti-clipboard-check" title={t('noReviewItems')} />
+            ) : (
+              <>
+                <div className="flex items-center gap-3 px-4 py-2 border-b border-beige bg-linen/30">
+                  <label htmlFor="review-filter" className="text-xs text-stone">{t('filterBy')}:</label>
+                  <select
+                    id="review-filter"
+                    value={reviewFilter}
+                    onChange={(e) => { setReviewFilter(e.target.value); }}
+                    className="text-xs border border-beige rounded px-2 py-1 bg-white text-charcoal focus:outline-none focus:ring-1 focus:ring-sage"
+                  >
+                    <option value="ALL">{t('allStatuses')}</option>
+                    <option value="PENDING">{t('statusPendingApproval')}</option>
+                    <option value="APPROVED">{t('statusApproved')}</option>
+                    <option value="REJECTED">{t('statusRejected')}</option>
+                    <option value="REVISION_REQUESTED">{t('statusRevisionRequested')}</option>
+                  </select>
+                  <span className="text-xs text-stone">{filteredReviewItems.length} {t('items')}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <caption className="sr-only">{t('reviewItemsTableCaption')}</caption>
+                    <thead>
+                      <tr className="border-b border-beige bg-linen/50">
+                        <TableHeader>{t('title')}</TableHeader>
+                        <TableHeader>{t('contentType')}</TableHeader>
+                        <TableHeader>{t('angle')}</TableHeader>
+                        <TableHeader>{t('reviewStatus')}</TableHeader>
+                        <TableHeader>{t('reviewActions')}</TableHeader>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-beige">
+                      {filteredReviewItems.map((item) => (
+                        <tr
+                          key={item.id}
+                          className="hover:bg-linen/40 transition-colors cursor-pointer"
+                          onClick={() => { setSelectedReviewItem(item); }}
+                        >
+                          <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-md truncate">
+                            <bdi dir="auto">{item.contentDraft?.title || '—'}</bdi>
+                          </td>
+                          <td className="px-4 py-3 text-stone"><bdi dir="auto">{item.contentDraft?.contentType ?? '—'}</bdi></td>
+                          <td className="px-4 py-3 text-stone text-xs min-w-48 max-w-sm truncate">
+                            <bdi dir="auto">{item.contentDraft?.angle || '—'}</bdi>
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={item.reviewStatus} />
+                          </td>
+                          <td className="px-4 py-3" onClick={(e) => { e.stopPropagation(); }}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <ActionButton
+                                icon="ti-check"
+                                label={t('approve')}
+                                loading={actionLoading === `review:${item.id}:approve`}
+                                disabled={isBusy || item.reviewStatus !== 'PENDING'}
+                                title={item.reviewStatus !== 'PENDING' ? t('actionUnavailable') : undefined}
+                                variant="primary"
+                                onClick={() => {
+                                  void runReviewAction(item.id, 'approve');
+                                }}
+                              />
+                              <ActionButton
+                                icon="ti-edit"
+                                label={t('requestRevision')}
+                                loading={actionLoading === `review:${item.id}:requestRevision`}
+                                disabled={isBusy || item.reviewStatus !== 'PENDING'}
+                                onClick={() => {
+                                  void runReviewAction(item.id, 'requestRevision');
+                                }}
+                              />
+                              <ActionButton
+                                icon="ti-x"
+                                label={t('reject')}
+                                loading={actionLoading === `review:${item.id}:reject`}
+                                disabled={isBusy || item.reviewStatus !== 'PENDING'}
+                                title={item.reviewStatus !== 'PENDING' ? t('actionUnavailable') : undefined}
+                                variant="danger"
+                                onClick={() => {
+                                  void runReviewAction(item.id, 'reject');
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Panel>
         </section>
+
+        <Panel title={t('publicOfferDrafts')} icon="ti-world">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : data.publicOfferDrafts.length === 0 ? (
+            <StateBlock icon="ti-file-text" title={t('noPublicOfferDrafts')} />
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <select
+                  value={publicOfferDraftFilter}
+                  onChange={(e) => setPublicOfferDraftFilter(e.target.value)}
+                  className="text-xs border border-beige rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-sage"
+                >
+                  <option value="ALL">{t('allStatuses')}</option>
+                  <option value="DRAFT">{t('draft')}</option>
+                  <option value="PENDING_APPROVAL">{t('pendingApproval')}</option>
+                  <option value="APPROVED">{t('approved')}</option>
+                  <option value="REJECTED">{t('rejected')}</option>
+                </select>
+                <span className="text-xs text-stone">{filteredPublicOfferDrafts.length} {t('items')}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <caption className="sr-only">{t('publicOfferDraftsTableCaption')}</caption>
+                  <thead>
+                    <tr className="border-b border-beige bg-linen/50">
+                      <TableHeader>{t('title')}</TableHeader>
+                      <TableHeader>{t('slug')}</TableHeader>
+                      <TableHeader>{t('publicOfferDraftStatus')}</TableHeader>
+                      <TableHeader>{t('created')}</TableHeader>
+                      <TableHeader>{t('actions')}</TableHeader>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-beige">
+                    {filteredPublicOfferDrafts.map((draft) => (
+                      <tr key={draft.id} className="hover:bg-linen/30 transition-colors">
+                        <td className="px-3 py-2 font-medium">{draft.title || '—'}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-charcoal/60">{draft.slug || '—'}</td>
+                        <td className="px-3 py-2">
+                          <StatusBadge status={draft.status} />
+                        </td>
+                        <td className="px-3 py-2 text-charcoal/60">{draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : '—'}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => setSelectedPublicOfferDraft(draft)}
+                            className="text-xs text-sage hover:text-sage/80 underline"
+                          >
+                            {t('view')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Panel>
 
         <Panel title={t('socialPosts')} icon="ti-messages">
           {loading ? (
@@ -991,6 +1801,65 @@ export default function AffiliateOsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title={t('scheduledJobs')} icon="ti-clock">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : data.scheduledJobs.length === 0 ? (
+            <StateBlock icon="ti-calendar" title={t('noScheduledJobs')} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <caption className="sr-only">{t('scheduledJobsTableCaption')}</caption>
+                <thead>
+                  <tr className="border-b border-beige bg-linen/50">
+                    <TableHeader>{t('name')}</TableHeader>
+                    <TableHeader>{t('handler')}</TableHeader>
+                    <TableHeader>{t('status')}</TableHeader>
+                    <TableHeader>{t('cronExpression')}</TableHeader>
+                    <TableHeader>{t('nextRun')}</TableHeader>
+                    <TableHeader>{t('lastRun')}</TableHeader>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-beige">
+                  {data.scheduledJobs.map((job) => (
+                    <tr key={job.id} className="hover:bg-linen/30 transition-colors">
+                      <td className="px-3 py-2 font-medium">{job.name}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-charcoal/60">{job.handler}</td>
+                      <td className="px-3 py-2"><StatusBadge status={job.status} /></td>
+                      <td className="px-3 py-2 font-mono text-xs text-charcoal/60">{job.cronExpression || '—'}</td>
+                      <td className="px-3 py-2 text-charcoal/60 text-xs">{job.nextRunAt ? new Date(job.nextRunAt).toLocaleString() : '—'}</td>
+                      <td className="px-3 py-2 text-charcoal/60 text-xs">{job.lastRunAt ? new Date(job.lastRunAt).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title={t('connectors')} icon="ti-plug">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : data.connectors.length === 0 ? (
+            <StateBlock icon="ti-plug" title={t('noConnectors')} />
+          ) : (
+            <div className="flex flex-wrap gap-4">
+              {data.connectors.map((connector) => (
+                <div key={connector.platform} className="flex items-center gap-3 rounded-lg border border-beige bg-linen/30 px-4 py-3 min-w-48">
+                  <div className={`w-2.5 h-2.5 rounded-full ${connector.enabled ? 'bg-green-500' : 'bg-stone-300'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-charcoal capitalize">{connector.platform}</p>
+                    <p className="text-xs text-charcoal/50">{connector.enabled ? t('connected') : t('disconnected')}</p>
+                  </div>
+                  <span className={`text-xs font-mono px-2 py-0.5 rounded ${connector.enabled ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-400'}`}>
+                    {connector.enabled ? t('active') : t('inactive')}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </Panel>

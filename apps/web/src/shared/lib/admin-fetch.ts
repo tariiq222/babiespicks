@@ -2,7 +2,9 @@ export function adminFetch(url: string, init?: RequestInit): Promise<Response> {
   let pathname: string;
   let finalUrl: string;
 
-  if (url.startsWith('http://') || url.startsWith('https://')) {
+  if (url.startsWith('/api/admin-proxy/')) {
+    finalUrl = url;
+  } else if (url.startsWith('http://') || url.startsWith('https://')) {
     // Strip the backend origin from absolute URLs so we re-build a same-origin
     // proxy path.  This handles both `http://localhost:3001` and production
     // origins without the caller needing to change.
@@ -33,23 +35,9 @@ export function adminFetch(url: string, init?: RequestInit): Promise<Response> {
     headers.set('Content-Type', 'application/json');
   }
 
-  if (!headers.has('x-admin-key')) {
-    const storedAdminKey = getStoredAdminKey();
-    if (storedAdminKey) headers.set('x-admin-key', storedAdminKey);
-  }
-
   return fetch(finalUrl, {
     ...init,
     headers,
+    credentials: init?.credentials ?? 'same-origin',
   });
-}
-
-function getStoredAdminKey(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    return window.sessionStorage.getItem('babiespicks_admin_key')?.trim() || null;
-  } catch {
-    return null;
-  }
 }

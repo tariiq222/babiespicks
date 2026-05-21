@@ -11,6 +11,8 @@ const adminAffiliateOsPagePath = path.join(
   'app/[locale]/admin/affiliate-os/page.tsx',
 );
 const adminFetchPath = path.join(webSrcRoot, 'shared/lib/admin-fetch.ts');
+const adminAuthPath = path.join(webSrcRoot, 'shared/lib/admin-auth.ts');
+const adminProxyPath = path.join(webSrcRoot, 'app/api/admin-proxy/[...path]/route.ts');
 const adminUiRoot = path.join(webSrcRoot, 'app/[locale]/admin');
 
 function readSource(filePath: string) {
@@ -65,41 +67,29 @@ describe('admin Affiliate OS stored-XSS guardrails', () => {
   });
 });
 
-describe('admin root key storage guardrails', () => {
+describe('admin root key and proxy auth guardrails', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it('does not read the admin root key from persistent localStorage', () => {
+  it('does not read the admin root key from browser storage', () => {
     const source = readSource(adminFetchPath);
 
     expect(/\b(?:window\.)?localStorage\b/.test(source)).toBe(false);
+    expect(/\b(?:window\.)?sessionStorage\b/.test(source)).toBe(false);
+    expect(/babiespicks_admin_key/.test(source)).toBe(false);
   });
 
-  it('provides a short-lived credential path via sessionStorage or explicit call-site header', () => {
+  it('does not send x-admin-key from admin browser code', () => {
     const adminFetchSource = readSource(adminFetchPath);
     const adminUiSource = listSourceFiles(adminUiRoot).map(readSource).join('\n');
 
-    const hasSessionStorageCredentialPath = /\b(?:window\.)?sessionStorage\b/.test(
-      adminFetchSource,
-    );
-    const hasExplicitAdminKeyOption =
-      /adminFetch\s*\([^)]*adminKey/.test(adminFetchSource) ||
-      /AdminFetch(?:Init|Options)[\s\S]*adminKey/.test(adminFetchSource);
-    const hasHeaderPassedFromAdminCallSite =
-      /adminFetch\([\s\S]{0,700}?headers[\s\S]{0,700}?['"]x-admin-key['"]/.test(
-        adminUiSource,
-      );
-
-    expect(
-      hasSessionStorageCredentialPath ||
-        hasExplicitAdminKeyOption ||
-        hasHeaderPassedFromAdminCallSite,
-    ).toBe(true);
+    expect(/['"]x-admin-key['"]/.test(adminFetchSource)).toBe(false);
+    expect(/adminFetch\([\s\S]{0,700}?headers[\s\S]{0,700}?['"]x-admin-key['"]/.test(adminUiSource)).toBe(false);
   });
 
-  it('never falls back to a persisted localStorage root key when no header is passed', async () => {
+  it('never reads browser storage or sends root key headers when no header is passed', async () => {
     const localStorageGet = vi.fn(() => 'persisted-root-key');
     const sessionStorageGet = vi.fn(() => 'short-lived-admin-key');
     const fetchMock = vi.fn<typeof fetch>(
@@ -115,6 +105,7 @@ describe('admin root key storage guardrails', () => {
     await adminFetch('/admin/approvals');
 
     expect(localStorageGet).not.toHaveBeenCalled();
+    expect(sessionStorageGet).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const firstFetchCall = fetchMock.mock.calls[0];
@@ -122,6 +113,72 @@ describe('admin root key storage guardrails', () => {
 
     const [, init] = firstFetchCall;
     const headers = new Headers(init?.headers);
-    expect(headers.get('x-admin-key')).not.toBe('persisted-root-key');
+    expect(headers.has('x-admin-key')).toBe(false);
+    expect(init?.credentials).toBe('same-origin');
+  });
+
+  it('gates the admin proxy with the signed admin session cookie helper', () => {
+    const adminAuthSource = readSource(adminAuthPath);
+    const adminProxySource = readSource(adminProxyPath);
+
+    expect(adminAuthSource).toContain('ADMIN_SESSION_COOKIE_NAME');
+    expect(adminAuthSource).toContain('timingSafeEqual');
+    expect(adminProxySource).toContain('verifyAdminSessionToken');
+    expect(adminProxySource).toContain('request.cookies.get(ADMIN_SESSION_COOKIE_NAME)');
+    expect(/request\.headers\.get\(['"]x-admin-key['"]\)/.test(adminProxySource)).toBe(false);
+    expect(/parseBearerToken/.test(adminProxySource)).toBe(false);
+  });
+
+  it('does not fall back to public admin keys for admin auth secrets', () => {
+    const adminAuthSource = readSource(adminAuthPath);
+
+    expect(adminAuthSource).not.toContain('NEXT_PUBLIC_ADMIN_API_KEY');
+    expect(/ADMIN_AUTH_SECRET\s*\|\|\s*process\.env\.ADMIN_API_KEY/.test(adminAuthSource)).toBe(false);
+  });
+
+  it('requires ADMIN_AUTH_SECRET for production session signing', () => {
+    const adminAuthSource = readSource(adminAuthPath);
+
+    expect(adminAuthSource).toContain('process.env.ADMIN_AUTH_SECRET');
+    expect(adminAuthSource).toContain("process.env.NODE_ENV === 'production'");
+    expect(/if \(isProduction\(\)\) return null;/.test(adminAuthSource)).toBe(true);
+  });
+
+  it('rate limits admin login failures by username and IP buckets', () => {
+    const adminAuthSource = readSource(adminAuthPath);
+
+    expect(adminAuthSource).toContain('normalizeAdminLoginUsername');
+    expect(adminAuthSource).toContain('normalizeAdminLoginClientIp');
+    expect(adminAuthSource).toContain('`username:${normalizeAdminLoginUsername(username)}`');
+    expect(adminAuthSource).toContain('`ip:${normalizeAdminLoginClientIp(clientIp)}`');
+    expect(adminAuthSource).toContain('getRateLimitKeys(clientIp, username)');
+    expect(adminAuthSource).not.toContain('`${clientIp || \'unknown\'}:${username.trim().toLowerCase()}`');
+  });
+
+  it('keeps admin login IP extraction conservative because forwarded headers are spoofable', () => {
+    const adminLoginRouteSource = readSource(
+      path.join(webSrcRoot, 'app/api/admin-auth/login/route.ts'),
+    );
+
+    expect(adminLoginRouteSource).toContain('parseSingleClientIp');
+    expect(adminLoginRouteSource).toContain('x-forwarded-for');
+    expect(adminLoginRouteSource).toContain('x-real-ip');
+    expect(adminLoginRouteSource).toContain("trimmed.includes(',')");
+    expect(adminLoginRouteSource).toContain('isIP(trimmed)');
+    expect(adminLoginRouteSource).toContain("|| 'unknown'");
+  });
+
+  it('limits admin proxy forwarding to explicit safe admin prefixes', () => {
+    const adminProxySource = readSource(adminProxyPath);
+
+    expect(adminProxySource).toContain('ALLOWED_ADMIN_PROXY_PREFIXES');
+    expect(adminProxySource).toContain('admin/product-drafts');
+    expect(adminProxySource).toContain('admin/approvals');
+    expect(adminProxySource).toContain('admin/ai-os');
+    expect(adminProxySource).toContain('admin/analytics');
+    expect(adminProxySource).toContain('admin/circuit-breakers');
+    expect(adminProxySource).toContain('ENCODED_PATH_SEPARATOR_PATTERN');
+    expect(adminProxySource).toContain("segment === '..'");
+    expect(adminProxySource).toContain('isAllowedAdminProxyPath');
   });
 });
