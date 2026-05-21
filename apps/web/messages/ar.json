@@ -764,6 +764,30 @@
         "PUBLISHED": "منشورة",
         "ARCHIVED": "مؤرشفة"
       }
+    },
+    "phase2": {
+      "readyForEnrichment": "جاهز للإثراء",
+      "noReadyForEnrichment": "لا توجد مسودات معتمدة جاهزة للإثراء",
+      "readyForEnrichmentCaption": "مسودات المنتجات المعتمدة مع إجراء إنشاء إثراء عرض",
+      "generateEnrichment": "إنشاء إثراء",
+      "enrichmentGenerated": "تم إنشاء إثراء العرض بنجاح",
+      "offerEnrichments": "إثراءات العروض",
+      "noOfferEnrichments": "لا توجد إثراءات عروض",
+      "offerEnrichmentsCaption": "قائمة إثراءات العروض مع إجراء إنشاء مسودة محتوى",
+      "offerTitle": "عنوان العرض",
+      "targetAudience": "الجمهور المستهدف",
+      "keyBenefits": "الفوائد الرئيسية",
+      "positioningAngle": "زاوية التموضع",
+      "confidence": "الثقة",
+      "generateArticleDraft": "إنشاء مسودة مقال",
+      "articleDraftGenerated": "تم إنشاء مسودة المقال بنجاح",
+      "articleDrafts": "مسودات المقالات / قائمة المحتوى",
+      "noArticleDrafts": "لا توجد مسودات مقالات",
+      "articleDraftsCaption": "قائمة مسودات المحتوى مع إجراءات الموافقة والرفض فقط",
+      "approvalStatus": "حالة الموافقة",
+      "angle": "الزاوية",
+      "articleApproved": "تمت موافقة مسودة المقال",
+      "articleRejected": "تم رفض مسودة المقال"
     }
   },
   "coupons": {

@@ -1,0 +1,114 @@
+{
+  "files": [
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/phase-2.dto.ts",
+      "action": "CREATE",
+      "reason": "All Phase 2 DTOs in one file: CreateOfferEnrichmentBodyDto, UpdateOfferEnrichmentBodyDto, ListOfferEnrichmentsQueryDto, CreateContentDraftBodyDto, UpdateContentDraftBodyDto, ListContentDraftsQueryDto, ContentDraftTransitionBodyDto, and TypeScript interfaces.",
+      "riskTags": ["API behavior", "validation"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/offer-enrichments.service.ts",
+      "action": "CREATE",
+      "reason": "Creates/list/get/updates offer enrichments as COMPLETED CONTENT_PIPELINE AiRun records. Gate: only APPROVED ProductDrafts accepted.",
+      "riskTags": ["API behavior", "business-logic"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/offer-enrichments.controller.ts",
+      "action": "CREATE",
+      "reason": "REST controller for offer enrichments: GET/POST /admin/affiliate-ai-os/offer-enrichments, GET/PATCH /admin/affiliate-ai-os/offer-enrichments/:id.",
+      "riskTags": ["API behavior", "new-endpoint"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/content-drafts.service.ts",
+      "action": "CREATE",
+      "reason": "Creates/list/get/updates/approves/rejects content drafts via ArticleDraft reuse. No publish. isPhase2Draft guard filters by sourceOfferEnrichmentId in outline. Slug deterministic with suffix.",
+      "riskTags": ["API behavior", "business-logic"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/content-drafts.controller.ts",
+      "action": "CREATE",
+      "reason": "REST controller for content drafts: GET/POST/PATCH, approve, reject. No publish endpoint. Protected by AdminApiKeyGuard.",
+      "riskTags": ["API behavior", "new-endpoint"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/affiliate-ai-os.module.ts",
+      "action": "MODIFY",
+      "reason": "Register OfferEnrichmentsController, OfferEnrichmentsService, ContentDraftsController, ContentDraftsService.",
+      "riskTags": ["API behavior", "module-registration"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/__tests__/offer-enrichments.service.spec.ts",
+      "action": "CREATE",
+      "reason": "Unit tests for OfferEnrichmentsService: create (APPROVED gate), list, get, update.",
+      "riskTags": ["test-coverage"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/__tests__/offer-enrichments.controller.spec.ts",
+      "action": "CREATE",
+      "reason": "Unit tests for OfferEnrichmentsController: routing, guard, request validation.",
+      "riskTags": ["test-coverage"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/__tests__/content-drafts.service.spec.ts",
+      "action": "CREATE",
+      "reason": "Unit tests for ContentDraftsService: create (article-only), list, get, update, approve, reject, idempotency, isPhase2Draft guard.",
+      "riskTags": ["test-coverage"]
+    },
+    {
+      "path": "apps/api/src/features/affiliate-ai-os/__tests__/content-drafts.controller.spec.ts",
+      "action": "CREATE",
+      "reason": "Unit tests for ContentDraftsController: routing, guards, no-publish verification, approve/reject transitions.",
+      "riskTags": ["test-coverage"]
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/affiliate-os/page.tsx",
+      "action": "MODIFY",
+      "reason": "Three new dashboard panels: Ready for Enrichment, Offer Enrichments, Article Drafts / Content Queue. No publish/schedule controls.",
+      "riskTags": ["UI cosmetic", "dashboard-extension"]
+    },
+    {
+      "path": "apps/web/messages/ar.json",
+      "action": "MODIFY",
+      "reason": "Arabic translations for Phase 2 labels: readyForEnrichment, offerEnrichments, articleDrafts, and all status/action labels.",
+      "riskTags": ["UI cosmetic", "i18n"]
+    },
+    {
+      "path": "apps/web/messages/en.json",
+      "action": "MODIFY",
+      "reason": "English translations for Phase 2 labels: readyForEnrichment, offerEnrichments, articleDrafts, and all status/action labels.",
+      "riskTags": ["UI cosmetic", "i18n"]
+    },
+    {
+      "path": "docs/ai-affiliate-os/phase-2-offer-enrichment-content-drafts.md",
+      "action": "CREATE",
+      "reason": "Phase 2 implementation documentation covering scope, out-of-scope, data flow, APIs, dashboard changes, approval rules, no-publish rule, known limitations, testing instructions, and Phase 3 candidates.",
+      "riskTags": ["documentation"]
+    }
+  ],
+  "excludedFiles": [
+    {
+      "path": "apps/api/prisma/schema.prisma",
+      "reason": "No schema changes needed. ArticleDraft reused as-is. Offer enrichments stored in AiRun JSON."
+    },
+    {
+      "path": "apps/api/src/features/admin/social-approval.controller.ts",
+      "reason": "Explicitly out of scope. Social drafts deferred to Phase 3 due to auto-schedule behavior."
+    },
+    {
+      "path": "apps/api/src/features/admin/approval.controller.ts",
+      "reason": "Explicitly out of scope. Phase 2 does not route through ContentPage approval."
+    },
+    {
+      "path": "apps/api/src/features/content/article-pipeline.service.ts",
+      "reason": "Not modified. Phase 2 uses ArticleDraft directly; publishArticleDraft() is intentionally not called."
+    },
+    {
+      "path": "apps/api/src/features/auth/**",
+      "reason": "Auth changes are forbidden by Scope Lock."
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/login/**",
+      "reason": "Auth changes are forbidden by Scope Lock."
+    }
+  ]
+}

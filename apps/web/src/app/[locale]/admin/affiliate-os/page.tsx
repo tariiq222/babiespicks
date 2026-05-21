@@ -72,12 +72,44 @@ interface AiRun {
   createdAt?: string | null;
 }
 
+interface OfferEnrichment {
+  id: string;
+  sourceProductDraftId?: string | null;
+  offerTitle?: string | null;
+  targetAudience?: string[] | null;
+  keyBenefits?: string[] | null;
+  painPoints?: string[] | null;
+  objections?: string[] | null;
+  positioningAngle?: string | null;
+  contentAngles?: string[] | null;
+  suggestedHooks?: string[] | null;
+  keywords?: string[] | null;
+  confidenceScore?: number | null;
+  status?: string | null;
+  enrichmentReason?: string | null;
+  createdAt?: string | null;
+}
+
+interface ArticleContentDraft {
+  id: string;
+  title?: string | null;
+  body?: string | null;
+  contentType?: string | null;
+  status?: string | null;
+  approvalStatus?: string | null;
+  angle?: string | null;
+  callToAction?: string | null;
+  createdAt?: string | null;
+}
+
 interface DashboardData {
   trendSignals: TrendSignal[];
   drafts: ProductDraft[];
   contentApprovals: ContentApproval[];
   socialPosts: SocialPost[];
   aiRuns: AiRun[];
+  offerEnrichments: OfferEnrichment[];
+  articleContentDrafts: ArticleContentDraft[];
   activeRuns: number;
   totalClicks: number;
   topProductName: string | null;
@@ -126,6 +158,14 @@ function isSocialPost(value: unknown): value is SocialPost {
 
 function isAiRun(value: unknown): value is AiRun {
   return isRecord(value) && typeof value.id === 'string' && typeof value.name === 'string';
+}
+
+function isOfferEnrichment(value: unknown): value is OfferEnrichment {
+  return isRecord(value) && typeof value.id === 'string';
+}
+
+function isArticleContentDraft(value: unknown): value is ArticleContentDraft {
+  return isRecord(value) && typeof value.id === 'string';
 }
 
 function isContentApproval(value: unknown): value is ContentApproval {
@@ -328,6 +368,8 @@ export default function AffiliateOsPage() {
     contentApprovals: [],
     socialPosts: [],
     aiRuns: [],
+    offerEnrichments: [],
+    articleContentDrafts: [],
     activeRuns: 0,
     totalClicks: 0,
     topProductName: null,
@@ -386,7 +428,7 @@ export default function AffiliateOsPage() {
     setError(null);
 
     try {
-      const [trendSignalsRes, draftsRes, contentRes, socialRes, overviewRes, analyticsRes, aiRunsRes] =
+      const [trendSignalsRes, draftsRes, contentRes, socialRes, overviewRes, analyticsRes, aiRunsRes, offerEnrichmentsRes, articleContentDraftsRes] =
         await Promise.all([
           adminFetch(`${API_BASE}/admin/trend-signals?limit=50`),
           adminFetch(`${API_BASE}/admin/product-drafts?limit=${PRODUCT_DRAFT_PAGE_SIZE}&offset=0`),
@@ -395,9 +437,11 @@ export default function AffiliateOsPage() {
           adminFetch(`${API_BASE}/admin/ai-os/overview`),
           adminFetch(`${API_BASE}/admin/analytics`),
           adminFetch(`${API_BASE}/admin/ai-os/runs?limit=5`),
+          adminFetch(`${API_BASE}/admin/affiliate-ai-os/offer-enrichments`),
+          adminFetch(`${API_BASE}/admin/affiliate-ai-os/content-drafts`),
         ]);
 
-      const [trendSignalsPayload, draftsPayload, contentPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload] =
+      const [trendSignalsPayload, draftsPayload, contentPayload, socialPayload, overviewPayload, analyticsPayload, aiRunsPayload, offerEnrichmentsPayload, articleContentDraftsPayload] =
         await Promise.all([
           trendSignalsRes.json().catch(() => null),
           draftsRes.json().catch(() => null),
@@ -406,6 +450,8 @@ export default function AffiliateOsPage() {
           overviewRes.json().catch(() => null),
           analyticsRes.json().catch(() => null),
           aiRunsRes.json().catch(() => null),
+          offerEnrichmentsRes.json().catch(() => null),
+          articleContentDraftsRes.json().catch(() => null),
         ]);
 
       const failedResponse = [
@@ -416,6 +462,8 @@ export default function AffiliateOsPage() {
         { response: overviewRes, payload: overviewPayload },
         { response: analyticsRes, payload: analyticsPayload },
         { response: aiRunsRes, payload: aiRunsPayload },
+        { response: offerEnrichmentsRes, payload: offerEnrichmentsPayload },
+        { response: articleContentDraftsRes, payload: articleContentDraftsPayload },
       ].find(({ response }) => !response.ok);
 
       if (failedResponse) {
@@ -433,6 +481,8 @@ export default function AffiliateOsPage() {
       const contentApprovals = extractItems(contentPayload, isContentApproval).filter(canReviewContent);
       const socialPosts = extractItems(socialPayload, isSocialPost);
       const aiRuns = extractItems(aiRunsPayload, isAiRun);
+      const offerEnrichments = extractItems(offerEnrichmentsPayload, isOfferEnrichment);
+      const articleContentDrafts = extractItems(articleContentDraftsPayload, isArticleContentDraft);
 
       setPendingSocialCount(getResponseTotal(socialPayload, socialPosts.length));
       setDraftPagination({
@@ -446,6 +496,8 @@ export default function AffiliateOsPage() {
         contentApprovals,
         socialPosts,
         aiRuns,
+        offerEnrichments,
+        articleContentDrafts,
         activeRuns: getNumericField(overviewPayload, ['aiOs', 'runsRunning']),
         totalClicks: getNumericField(analyticsPayload, ['affiliate', 'totalClicks']),
         topProductName: getTopProductName(analyticsPayload),
@@ -655,6 +707,134 @@ export default function AffiliateOsPage() {
     }
   }
 
+  async function generateEnrichment(draft: ProductDraft) {
+    const actionKey = `enrichment:${draft.id}:generate`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/affiliate-ai-os/offer-enrichments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceProductDraftId: draft.id,
+          offerTitle: draft.title,
+          enrichmentReason: draft.discoveryReason ?? 'Approved product draft ready for enrichment',
+          targetAudience: [],
+          keyBenefits: [],
+          painPoints: [],
+          objections: [],
+          contentAngles: [],
+          suggestedHooks: [],
+          keywords: [],
+          positioningAngle: '',
+          confidenceScore: 0,
+          status: 'READY',
+        }),
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t('phase2.enrichmentGenerated'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function generateArticleDraft(enrichment: OfferEnrichment) {
+    const actionKey = `article-draft:${enrichment.id}:generate`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/affiliate-ai-os/content-drafts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceOfferEnrichmentId: enrichment.id,
+          contentType: 'article',
+          title: enrichment.offerTitle || '',
+          body: enrichment.positioningAngle || '',
+          angle: enrichment.positioningAngle || '',
+          callToAction: enrichment.keyBenefits?.join(', ') || '',
+        }),
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t('phase2.articleDraftGenerated'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function approveArticleDraft(draftId: string) {
+    const actionKey = `article-draft:${draftId}:approve`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/affiliate-ai-os/content-drafts/${draftId}/approve`, {
+        method: 'POST',
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t('phase2.articleApproved'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function rejectArticleDraft(draftId: string) {
+    const actionKey = `article-draft:${draftId}:reject`;
+    setActionLoading(actionKey);
+
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/affiliate-ai-os/content-drafts/${draftId}/reject`, {
+        method: 'POST',
+      });
+      const payload: unknown = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(markAuthRequired());
+        }
+        throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      }
+
+      showToast('success', t('phase2.articleRejected'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const approvedProductDrafts = data.drafts.filter((d) => d.status === 'APPROVED');
   const pendingDraftsCount = data.drafts.filter(canReviewDraft).length;
   const isBusy = loading || actionLoading !== null;
 
@@ -993,6 +1173,175 @@ export default function AffiliateOsPage() {
             )}
           </Panel>
         </section>
+
+        <Panel title={`${t('phase2.readyForEnrichment')} (${formatNumber(approvedProductDrafts.length, locale)})`} icon="ti-sparkles">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : approvedProductDrafts.length === 0 ? (
+            <StateBlock icon="ti-sparkles" title={t('phase2.noReadyForEnrichment')} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <caption className="sr-only">{t('phase2.readyForEnrichmentCaption')}</caption>
+                <thead>
+                  <tr className="border-b border-beige bg-linen/50">
+                    <TableHeader>{t('product')}</TableHeader>
+                    <TableHeader>{t('discoveryReason')}</TableHeader>
+                    <TableHeader>{t('actions')}</TableHeader>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-beige">
+                  {approvedProductDrafts.map((draft) => (
+                    <tr key={draft.id} className="hover:bg-linen/40 transition-colors">
+                      <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-72 truncate">
+                        <bdi dir="auto">{draft.title}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-56 max-w-md truncate" dir="auto">
+                        <bdi dir="auto">{draft.discoveryReason || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ActionButton
+                          icon="ti-sparkles"
+                          label={t('phase2.generateEnrichment')}
+                          loading={actionLoading === `enrichment:${draft.id}:generate`}
+                          disabled={isBusy}
+                          variant="primary"
+                          onClick={() => {
+                            void generateEnrichment(draft);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title={`${t('phase2.offerEnrichments')} (${formatNumber(data.offerEnrichments.length, locale)})`} icon="ti-bulb">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : data.offerEnrichments.length === 0 ? (
+            <StateBlock icon="ti-bulb" title={t('phase2.noOfferEnrichments')} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <caption className="sr-only">{t('phase2.offerEnrichmentsCaption')}</caption>
+                <thead>
+                  <tr className="border-b border-beige bg-linen/50">
+                    <TableHeader>{t('phase2.offerTitle')}</TableHeader>
+                    <TableHeader>{t('phase2.targetAudience')}</TableHeader>
+                    <TableHeader>{t('phase2.keyBenefits')}</TableHeader>
+                    <TableHeader>{t('phase2.positioningAngle')}</TableHeader>
+                    <TableHeader>{t('phase2.confidence')}</TableHeader>
+                    <TableHeader>{t('actions')}</TableHeader>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-beige">
+                  {data.offerEnrichments.map((enrichment) => (
+                    <tr key={enrichment.id} className="hover:bg-linen/40 transition-colors">
+                      <td className="px-4 py-3 text-charcoal font-medium min-w-48 max-w-64 truncate">
+                        <bdi dir="auto">{enrichment.offerTitle || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-40 max-w-48 truncate" dir="auto">
+                        <bdi dir="auto">{enrichment.targetAudience?.join(', ') || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-40 max-w-48 truncate" dir="auto">
+                        <bdi dir="auto">{enrichment.keyBenefits?.join(', ') || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-40 max-w-48 truncate" dir="auto">
+                        <bdi dir="auto">{enrichment.positioningAngle || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-charcoal tabular-nums">
+                        {formatScore(enrichment.confidenceScore, locale)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <ActionButton
+                          icon="ti-file-text"
+                          label={t('phase2.generateArticleDraft')}
+                          loading={actionLoading === `article-draft:${enrichment.id}:generate`}
+                          disabled={isBusy}
+                          variant="primary"
+                          onClick={() => {
+                            void generateArticleDraft(enrichment);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+
+        <Panel title={`${t('phase2.articleDrafts')} (${formatNumber(data.articleContentDrafts.length, locale)})`} icon="ti-file-text">
+          {loading ? (
+            <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
+          ) : data.articleContentDrafts.length === 0 ? (
+            <StateBlock icon="ti-file-text" title={t('phase2.noArticleDrafts')} />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <caption className="sr-only">{t('phase2.articleDraftsCaption')}</caption>
+                <thead>
+                  <tr className="border-b border-beige bg-linen/50">
+                    <TableHeader>{t('title')}</TableHeader>
+                    <TableHeader>{t('type')}</TableHeader>
+                    <TableHeader>{t('status')}</TableHeader>
+                    <TableHeader>{t('phase2.approvalStatus')}</TableHeader>
+                    <TableHeader>{t('phase2.angle')}</TableHeader>
+                    <TableHeader>{t('approvalDecision')}</TableHeader>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-beige">
+                  {data.articleContentDrafts.map((draft) => (
+                    <tr key={draft.id} className="hover:bg-linen/40 transition-colors">
+                      <td className="px-4 py-3 text-charcoal font-medium min-w-56 max-w-72 truncate">
+                        <bdi dir="auto">{draft.title || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3 text-stone"><bdi dir="auto">{draft.contentType ?? '—'}</bdi></td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={draft.status || 'UNKNOWN'} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={draft.approvalStatus || 'UNKNOWN'} />
+                      </td>
+                      <td className="px-4 py-3 text-stone text-xs min-w-40 max-w-48 truncate" dir="auto">
+                        <bdi dir="auto">{draft.angle || '—'}</bdi>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <ActionButton
+                            icon="ti-check"
+                            label={t('approve')}
+                            loading={actionLoading === `article-draft:${draft.id}:approve`}
+                            disabled={isBusy}
+                            variant="primary"
+                            onClick={() => {
+                              void approveArticleDraft(draft.id);
+                            }}
+                          />
+                          <ActionButton
+                            icon="ti-x"
+                            label={t('reject')}
+                            loading={actionLoading === `article-draft:${draft.id}:reject`}
+                            disabled={isBusy}
+                            variant="danger"
+                            onClick={() => {
+                              void rejectArticleDraft(draft.id);
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
 
         <Panel title={t('socialPosts')} icon="ti-messages">
           {loading ? (

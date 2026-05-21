@@ -1,0 +1,152 @@
+{
+  "name": "ai-affiliate-os-phase-2-offer-enrichment-content-drafts",
+  "nodes": [
+    {
+      "id": "resolve-blockers",
+      "label": "Resolve BLOCKED questions from discovery.md (social scope, slug strategy, dashboard integration)",
+      "status": "completed",
+      "dependsOn": [],
+      "owner": "product / orchestrator",
+      "outOfScopeNote": "Decided: ArticleDraft-only scope. SocialPost drafts deferred to Phase 3. Slug strategy: deterministic with suffix on collision."
+    },
+    {
+      "id": "implement-offer-enrichments",
+      "label": "Create OfferEnrichmentsService and OfferEnrichmentsController",
+      "status": "completed",
+      "dependsOn": ["resolve-blockers"],
+      "owner": "backend-engineer",
+      "files": [
+        "apps/api/src/features/affiliate-ai-os/offer-enrichments.service.ts",
+        "apps/api/src/features/affiliate-ai-os/offer-enrichments.controller.ts",
+        "apps/api/src/features/affiliate-ai-os/phase-2.dto.ts"
+      ]
+    },
+    {
+      "id": "implement-content-drafts",
+      "label": "Create ContentDraftsService and ContentDraftsController (no publish)",
+      "status": "completed",
+      "dependsOn": ["resolve-blockers"],
+      "owner": "backend-engineer",
+      "files": [
+        "apps/api/src/features/affiliate-ai-os/content-drafts.service.ts",
+        "apps/api/src/features/affiliate-ai-os/content-drafts.controller.ts"
+      ]
+    },
+    {
+      "id": "register-module",
+      "label": "Register Phase 2 controllers and services in AffiliateAiOsModule",
+      "status": "completed",
+      "dependsOn": ["implement-offer-enrichments", "implement-content-drafts"],
+      "owner": "backend-engineer",
+      "files": ["apps/api/src/features/affiliate-ai-os/affiliate-ai-os.module.ts"]
+    },
+    {
+      "id": "backend-tests",
+      "label": "Write controller and service tests for offer enrichments and content drafts",
+      "status": "completed",
+      "dependsOn": ["register-module"],
+      "owner": "test-engineer",
+      "files": [
+        "apps/api/src/features/affiliate-ai-os/__tests__/offer-enrichments.service.spec.ts",
+        "apps/api/src/features/affiliate-ai-os/__tests__/offer-enrichments.controller.spec.ts",
+        "apps/api/src/features/affiliate-ai-os/__tests__/content-drafts.service.spec.ts",
+        "apps/api/src/features/affiliate-ai-os/__tests__/content-drafts.controller.spec.ts"
+      ]
+    },
+    {
+      "id": "api-type-check",
+      "label": "Run pnpm --dir apps/api type-check",
+      "status": "completed",
+      "dependsOn": ["backend-tests"],
+      "owner": "backend-engineer",
+      "command": "pnpm --dir apps/api type-check"
+    },
+    {
+      "id": "implement-dashboard-ui",
+      "label": "Extend Affiliate OS dashboard with three new panels: Ready for Enrichment, Offer Enrichments, Article Drafts",
+      "status": "completed",
+      "dependsOn": ["resolve-blockers"],
+      "owner": "frontend-engineer",
+      "files": ["apps/web/src/app/[locale]/admin/affiliate-os/page.tsx"]
+    },
+    {
+      "id": "i18n-translations",
+      "label": "Add ar/en translation keys for Phase 2 labels, statuses, and toasts",
+      "status": "completed",
+      "dependsOn": ["implement-dashboard-ui"],
+      "owner": "frontend-engineer",
+      "files": [
+        "apps/web/messages/ar.json",
+        "apps/web/messages/en.json"
+      ]
+    },
+    {
+      "id": "web-type-check",
+      "label": "Run pnpm --dir apps/web type-check",
+      "status": "completed",
+      "dependsOn": ["i18n-translations"],
+      "owner": "frontend-engineer",
+      "command": "pnpm --dir apps/web type-check"
+    },
+    {
+      "id": "final-verification",
+      "label": "Run backend tests and type-checks; verify no-publish rule",
+      "status": "pending",
+      "dependsOn": ["api-type-check", "web-type-check"],
+      "owner": "test-engineer",
+      "note": "Command: pnpm --dir apps/api test src/features/affiliate-ai-os. Backend tests (40 tests) confirmed passed by implementation subagent. Final test-agent verification still pending."
+    },
+    {
+      "id": "docs-phase-2",
+      "label": "Create docs/ai-affiliate-os/phase-2-offer-enrichment-content-drafts.md implementation doc",
+      "status": "completed",
+      "dependsOn": ["final-verification"],
+      "owner": "documentation-writer",
+      "files": ["docs/ai-affiliate-os/phase-2-offer-enrichment-content-drafts.md"]
+    }
+  ],
+  "criticalPath": [
+    "resolve-blockers",
+    "implement-offer-enrichments",
+    "implement-content-drafts",
+    "register-module",
+    "backend-tests",
+    "api-type-check",
+    "implement-dashboard-ui",
+    "i18n-translations",
+    "web-type-check",
+    "final-verification",
+    "docs-phase-2"
+  ],
+  "excludedNodes": [
+    {
+      "id": "social-draft-implementation",
+      "label": "Social post draft creation and approval",
+      "reason": "Blocked by discovery: existing SocialPost approval auto-schedules, violating Phase 2 no-scheduling rule. Deferred to Phase 3."
+    },
+    {
+      "id": "publish-workflow",
+      "label": "Publish approved article drafts to ContentPage",
+      "reason": "Explicitly out of scope. Phase 2 stops at approved drafts. No publish endpoint exists in ContentDraftsController."
+    },
+    {
+      "id": "analytics",
+      "label": "Analytics for approval-to-conversion performance",
+      "reason": "Explicitly out of scope per Scope Lock."
+    },
+    {
+      "id": "schema-migration",
+      "label": "Prisma schema migration for new models",
+      "reason": "No schema changes needed. Offer enrichments use AiRun model; content drafts use ArticleDraft model."
+    },
+    {
+      "id": "email-adcopy-content-types",
+      "label": "Email and ad_copy content types",
+      "reason": "Only 'article' supported in Phase 2. Other types return 409 with deferred message."
+    }
+  ],
+  "publishGate": {
+    "autoPublishingAllowed": false,
+    "reason": "Phase 2 stops at human-approved content drafts. No publish endpoint exists. Publishing and scheduling are deferred to Phase 3+."
+  }
+}

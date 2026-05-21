@@ -764,6 +764,30 @@
         "PUBLISHED": "Published",
         "ARCHIVED": "Archived"
       }
+    },
+    "phase2": {
+      "readyForEnrichment": "Ready for Enrichment",
+      "noReadyForEnrichment": "No approved drafts ready for enrichment",
+      "readyForEnrichmentCaption": "Approved product drafts with generate enrichment action",
+      "generateEnrichment": "Generate Enrichment",
+      "enrichmentGenerated": "Offer enrichment created successfully",
+      "offerEnrichments": "Offer Enrichments",
+      "noOfferEnrichments": "No offer enrichments",
+      "offerEnrichmentsCaption": "Offer enrichments list with generate content draft action",
+      "offerTitle": "Offer Title",
+      "targetAudience": "Target Audience",
+      "keyBenefits": "Key Benefits",
+      "positioningAngle": "Positioning Angle",
+      "confidence": "Confidence",
+      "generateArticleDraft": "Generate Article Draft",
+      "articleDraftGenerated": "Article draft created successfully",
+      "articleDrafts": "Article Drafts / Content Queue",
+      "noArticleDrafts": "No article drafts",
+      "articleDraftsCaption": "Content drafts list with approve and reject actions only",
+      "approvalStatus": "Approval Status",
+      "angle": "Angle",
+      "articleApproved": "Article draft approved",
+      "articleRejected": "Article draft rejected"
     }
   },
   "coupons": {

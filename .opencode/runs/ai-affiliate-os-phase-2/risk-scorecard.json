@@ -1,0 +1,61 @@
+{
+  "riskLevel": "Medium",
+  "riskScore": 4,
+  "scoringMethod": "API behavior +3, UI cosmetic +1. No DB schema, auth, payment, multi-tenant, production env, or destructive factors. Distinct areas summed (3 + 1 = 4).",
+  "factors": [
+    {
+      "area": "API behavior",
+      "score": 3,
+      "notes": "New admin endpoints: OfferEnrichmentsController (4 routes) + ContentDraftsController (6 routes). All use AdminApiKeyGuard. No publish endpoint exposed. Reuses existing AiRun and ArticleDraft models. Offer enrichments stored as AiRun JSON (no schema change)."
+    },
+    {
+      "area": "UI cosmetic",
+      "score": 1,
+      "notes": "Dashboard extension: three new panels (Ready for Enrichment, Offer Enrichments, Article Drafts). Reuses existing Panel/TableHeader/StatusBadge/ActionButton patterns. No new design tokens."
+    },
+    {
+      "area": "DB schema",
+      "score": 0,
+      "notes": "No schema change. Offer enrichments use existing AiRun model. Content drafts use existing ArticleDraft model. No new tables or columns."
+    },
+    {
+      "area": "Auth/roles",
+      "score": 0,
+      "notes": "No auth or role changes. All new endpoints use existing AdminApiKeyGuard."
+    },
+    {
+      "area": "Payment/invoice",
+      "score": 0,
+      "notes": "No payment or invoice changes."
+    },
+    {
+      "area": "Multi-tenant",
+      "score": 0,
+      "notes": "No multi-tenant changes. Single-tenant admin surface."
+    },
+    {
+      "area": "Production env",
+      "score": 0,
+      "notes": "No environment, infra, or deployment changes."
+    },
+    {
+      "area": "Destructive",
+      "score": 0,
+      "notes": "No destructive operations. All changes are additive: new controllers, new services, new tests, new UI sections."
+    }
+  ],
+  "criticalFlags": [],
+  "requiredMitigations": [
+    "Verify ContentDraftsController NEVER calls ArticlePipelineService.publishArticleDraft(). Code review confirms no publish route exists.",
+    "Verify approve/reject transitions write ApprovalAuditEvent records with entityType ARTICLE_DRAFT. Tests confirm this.",
+    "Verify only 'article' contentType is accepted; other types return 409 with deferred message. Tests confirm this.",
+    "Verify isPhase2Draft() guard prevents legacy ArticleDrafts from being managed through Phase 2 endpoints.",
+    "Run full API and web type-check before merge.",
+    "Run backend tests: pnpm --dir apps/api test src/features/affiliate-ai-os (40 tests expected)."
+  ],
+  "postImplementationNotes": [
+    "sourceProductDraftId is stored in ArticleDraft.productIds (semantic compromise). No dedicated column exists. Future phase should add sourceProductDraftId Json column.",
+    "Slug is deterministic from title with numeric suffix on collision. No human-friendly slug strategy in Phase 2.",
+    "SocialPost drafts remain blocked — existing SocialApprovalController auto-schedules, violating Phase 2 no-scheduling rule."
+  ]
+}
