@@ -851,29 +851,6 @@
         "PUBLISHED": "منشورة",
         "ARCHIVED": "مؤرشفة"
       }
-    },
-    "affiliateDiscovery": {
-      "title": "اكتشاف المنتجات الأفلييت",
-      "search": {
-        "placeholder": "اكتبي اسم المنتج أو كلمة البحث..."
-      },
-      "source": {
-        "amazon": "أمازون",
-        "noon": "نون",
-        "manual": "يدوي"
-      },
-      "run": "تشغيل",
-      "results": {
-        "title": "نتيجة الاكتشاف",
-        "asin": "الرقم التسلسلي (ASIN)",
-        "link": "الرابط الأفلييت",
-        "copy": "نسخ",
-        "open": "فتح"
-      },
-      "errors": {
-        "none": "لم يتم العثور على نتائج",
-        "searchFailed": "فشل البحث، حاولي مرة أخرى"
-      }
     }
   },
   "coupons": {
