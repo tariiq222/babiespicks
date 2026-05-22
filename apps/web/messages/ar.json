@@ -636,6 +636,13 @@
     "runContentPipeline": "تشغيل المحتوى",
     "recentAiRuns": "آخر تشغيلات الذكاء",
     "triggerStarted": "تم بدء التشغيل",
+    "triggerCompleted": "اكتمل التشغيل",
+    "triggerFailedShort": "فشل التشغيل",
+    "triggerNoCandidates": "اكتمل التشغيل — لم يُكتشف منتج جديد",
+    "runDiscovered": "اكتُشف",
+    "runCandidates": "مرشحون",
+    "runSucceeded": "نجح",
+    "runFailed": "فشل",
     "publicOfferDraftActionSuccess": {
       "approve": "تم اعتماد العرض العام",
       "reject": "تم رفض العرض العام",

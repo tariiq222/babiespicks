@@ -365,7 +365,11 @@ export class AiOsWorkerService implements OnModuleInit, OnModuleDestroy {
 
     const completed = await this.prisma.aiRun.updateMany({
       where: { id: runId, status: AiRunStatus.RUNNING },
-      data: { status: AiRunStatus.COMPLETED, completedAt: new Date() },
+      data: {
+        status: AiRunStatus.COMPLETED,
+        completedAt: new Date(),
+        output: { source, maxProducts, ...summary } as any,
+      },
     });
 
     if (completed.count === 0) {

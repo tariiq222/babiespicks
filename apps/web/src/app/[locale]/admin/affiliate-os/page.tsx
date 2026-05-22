@@ -89,6 +89,14 @@ interface AiRun {
   type: string;
   status: string;
   createdAt?: string | null;
+  error?: string | null;
+  output?: {
+    discovered?: number | null;
+    total?: number | null;
+    succeeded?: number | null;
+    failed?: number | null;
+    source?: string;
+  } | Record<string, unknown> | null;
 }
 
 interface OfferEnrichment {
@@ -688,21 +696,60 @@ export default function AffiliateOsPage() {
   async function triggerPipeline(kind: 'amazon_discovery' | 'noon_discovery' | 'product_pipeline' | 'content_pipeline') {
     const actionKey = `trigger:${kind}`;
     setActionLoading(actionKey);
+    let runId: string | null = null;
     try {
       const res = await adminFetch(`${API_BASE}/admin/affiliate-os/trigger`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind }),
       });
-      const payload: unknown = await res.json().catch(() => null);
+      const payload: any = await res.json().catch(() => null);
       if (!res.ok) throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      runId = payload?.runId ?? null;
       showToast('success', t('triggerStarted'));
       void fetchAllData();
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('loadFailed'));
-    } finally {
       setActionLoading(null);
+      return;
     }
+
+    // Poll the run until it leaves PENDING/RUNNING, then show a summary toast.
+    if (!runId) { setActionLoading(null); return; }
+    const start = Date.now();
+    const POLL_MAX_MS = 5 * 60 * 1000;
+    const POLL_INTERVAL_MS = 4000;
+    const poll = async () => {
+      if (Date.now() - start > POLL_MAX_MS) { setActionLoading(null); return; }
+      try {
+        const r = await adminFetch(`${API_BASE}/admin/ai-os/runs/${runId}`);
+        if (r.ok) {
+          const j: any = await r.json().catch(() => null);
+          const status = j?.status as string | undefined;
+          if (status && status !== 'PENDING' && status !== 'RUNNING') {
+            const out = j?.output ?? {};
+            const total = Number(out.total ?? 0);
+            const succeeded = Number(out.succeeded ?? 0);
+            const failed = Number(out.failed ?? 0);
+            if (status === 'COMPLETED') {
+              showToast(
+                'success',
+                total === 0
+                  ? t('triggerNoCandidates')
+                  : `${t('triggerCompleted')}: ${succeeded}/${total}${failed > 0 ? ` (${failed} ${t('runFailed').toLowerCase()})` : ''}`,
+              );
+            } else {
+              showToast('error', j?.error || t('triggerFailedShort'));
+            }
+            void fetchAllData();
+            setActionLoading(null);
+            return;
+          }
+        }
+      } catch { /* swallow & retry */ }
+      setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
+    };
+    void poll();
   }
 
   async function createDraftFromTrendSignal(signalId: string) {
@@ -1256,15 +1303,36 @@ export default function AffiliateOsPage() {
                   : run.status === 'FAILED' ? 'bg-red-100 text-red-700'
                   : run.status === 'RUNNING' ? 'bg-amber-100 text-amber-700'
                   : 'bg-stone-100 text-stone-600';
+                const out = (run.output && typeof run.output === 'object' ? run.output : null) as Record<string, unknown> | null;
+                const summary =
+                  run.status === 'FAILED' && run.error
+                    ? String(run.error)
+                    : out
+                    ? [
+                        out.discovered != null ? `${t('runDiscovered')}: ${String(out.discovered)}` : null,
+                        out.total != null ? `${t('runCandidates')}: ${String(out.total)}` : null,
+                        out.succeeded != null ? `${t('runSucceeded')}: ${String(out.succeeded)}` : null,
+                        out.failed != null && Number(out.failed) > 0 ? `${t('runFailed')}: ${String(out.failed)}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : '';
                 return (
-                  <div key={run.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-linen/30 hover:bg-linen/50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${statusColor}`}>{run.status}</span>
-                      <span className="text-xs font-medium text-charcoal truncate">{run.name || run.type}</span>
+                  <div key={run.id} className="flex flex-col gap-1 px-3 py-2 rounded-lg bg-linen/30 hover:bg-linen/50 transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${statusColor}`}>{run.status}</span>
+                        <span className="text-xs font-medium text-charcoal truncate">{run.name || run.type}</span>
+                      </div>
+                      <span className="text-[11px] text-stone whitespace-nowrap">
+                        {run.createdAt ? new Date(run.createdAt).toLocaleTimeString() : ''}
+                      </span>
                     </div>
-                    <span className="text-[11px] text-stone whitespace-nowrap">
-                      {run.createdAt ? new Date(run.createdAt).toLocaleTimeString() : ''}
-                    </span>
+                    {summary && (
+                      <p className={`text-[11px] ${run.status === 'FAILED' ? 'text-red-600' : 'text-stone'} ms-[68px] truncate`} title={summary}>
+                        {summary}
+                      </p>
+                    )}
                   </div>
                 );
               })}
