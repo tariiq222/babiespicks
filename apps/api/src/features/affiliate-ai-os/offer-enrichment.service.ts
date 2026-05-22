@@ -120,16 +120,11 @@ export class OfferEnrichmentService {
       );
     }
 
-    const idempotencyKey = options.idempotencyKey?.trim() || null;
-
     const existing = await db.offerEnrichment.findFirst({
       where: { sourceProductDraftId: draftId },
     });
 
     if (existing) {
-      if (idempotencyKey && existing.id === idempotencyKey) {
-        return this.getEnrichment(existing.id);
-      }
       return db.offerEnrichment.update({
         where: { id: existing.id },
         data: {
@@ -143,7 +138,6 @@ export class OfferEnrichmentService {
     return db.offerEnrichment.create({
       data: {
         sourceProductDraftId: draftId,
-        idempotencyKey,
         ...enrichmentData,
       },
     });
