@@ -685,6 +685,26 @@ export default function AffiliateOsPage() {
     }
   }
 
+  async function triggerPipeline(kind: 'amazon_discovery' | 'noon_discovery' | 'product_pipeline' | 'content_pipeline') {
+    const actionKey = `trigger:${kind}`;
+    setActionLoading(actionKey);
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/affiliate-os/trigger`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind }),
+      });
+      const payload: unknown = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      showToast('success', t('triggerStarted'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function createDraftFromTrendSignal(signalId: string) {
     const actionKey = `trend:${signalId}:create-draft`;
     setActionLoading(actionKey);
@@ -1185,6 +1205,72 @@ export default function AffiliateOsPage() {
             </span>
           </div>
         </section>
+
+        <section className="rounded-2xl border border-beige bg-white px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="ti ti-bolt text-base text-sage" />
+              <h2 className="text-sm font-semibold text-charcoal">{t('pipelineControls')}</h2>
+            </div>
+            <span className="text-xs text-stone">{t('pipelineControlsHint')}</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {([
+              { kind: 'amazon_discovery', label: t('runAmazonDiscovery'), icon: 'ti-search' },
+              { kind: 'noon_discovery', label: t('runNoonDiscovery'), icon: 'ti-search' },
+              { kind: 'product_pipeline', label: t('runProductPipeline'), icon: 'ti-package' },
+              { kind: 'content_pipeline', label: t('runContentPipeline'), icon: 'ti-file-text' },
+            ] as const).map((btn) => {
+              const isLoading = actionLoading === `trigger:${btn.kind}`;
+              return (
+                <button
+                  key={btn.kind}
+                  type="button"
+                  onClick={() => { void triggerPipeline(btn.kind); }}
+                  disabled={!!actionLoading}
+                  className="flex items-center gap-2 justify-center rounded-lg border border-beige bg-linen/30 hover:bg-sage/10 hover:border-sage/30 px-3 py-2.5 text-xs font-medium text-charcoal transition-colors disabled:opacity-50"
+                >
+                  <span aria-hidden="true" className={`ti ${isLoading ? 'ti-loader animate-spin' : btn.icon} text-sm`} />
+                  {btn.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {data.aiRuns.length > 0 && (
+          <section className="rounded-2xl border border-beige bg-white px-5 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true" className="ti ti-activity text-base text-sage" />
+                <h2 className="text-sm font-semibold text-charcoal">{t('recentAiRuns')}</h2>
+              </div>
+              <span className="text-xs text-stone">
+                {t('activeRuns')}: {data.activeRuns ?? 0}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {data.aiRuns.slice(0, 5).map((run) => {
+                const statusColor =
+                  run.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700'
+                  : run.status === 'FAILED' ? 'bg-red-100 text-red-700'
+                  : run.status === 'RUNNING' ? 'bg-amber-100 text-amber-700'
+                  : 'bg-stone-100 text-stone-600';
+                return (
+                  <div key={run.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-linen/30 hover:bg-linen/50 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${statusColor}`}>{run.status}</span>
+                      <span className="text-xs font-medium text-charcoal truncate">{run.name || run.type}</span>
+                    </div>
+                    <span className="text-[11px] text-stone whitespace-nowrap">
+                      {run.createdAt ? new Date(run.createdAt).toLocaleTimeString() : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {error && (
           <section className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 flex items-center justify-between gap-4">

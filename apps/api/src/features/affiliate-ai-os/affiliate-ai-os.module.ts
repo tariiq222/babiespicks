@@ -24,8 +24,10 @@ import { AutomationRulesController } from './automation-rules.controller';
 import { AutomationRulesService } from './automation-rules.service';
 import { OsDashboardController } from './os-dashboard.controller';
 import { OsDashboardService } from './os-dashboard.service';
+import { AiOsModule } from '../ai-os/ai-os.module';
 
 @Module({
+  imports: [AiOsModule],
   controllers: [
     ProductDraftsController,
     TrendSignalsController,
