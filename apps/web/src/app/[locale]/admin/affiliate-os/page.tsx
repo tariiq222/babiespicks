@@ -1685,8 +1685,8 @@ export default function AffiliateOsPage() {
                               icon="ti-file-text"
                               label={t('generateContent')}
                               loading={actionLoading === `enrichment:${enrichment.id}:generate-content`}
-                              disabled={isBusy || enrichment.status !== 'COMPLETED'}
-                              title={enrichment.status !== 'COMPLETED' ? t('actionUnavailable') : undefined}
+                              disabled={isBusy || (enrichment.status !== 'PENDING' && enrichment.status !== 'COMPLETED')}
+                              title={(enrichment.status !== 'PENDING' && enrichment.status !== 'COMPLETED') ? t('actionUnavailable') : undefined}
                               variant="primary"
                               onClick={() => {
                                 void runEnrichmentAction(enrichment, 'generate-content');
