@@ -357,14 +357,26 @@ export class OfferEnrichmentService {
   ): string {
     const title = enrichment.offerTitle ?? 'Untitled';
     const angle = (enrichment.positioningAngle as string | null) ?? '';
+    const toLines = (v: unknown): string[] => {
+      if (Array.isArray(v)) return v.map(String).filter(Boolean);
+      if (typeof v === 'string') {
+        return v
+          .split(/\n+/)
+          .map((s) => s.replace(/^[•\-*]\s*/, '').trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+    const benefits = toLines(enrichment.keyBenefits);
+    const hooks = toLines(enrichment.suggestedHooks);
 
     switch (contentType) {
       case 'article':
-        return `# ${title}\n\n## Introduction\n\nDiscover everything you need to know about ${title}.\n\n## Key Benefits\n\n${((enrichment.keyBenefits as string[] | null) ?? []).map((b) => `- ${b}`).join('\n')}\n\n## Why Parents Love It\n\n${angle}`;
+        return `# ${title}\n\n## Introduction\n\nDiscover everything you need to know about ${title}.\n\n## Key Benefits\n\n${benefits.map((b) => `- ${b}`).join('\n')}\n\n## Why Parents Love It\n\n${angle}`;
       case 'social_post':
-        return `${title}\n\n${angle}\n\n${((enrichment.suggestedHooks as string[] | null) ?? [])[0] ?? 'Learn more!'}`;
+        return `${title}\n\n${angle}\n\n${hooks[0] ?? 'Learn more!'}`;
       case 'email':
-        return `Subject: ${title}\n\nDear Parent,\n\n${angle}\n\n${((enrichment.keyBenefits as string[] | null) ?? [])[0] ?? 'Discover more about this product.'}`;
+        return `Subject: ${title}\n\nDear Parent,\n\n${angle}\n\n${benefits[0] ?? 'Discover more about this product.'}`;
       case 'ad_copy':
         return `${title}\n\n${angle}\n\nShop now!`;
       default:
