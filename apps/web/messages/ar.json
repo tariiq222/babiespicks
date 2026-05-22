@@ -645,6 +645,8 @@
     "runFailed": "فشل",
     "generateEnrichment": "توليد إثراء",
     "enrichmentCreated": "تم إنشاء الإثراء",
+    "createPublicOfferFromEnrichment": "إنشاء عرض للموقع",
+    "publicOfferDraftCreated": "تم إنشاء مسودة العرض",
     "publicOfferDraftActionSuccess": {
       "approve": "تم اعتماد العرض العام",
       "reject": "تم رفض العرض العام",

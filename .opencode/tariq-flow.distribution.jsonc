@@ -1,0 +1,226 @@
+{
+  // ملف توزيع قابل للتعديل؛ لا يتم تحميله كإعداد نشط لـ OpenCode.
+  "metadata": {
+    "name": "tariq-agent-flow-distribution",
+    "purpose": "Standalone draft for Tariq's five-step orchestration flow.",
+    "status": "draft-distribution-only",
+    "lastReviewed": "2026-05-22"
+  },
+
+  "providers": {
+    "connected": [
+      {
+        "id": "openai",
+        "name": "OpenAI",
+        "selectedModels": ["openai/gpt-5.5"]
+      },
+      {
+        "id": "anthropic",
+        "name": "Anthropic Claude",
+        "selectedModels": ["anthropic/claude-sonnet-4-6"],
+        "note": "Connected, but activation may require allowlist policy approval."
+      },
+      {
+        "id": "kimi-for-coding",
+        "name": "Kimi",
+        "selectedModels": ["kimi-for-coding/k2p6"]
+      },
+      {
+        "id": "minimax-coding-plan",
+        "name": "MiniMax",
+        "selectedModels": ["minimax-coding-plan/MiniMax-M2.7-highspeed"]
+      }
+    ]
+  },
+
+  "hierarchy": {
+    "owner": {
+      "id": "tariq",
+      "title": "Primary Orchestrator / Owner",
+      "responsibility": "Owns the full flow, sets priorities, approves direction, and makes final decisions."
+    },
+    "managers": [
+      {
+        "id": "understanding-manager",
+        "title": "Understanding Manager",
+        "reportsTo": "tariq",
+        "responsibility": "Coordinates context gathering and problem understanding. Does not execute implementation work."
+      },
+      {
+        "id": "classification-manager",
+        "title": "Classification Manager",
+        "reportsTo": "tariq",
+        "responsibility": "Coordinates task classification, affected domains, and risk framing. Does not execute implementation work."
+      },
+      {
+        "id": "planning-manager",
+        "title": "Planning Manager",
+        "reportsTo": "tariq",
+        "responsibility": "Coordinates scope, sequencing, TODO creation, and acceptance criteria. Does not execute implementation work."
+      },
+      {
+        "id": "execution-manager",
+        "title": "Executor Manager / مدير المنفذين",
+        "reportsTo": "tariq",
+        "responsibility": "Manages executor workers by creating, dispatching, and reviewing TaskSpecs. Never reads, edits, runs tests, or executes implementation work directly."
+      },
+      {
+        "id": "reporting-manager",
+        "title": "Reporting Manager",
+        "reportsTo": "tariq",
+        "responsibility": "Coordinates final reporting, decision summaries, residual risks, and handoff notes. Does not execute implementation work."
+      }
+    ],
+    "workersByManager": {
+      "understanding-manager": [
+        "context-worker",
+        "requirements-worker",
+        "research-worker"
+      ],
+      "classification-manager": [
+        "architecture-worker",
+        "scope-worker",
+        "risk-worker"
+      ],
+      "planning-manager": [
+        "todo-worker",
+        "acceptance-criteria-worker",
+        "dependency-worker"
+      ],
+      "execution-manager": [
+        "frontend-worker",
+        "backend-worker",
+        "database-worker",
+        "test-worker",
+        "docs-worker",
+        "security-review-worker",
+        "final-review-worker"
+      ],
+      "reporting-manager": [
+        "summary-worker",
+        "risk-report-worker",
+        "handoff-worker",
+        "final-review-worker"
+      ]
+    }
+  },
+
+  "executorRoles": {
+    "managerOfExecutors": {
+      "id": "execution-manager",
+      "title": "Executor Manager / مدير المنفذين",
+      "model": "openai/gpt-5.5",
+      "role": "Creates, dispatches, monitors, and reviews bounded TaskSpecs for executor workers; never performs direct execution."
+    },
+    "actualExecutors": {
+      "role": "Workers that read/edit files, run tests, and validate results within their TaskSpec scope.",
+      "workers": {
+        "frontend-worker": "kimi-for-coding/k2p6",
+        "backend-worker": "kimi-for-coding/k2p6",
+        "database-worker": "kimi-for-coding/k2p6",
+        "test-worker": "kimi-for-coding/k2p6",
+        "docs-worker": "anthropic/claude-sonnet-4-6"
+      }
+    },
+    "rule": "Managers create, dispatch, monitor, and review TaskSpecs; executors read, edit, run tests, and validate only within assigned scope."
+  },
+
+  "modelAssignments": {
+    "owner": {
+      "tariq": "human"
+    },
+    "managers": {
+      "default": "openai/gpt-5.5",
+      "understanding-manager": "anthropic/claude-sonnet-4-6",
+      "classification-manager": "openai/gpt-5.5",
+      "planning-manager": "openai/gpt-5.5",
+      "execution-manager": "openai/gpt-5.5",
+      "reporting-manager": "anthropic/claude-sonnet-4-6",
+      "note": "Managers coordinate, review, and make tradeoff decisions; they do not execute implementation work or consume heavy execution tokens."
+    },
+    "workers": {
+      "defaultExecution": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "specialistReview": "kimi-for-coding/k2p6",
+      "strategicOrFinalReview": "openai/gpt-5.5",
+      "proseAndReporting": "anthropic/claude-sonnet-4-6",
+      "claudeCandidate": "anthropic/claude-sonnet-4-6"
+    },
+    "workerOverrides": {
+      "context-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "requirements-worker": "anthropic/claude-sonnet-4-6",
+      "research-worker": "anthropic/claude-sonnet-4-6",
+      "architecture-worker": "kimi-for-coding/k2p6",
+      "scope-worker": "openai/gpt-5.5",
+      "risk-worker": "openai/gpt-5.5",
+      "todo-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "frontend-worker": "kimi-for-coding/k2p6",
+      "backend-worker": "kimi-for-coding/k2p6",
+      "database-worker": "kimi-for-coding/k2p6",
+      "test-worker": "kimi-for-coding/k2p6",
+      "docs-worker": "anthropic/claude-sonnet-4-6",
+      "security-review-worker": "openai/gpt-5.5",
+      "final-review-worker": "openai/gpt-5.5",
+      "summary-worker": "anthropic/claude-sonnet-4-6",
+      "risk-report-worker": "anthropic/claude-sonnet-4-6",
+      "handoff-worker": "anthropic/claude-sonnet-4-6"
+    }
+  },
+
+  "tokenLoad": {
+    "principle": "Keep coordination tokens with managers light; spend execution tokens in bounded worker tasks.",
+    "byPhase": {
+      "understanding": {
+        "primaryLoad": "tariq + understanding-manager + understanding workers",
+        "expectedTokenUse": "low",
+        "notes": "Clarify goal, scope, risks, and acceptance criteria before worker dispatch."
+      },
+      "classification": {
+        "primaryLoad": "classification-manager + architecture/scope/risk workers",
+        "expectedTokenUse": "low-to-medium",
+        "notes": "Classify the task, affected domains, and delivery risk without starting execution."
+      },
+      "planning": {
+        "primaryLoad": "planning-manager + planning workers",
+        "expectedTokenUse": "low-to-medium",
+        "notes": "Manager decomposes work and prepares small TaskSpecs; no file execution here."
+      },
+      "execution": {
+        "primaryLoad": "execution-manager workers",
+        "expectedTokenUse": "high",
+        "notes": "The largest token spend should be in execution-manager's workers because they perform code changes, detailed searches, test runs, validation, and docs updates."
+      },
+      "reporting": {
+        "primaryLoad": "reporting-manager + review/test/reporting workers",
+        "expectedTokenUse": "medium",
+        "notes": "After execution workers, the next largest token spend is review/test workers that inspect diffs, run validation, and summarize residual risk."
+      }
+    },
+    "byAgentCategory": {
+      "owner": {
+        "expectedTokenUse": "very-low",
+        "notes": "Tariq decides; agents should not spend tokens simulating owner judgment beyond concise options."
+      },
+      "managers": {
+        "expectedTokenUse": "low-to-medium",
+        "notes": "Managers coordinate and review only. They should stay low/medium overhead and never perform long implementation loops."
+      },
+      "workers": {
+        "expectedTokenUse": "medium-to-high",
+        "notes": "Execution-manager workers carry the highest token load; review/test workers are next highest. Bound all worker tasks with timeboxes."
+      },
+      "reviewers": {
+        "expectedTokenUse": "medium",
+        "notes": "Review/test workers inspect diffs, risks, and acceptance criteria after execution. Keep scope narrow."
+      }
+    }
+  },
+
+  "activationNotes": [
+    "This file is a distribution draft only and must not be treated as active OpenCode configuration.",
+    "No provider credentials, API keys, tokens, or secrets belong in this file.",
+    "Claude is connected as a candidate provider, but may require allowlist policy approval before activation.",
+    "Tariq is the primary orchestrator and owner; managers coordinate the five flow steps and workers execute bounded tasks.",
+    "Managers coordinate and workers execute; keep worker TaskSpecs small, bounded, and testable.",
+    "Before activating any part of this distribution, copy only the needed pieces into a validated OpenCode config shape."
+  ]
+}

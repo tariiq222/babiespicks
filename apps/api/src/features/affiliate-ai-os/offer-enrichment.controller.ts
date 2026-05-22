@@ -74,6 +74,17 @@ export class OfferEnrichmentController {
       idempotencyKey: body.idempotencyKey,
     });
   }
+
+  /**
+   * POST /admin/offer-enrichments/:id/create-offer
+   * Shortcut: skip the content-drafts review stage and create a PublicOfferDraft
+   * directly from the enrichment. Used when only the on-site offer page is needed.
+   */
+  @Post('offer-enrichments/:id/create-offer')
+  @HttpCode(200)
+  async createOfferDirect(@Param('id') id: string): Promise<unknown> {
+    return this.enrichment.createPublicOfferDraftDirect(id);
+  }
 }
 
 @Controller('admin/content-drafts')

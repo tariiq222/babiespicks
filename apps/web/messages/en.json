@@ -645,6 +645,8 @@
     "runFailed": "Failed",
     "generateEnrichment": "Generate enrichment",
     "enrichmentCreated": "Enrichment created",
+    "createPublicOfferFromEnrichment": "Create site offer",
+    "publicOfferDraftCreated": "Public offer draft created",
     "publicOfferDraftActionSuccess": {
       "approve": "Public offer approved",
       "reject": "Public offer rejected",

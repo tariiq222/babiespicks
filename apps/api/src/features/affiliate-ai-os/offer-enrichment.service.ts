@@ -351,6 +351,87 @@ export class OfferEnrichmentService {
     };
   }
 
+  /**
+   * Shortcut: turn a PENDING/COMPLETED enrichment into an APPROVED ContentDraft
+   * (article) and a DRAFT PublicOfferDraft in one call. The admin then only
+   * needs to approve the PublicOfferDraft and press Publish.
+   */
+  async createPublicOfferDraftDirect(enrichmentId: string): Promise<unknown> {
+    const db = this.prisma as any;
+    const enrichment = await db.offerEnrichment.findUnique({ where: { id: enrichmentId } });
+    if (!enrichment) {
+      throw new NotFoundException(`OfferEnrichment ${enrichmentId} not found`);
+    }
+
+    const title = (enrichment.offerTitle as string | null) ?? 'Untitled Offer';
+    const angle = (enrichment.positioningAngle as string | null) ?? '';
+    const body = this.buildPlaceholderBody(enrichment, 'article');
+
+    // 1) ContentDraft (article, APPROVED) — required FK source for PublicOfferDraft
+    let contentDraft = await db.contentDraft.findFirst({
+      where: { sourceOfferEnrichmentId: enrichmentId, contentType: 'article' },
+    });
+    if (!contentDraft) {
+      contentDraft = await db.contentDraft.create({
+        data: {
+          sourceOfferEnrichmentId: enrichmentId,
+          contentType: 'article',
+          title,
+          body,
+          angle,
+          status: 'APPROVED',
+        },
+      });
+    } else if (contentDraft.status !== 'APPROVED') {
+      contentDraft = await db.contentDraft.update({
+        where: { id: contentDraft.id },
+        data: { status: 'APPROVED', title, body, angle },
+      });
+    }
+
+    // 2) PublicOfferDraft (DRAFT) — admin still has to approve + publish
+    const existingOffer = await db.publicOfferDraft.findUnique({
+      where: { sourceContentDraftId: contentDraft.id },
+    });
+    if (existingOffer) {
+      return { publicOfferDraftId: existingOffer.id, contentDraftId: contentDraft.id, reused: true };
+    }
+
+    const baseSlug = (title || enrichmentId)
+      .toLowerCase()
+      .replace(/[^a-z0-9؀-ۿ\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80) || `offer-${enrichmentId.slice(0, 8)}`;
+    let slug = baseSlug;
+    let n = 0;
+    while (await db.publicOfferDraft.findUnique({ where: { slug } })) {
+      n++;
+      slug = `${baseSlug}-${n}`;
+    }
+
+    const created = await db.publicOfferDraft.create({
+      data: {
+        sourceContentDraftId: contentDraft.id,
+        slug,
+        title,
+        summary: angle || null,
+        heroCopy: angle || null,
+        seoTitle: title,
+        seoDescription: angle || null,
+        status: 'DRAFT',
+      },
+    });
+
+    await db.offerEnrichment.update({
+      where: { id: enrichmentId },
+      data: { status: OFFER_ENRICHMENT_STATUS_COMPLETED },
+    });
+
+    return { publicOfferDraftId: created.id, contentDraftId: contentDraft.id, slug, reused: false };
+  }
+
   private buildPlaceholderBody(
     enrichment: OfferEnrichmentRecord,
     contentType: string,

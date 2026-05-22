@@ -752,6 +752,26 @@ export default function AffiliateOsPage() {
     void poll();
   }
 
+  async function createOfferFromEnrichment(enrichmentId: string) {
+    const actionKey = `enrichment:${enrichmentId}:create-offer`;
+    setActionLoading(actionKey);
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/offer-enrichments/${enrichmentId}/create-offer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const payload: unknown = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      showToast('success', t('publicOfferDraftCreated'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function enrichApprovedDraft(draftId: string) {
     const actionKey = `product:${draftId}:enrich`;
     setActionLoading(actionKey);
@@ -1569,7 +1589,7 @@ export default function AffiliateOsPage() {
             )}
           </Panel>
 
-          <Panel title={t('contentApprovals')} icon="ti-file-check">
+          {false && (<Panel title={t('contentApprovals')} icon="ti-file-check">
             {loading ? (
               <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
             ) : data.contentApprovals.length === 0 ? (
@@ -1644,7 +1664,7 @@ export default function AffiliateOsPage() {
                 </table>
               </div>
             )}
-          </Panel>
+          </Panel>)}
 
           <Panel title={t('offerEnrichments')} icon="ti-sparkles">
             {loading ? (
@@ -1682,14 +1702,14 @@ export default function AffiliateOsPage() {
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <ActionButton
-                              icon="ti-file-text"
-                              label={t('generateContent')}
-                              loading={actionLoading === `enrichment:${enrichment.id}:generate-content`}
+                              icon="ti-rocket"
+                              label={t('createPublicOfferFromEnrichment')}
+                              loading={actionLoading === `enrichment:${enrichment.id}:create-offer`}
                               disabled={isBusy || (enrichment.status !== 'PENDING' && enrichment.status !== 'COMPLETED')}
                               title={(enrichment.status !== 'PENDING' && enrichment.status !== 'COMPLETED') ? t('actionUnavailable') : undefined}
                               variant="primary"
                               onClick={() => {
-                                void runEnrichmentAction(enrichment, 'generate-content');
+                                void createOfferFromEnrichment(enrichment.id);
                               }}
                             />
                           </div>
@@ -1702,7 +1722,7 @@ export default function AffiliateOsPage() {
             )}
           </Panel>
 
-          <Panel title={t('contentDrafts')} icon="ti-layout-list">
+          {false && (<Panel title={t('contentDrafts')} icon="ti-layout-list">
             {loading ? (
               <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
             ) : data.contentDrafts.length === 0 ? (
@@ -1774,9 +1794,9 @@ export default function AffiliateOsPage() {
                 </table>
               </div>
             )}
-          </Panel>
+          </Panel>)}
 
-          <Panel title={t('reviewItems')} icon="ti-clipboard-check">
+          {false && <Panel title={t('reviewItems')} icon="ti-clipboard-check">
             {loading ? (
               <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
             ) : data.reviewItems.length === 0 ? (
@@ -1870,7 +1890,7 @@ export default function AffiliateOsPage() {
                 </div>
               </>
             )}
-          </Panel>
+          </Panel>}
         </section>
 
         <Panel title={t('publicOfferDrafts')} icon="ti-world">
