@@ -12,6 +12,7 @@ import { SEOAuditorService } from '../seo-auditor/seo-auditor.service';
 import { QualityGuardService } from '../quality-guard/quality-guard.service';
 import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
 import { getUrlLogTarget } from '../../infrastructure/safety/url-safety';
+import { TrendIntelligenceService } from '../../features/affiliate-ai-os/trend-intelligence.service';
 
 export interface ContentPipelineResult {
   page: { id: string; [key: string]: any } | null;
@@ -57,7 +58,44 @@ export class CoordinatorService {
     private readonly seoAuditor: SEOAuditorService,
     private readonly qualityGuard: QualityGuardService,
     private readonly circuitBreaker: CircuitBreakerService,
+    private readonly trendIntel: TrendIntelligenceService,
   ) {}
+
+  /**
+   * Persist discovery candidates as TrendSignals. Idempotent on URL/title hash.
+   * Returns the number of newly created (or matched) trend signals.
+   */
+  private async persistTrendSignals(
+    candidates: import('../discovery/discovery.service').DiscoveryCandidate[],
+    source: string,
+  ): Promise<number> {
+    let created = 0;
+    for (const c of candidates) {
+      try {
+        await this.trendIntel.createSignalFromSource({
+          source: c.source || `discovery:${source}`,
+          productUrl: c.url,
+          sourceUrl: c.url,
+          title: c.name,
+          discoveryReason:
+            c.trendReason || c.competitorReason || c.snippet || `Discovered via ${c.source}`,
+          trendScore: typeof c.score === 'number' ? c.score : 5,
+          metadata: {
+            category: c.category,
+            thumbnail: c.thumbnail,
+            snippet: c.snippet,
+            originalSource: c.source,
+          } as any,
+        });
+        created++;
+      } catch (err) {
+        this.logger.warn(
+          `Failed to persist trend signal for ${getUrlLogTarget(c.url)}: ${(err as Error).message}`,
+        );
+      }
+    }
+    return created;
+  }
 
   /**
    * Full pipeline: URL -> Product -> Reviews -> Verdict -> Publish
@@ -165,6 +203,11 @@ export class CoordinatorService {
 
     const { discovered, newCandidates, candidates } =
       await this.discovery.discoverProducts(maxProducts, source);
+
+    // Persist every candidate as a TrendSignal so the admin OS sees them
+    // immediately, even if the deep product scrape is blocked downstream.
+    const signalsCreated = await this.persistTrendSignals(candidates, source);
+    this.logger.log(`Trend signals persisted: ${signalsCreated}/${candidates.length}`);
 
     const results: DiscoveryPipelineResult['results'] = [];
     let succeeded = 0;
