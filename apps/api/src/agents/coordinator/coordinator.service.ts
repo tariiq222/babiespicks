@@ -10,9 +10,9 @@ import { scrapeReviews } from '../data-acquisition/layers/review-scraper';
 import { SEOPlannerService } from '../seo-planner/seo-planner.service';
 import { SEOAuditorService } from '../seo-auditor/seo-auditor.service';
 import { QualityGuardService } from '../quality-guard/quality-guard.service';
+import { createHash } from 'node:crypto';
 import { CircuitBreakerService } from '../../infrastructure/circuit-breaker/circuit-breaker.service';
 import { getUrlLogTarget } from '../../infrastructure/safety/url-safety';
-import { TrendIntelligenceService } from '../../features/affiliate-ai-os/trend-intelligence.service';
 
 export interface ContentPipelineResult {
   page: { id: string; [key: string]: any } | null;
@@ -58,43 +58,62 @@ export class CoordinatorService {
     private readonly seoAuditor: SEOAuditorService,
     private readonly qualityGuard: QualityGuardService,
     private readonly circuitBreaker: CircuitBreakerService,
-    private readonly trendIntel: TrendIntelligenceService,
   ) {}
 
   /**
-   * Persist discovery candidates as TrendSignals. Idempotent on URL/title hash.
+   * Persist discovery candidates as TrendSignals. Idempotent via canonical URL.
    * Returns the number of newly created (or matched) trend signals.
+   * Implemented directly against Prisma to avoid a circular module dependency
+   * between CoordinatorModule and AffiliateAiOsModule.
    */
   private async persistTrendSignals(
     candidates: import('../discovery/discovery.service').DiscoveryCandidate[],
     source: string,
   ): Promise<number> {
-    let created = 0;
+    let persisted = 0;
     for (const c of candidates) {
       try {
-        await this.trendIntel.createSignalFromSource({
-          source: c.source || `discovery:${source}`,
-          productUrl: c.url,
-          sourceUrl: c.url,
-          title: c.name,
-          discoveryReason:
-            c.trendReason || c.competitorReason || c.snippet || `Discovered via ${c.source}`,
-          trendScore: typeof c.score === 'number' ? c.score : 5,
-          metadata: {
-            category: c.category,
-            thumbnail: c.thumbnail,
-            snippet: c.snippet,
-            originalSource: c.source,
-          } as any,
+        const canonicalUrl = c.url.split('?')[0].split('#')[0];
+        const normalizedTitle = c.name.toLowerCase().replace(/\s+/g, ' ').trim();
+        const sourceTag = c.source || `discovery:${source}`;
+        const sourceHash = createHash('sha256')
+          .update(`${sourceTag}|${canonicalUrl}|${normalizedTitle}`)
+          .digest('hex');
+
+        const existing = await (this.prisma as any).trendSignal.findFirst({
+          where: { OR: [{ canonicalUrl }, { normalizedTitle }, { sourceHash }] },
+          select: { id: true },
         });
-        created++;
+        if (existing) { persisted++; continue; }
+
+        await (this.prisma as any).trendSignal.create({
+          data: {
+            source: sourceTag,
+            sourceUrl: canonicalUrl,
+            canonicalUrl,
+            rawTitle: c.name.trim(),
+            normalizedTitle,
+            sourceHash,
+            discoveryReason:
+              c.trendReason || c.competitorReason || c.snippet || `Discovered via ${c.source}`,
+            trendScore: typeof c.score === 'number' ? c.score : 5,
+            metadata: {
+              category: c.category,
+              thumbnail: c.thumbnail,
+              snippet: c.snippet,
+              originalSource: c.source,
+            },
+            status: 'NEW',
+          },
+        });
+        persisted++;
       } catch (err) {
         this.logger.warn(
           `Failed to persist trend signal for ${getUrlLogTarget(c.url)}: ${(err as Error).message}`,
         );
       }
     }
-    return created;
+    return persisted;
   }
 
   /**

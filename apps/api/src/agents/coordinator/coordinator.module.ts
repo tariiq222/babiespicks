@@ -9,7 +9,6 @@ import { DiscoveryModule } from '../discovery/discovery.module';
 import { SEOPlannerModule } from '../seo-planner/seo-planner.module';
 import { SEOAuditorModule } from '../seo-auditor/seo-auditor.module';
 import { QualityGuardModule } from '../quality-guard/quality-guard.module';
-import { AffiliateAiOsModule } from '../../features/affiliate-ai-os/affiliate-ai-os.module';
 
 @Module({
   imports: [
@@ -22,7 +21,6 @@ import { AffiliateAiOsModule } from '../../features/affiliate-ai-os/affiliate-ai
     SEOPlannerModule,
     SEOAuditorModule,
     QualityGuardModule,
-    AffiliateAiOsModule,
   ],
   providers: [CoordinatorService],
   exports: [CoordinatorService],
