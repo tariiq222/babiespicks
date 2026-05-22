@@ -88,4 +88,36 @@ export class ControlledPublishingService {
       return { publicOffer: created, alreadyPublished: false };
     }
   }
+
+  async listPublicOffers(limit = 50, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.publicOffer.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.publicOffer.count(),
+    ]);
+    return { items, total, limit, offset };
+  }
+
+  async unpublishPublicOffer(id: string) {
+    const offer = await this.prisma.publicOffer.findUnique({ where: { id } });
+    if (!offer) throw new NotFoundException(`PublicOffer ${id} not found`);
+    if (offer.status !== 'PUBLISHED') {
+      throw new BadRequestException(`Offer ${id} is not PUBLISHED (current: ${offer.status})`);
+    }
+    return this.prisma.publicOffer.update({
+      where: { id },
+      data: { status: 'UNPUBLISHED', unpublishedAt: new Date() },
+    });
+  }
+
+  async getPublicOfferBySlug(slug: string) {
+    const offer = await this.prisma.publicOffer.findUnique({ where: { slug } });
+    if (!offer || offer.status !== 'PUBLISHED') {
+      throw new NotFoundException(`Offer not found`);
+    }
+    return offer;
+  }
 }

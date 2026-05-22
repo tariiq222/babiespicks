@@ -25,6 +25,8 @@ const ALLOWED_ADMIN_PROXY_PREFIXES = [
   'admin/scheduled-jobs',
   'admin/connectors',
   'admin/review-workspace',
+  'admin/public-offers',
+  'admin/scheduled-posts',
 ] as const;
 
 export async function GET(

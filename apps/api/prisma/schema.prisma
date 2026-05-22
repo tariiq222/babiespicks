@@ -1128,3 +1128,20 @@ model Verification {
 
   @@map("verifications")
 }
+
+model RecommendationInsight {
+  id                String   @id @default(cuid())
+  sourceType        String
+  sourceId          String
+  insightType       String
+  message           String   @db.Text
+  recommendedAction String?  @db.Text
+  confidenceScore   Float?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([sourceType, sourceId])
+  @@index([insightType])
+  @@map("recommendation_insights")
+}

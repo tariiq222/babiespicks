@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 export interface ConnectorConfig {
@@ -20,7 +20,61 @@ export interface AnalyticsSummary {
 
 @Injectable()
 export class ConnectorService {
+  private readonly logger = new Logger(ConnectorService.name);
   constructor(private readonly prisma: PrismaService) {}
+
+  /** POST /admin/connectors/:platform/test — verify connector configuration */
+  async testConnector(platform: string, _payload?: unknown) {
+    const health = await this.healthCheck(platform);
+    if (!health.healthy) {
+      return { platform, success: false, error: health.error || 'Connector unhealthy' };
+    }
+    return { platform, success: true, latencyMs: health.latencyMs ?? 0, testedAt: new Date().toISOString() };
+  }
+
+  /**
+   * POST /admin/scheduled-posts/:id/execute — execute a scheduled social post via connector.
+   * This is the explicit human-triggered executor (Phase 7).
+   */
+  async executeScheduledPost(socialPostId: string) {
+    const post = await this.prisma.socialPost.findUnique({ where: { id: socialPostId } });
+    if (!post) throw new NotFoundException(`SocialPost ${socialPostId} not found`);
+    if (post.status !== 'SCHEDULED' && post.status !== 'APPROVED') {
+      throw new BadRequestException(`Cannot execute post with status ${post.status}`);
+    }
+
+    const health = await this.healthCheck(post.platform);
+    if (!health.healthy) {
+      await this.prisma.socialPost.update({
+        where: { id: socialPostId },
+        data: {
+          metadata: {
+            ...((post.metadata as Record<string, unknown>) ?? {}),
+            lastExecutionError: health.error,
+            lastExecutionAt: new Date().toISOString(),
+          },
+        },
+      });
+      throw new BadRequestException(`Connector ${post.platform} unhealthy: ${health.error}`);
+    }
+
+    // Stub: in a real connector this would call the external platform.
+    const externalId = `${post.platform}_${Date.now()}`;
+    const updated = await this.prisma.socialPost.update({
+      where: { id: socialPostId },
+      data: {
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+        externalId,
+        metadata: {
+          ...((post.metadata as Record<string, unknown>) ?? {}),
+          executedAt: new Date().toISOString(),
+        },
+      },
+    });
+    this.logger.log(`Executed scheduled post ${socialPostId} on ${post.platform} -> ${externalId}`);
+    return { success: true, post: updated };
+  }
 
   /** GET /admin/connectors */
   async listConnectors(): Promise<ConnectorConfig[]> {

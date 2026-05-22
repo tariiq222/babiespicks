@@ -6,13 +6,14 @@ import { CouponsModule } from '../coupons/coupons.module';
 import { PublisherModule } from '../../agents/publisher/publisher.module';
 import { PublishingModule } from '../../infrastructure/publishing/publishing.module';
 import { AiOsModule } from '../ai-os/ai-os.module';
+import { AffiliateAiOsModule } from '../affiliate-ai-os/affiliate-ai-os.module';
 import { SchedulerService } from './scheduler.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { TwitterPublisherService } from '../../infrastructure/publishing/twitter-publisher.service';
 import { TelegramPublisherService } from '../../infrastructure/publishing/telegram-publisher.service';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), CoordinatorModule, CouponsModule, PublisherModule, PublishingModule, AiOsModule],
+  imports: [ScheduleModule.forRoot(), CoordinatorModule, CouponsModule, PublisherModule, PublishingModule, AiOsModule, AffiliateAiOsModule],
   providers: [
     CronService,
     {

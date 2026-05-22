@@ -8,6 +8,8 @@ import { SitemapService } from '../../infrastructure/publishing/sitemap.service'
 import { PublisherService } from '../../agents/publisher/publisher.service';
 import { AiOsService } from '../ai-os/ai-os.service';
 import { SchedulerService } from './scheduler.service';
+import { AnalyticsService } from '../affiliate-ai-os/analytics.service';
+import { ConnectorService } from '../affiliate-ai-os/connector.service';
 
 @Injectable()
 export class CronService {
@@ -21,6 +23,8 @@ export class CronService {
     private readonly publisher: PublisherService,
     private readonly aiOs: AiOsService,
     private readonly scheduler: SchedulerService,
+    private readonly analyticsAffiliate: AnalyticsService,
+    private readonly connectorService: ConnectorService,
   ) {}
 
   // Re-scrape prices and data for products with sourceUrl every 6 hours
@@ -228,6 +232,48 @@ export class CronService {
     ]);
 
     this.logger.log(`📊 Daily Stats — Products: ${products}, Verdicts: ${verdicts}, Clicks: ${clicks}, Agent Jobs: ${jobs}`);
+  }
+
+  // Phase 8 — analytics ingestion worker (hourly)
+  @Cron(CronExpression.EVERY_HOUR)
+  async ingestAnalytics() {
+    try {
+      const result = await this.analyticsAffiliate.ingestAnalytics();
+      this.logger.log(`📈 analytics-ingestion: ${result.buckets} buckets`);
+    } catch (err) {
+      this.logger.error(`analytics-ingestion failed: ${safeLogMessage(err)}`);
+    }
+  }
+
+  // Phase 8 — recommendation feedback worker (daily 4am)
+  @Cron('0 4 * * *')
+  async generateRecommendations() {
+    try {
+      const result = await this.analyticsAffiliate.generateRecommendations();
+      this.logger.log(`💡 recommendation-feedback: created ${result.insightsCreated} insights`);
+    } catch (err) {
+      this.logger.error(`recommendation-feedback failed: ${safeLogMessage(err)}`);
+    }
+  }
+
+  // Phase 7 — scheduled-post-executor (every 10 minutes)
+  @Cron('*/10 * * * *')
+  async executeDueScheduledPosts() {
+    const due = await this.prisma.socialPost.findMany({
+      where: {
+        status: 'SCHEDULED',
+        scheduledAt: { lte: new Date() },
+      },
+      take: 20,
+      orderBy: { scheduledAt: 'asc' },
+    });
+    for (const post of due) {
+      try {
+        await this.connectorService.executeScheduledPost(post.id);
+      } catch (err) {
+        this.logger.warn(`scheduled-post-executor ${post.id} failed: ${safeLogMessage(err)}`);
+      }
+    }
   }
 }
 

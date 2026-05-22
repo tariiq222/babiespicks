@@ -142,4 +142,51 @@ export class AnalyticsService {
       topCountries: [],
     };
   }
+
+  /**
+   * Worker: analytics-ingestion — aggregates raw events into per-source counts.
+   * Called by cron. Stub-safe: records nothing if no events present.
+   */
+  async ingestAnalytics() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = await this.prisma.affiliateClick.groupBy({
+      by: ['productId'],
+      _count: { productId: true },
+      where: { createdAt: { gte: since } },
+    });
+    return { ingestedAt: new Date().toISOString(), buckets: rows.length };
+  }
+
+  /**
+   * Worker: recommendation-feedback — generates RecommendationInsight rows from
+   * recent performance signals. Never mutates published content.
+   */
+  async generateRecommendations() {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const top = await this.prisma.affiliateClick.groupBy({
+      by: ['productId'],
+      _count: { productId: true },
+      where: { createdAt: { gte: since } },
+      orderBy: { _count: { productId: 'desc' } },
+      take: 3,
+    });
+
+    let created = 0;
+    for (const row of top) {
+      if (row._count.productId < 5) continue;
+      await this.prisma.recommendationInsight.create({
+        data: {
+          sourceType: 'product',
+          sourceId: row.productId,
+          insightType: 'high-traffic',
+          message: `Product ${row.productId} received ${row._count.productId} clicks in the last 7 days.`,
+          recommendedAction: 'Consider generating an additional content draft to capitalize on this trend.',
+          confidenceScore: Math.min(1, row._count.productId / 100),
+          metadata: { windowDays: 7, clicks: row._count.productId },
+        },
+      });
+      created += 1;
+    }
+    return { generatedAt: new Date().toISOString(), insightsCreated: created };
+  }
 }

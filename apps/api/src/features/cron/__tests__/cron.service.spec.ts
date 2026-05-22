@@ -31,6 +31,8 @@ describe('CronService social legacy publish hardening', () => {
       {} as PublisherService,
       aiOs as unknown as AiOsService,
       scheduler as unknown as SchedulerService,
+      { ingestAnalytics: () => Promise.resolve({ buckets: 0, ingestedAt: "" }), generateRecommendations: () => Promise.resolve({ insightsCreated: 0, generatedAt: "" }) } as never,
+      { executeScheduledPost: () => Promise.resolve({} as any) } as never,
     );
 
     await service.publishApprovedSocialPosts();
@@ -61,6 +63,8 @@ describe('CronService social legacy publish hardening', () => {
       publisher as unknown as PublisherService,
       {} as AiOsService,
       {} as SchedulerService,
+      { ingestAnalytics: () => Promise.resolve({ buckets: 0, ingestedAt: '' }), generateRecommendations: () => Promise.resolve({ insightsCreated: 0, generatedAt: '' }) } as never,
+      { executeScheduledPost: () => Promise.resolve({} as any) } as never,
     );
 
     await service.publishScheduledContent();

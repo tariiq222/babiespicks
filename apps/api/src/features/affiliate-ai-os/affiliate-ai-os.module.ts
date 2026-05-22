@@ -10,7 +10,7 @@ import { ReviewWorkspaceController } from './review-workspace.controller';
 import { ReviewWorkspaceService } from './review-workspace.service';
 import { PublicOfferDraftController } from './public-offer-draft.controller';
 import { PublicOfferDraftService } from './public-offer-draft.service';
-import { ControlledPublishingController } from './controlled-publishing.controller';
+import { ControlledPublishingController, PublicOffersController } from './controlled-publishing.controller';
 import { ControlledPublishingService } from './controlled-publishing.service';
 import { SocialDraftController } from './social-draft.controller';
 import { SocialDraftService } from './social-draft.service';
@@ -34,6 +34,7 @@ import { OsDashboardService } from './os-dashboard.service';
     ReviewWorkspaceController,
     PublicOfferDraftController,
     ControlledPublishingController,
+    PublicOffersController,
     SocialDraftController,
     ScheduledJobsController,
     ConnectorController,
