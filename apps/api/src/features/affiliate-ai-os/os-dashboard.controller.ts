@@ -5,8 +5,8 @@ import { OsDashboardService } from './os-dashboard.service';
 import { AiOsService } from '../ai-os/ai-os.service';
 
 const ALLOWED_TRIGGERS: Record<string, { type: AiRunType; name: string; input: Record<string, unknown> }> = {
-  amazon_discovery: { type: AiRunType.DISCOVERY, name: 'manual:amazon-discovery', input: { source: 'amazon-sa', triggeredBy: 'admin' } },
-  noon_discovery: { type: AiRunType.DISCOVERY, name: 'manual:noon-discovery', input: { source: 'noon-sa', triggeredBy: 'admin' } },
+  amazon_discovery: { type: AiRunType.DISCOVERY, name: 'manual:amazon-discovery', input: { source: 'amazon', triggeredBy: 'admin' } },
+  noon_discovery: { type: AiRunType.DISCOVERY, name: 'manual:noon-discovery', input: { source: 'noon', triggeredBy: 'admin' } },
   product_pipeline: { type: AiRunType.PRODUCT_PIPELINE, name: 'manual:product-pipeline', input: { triggeredBy: 'admin' } },
   content_pipeline: { type: AiRunType.CONTENT_PIPELINE, name: 'manual:content-pipeline', input: { triggeredBy: 'admin' } },
 };
