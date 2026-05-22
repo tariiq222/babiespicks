@@ -851,6 +851,29 @@
         "PUBLISHED": "Published",
         "ARCHIVED": "Archived"
       }
+    },
+    "affiliateDiscovery": {
+      "title": "Affiliate Product Discovery",
+      "search": {
+        "placeholder": "Enter product name or search keyword..."
+      },
+      "source": {
+        "amazon": "Amazon",
+        "noon": "Noon",
+        "manual": "Manual"
+      },
+      "run": "Run",
+      "results": {
+        "title": "Discovery Result",
+        "asin": "ASIN",
+        "link": "Affiliate Link",
+        "copy": "Copy",
+        "open": "Open"
+      },
+      "errors": {
+        "none": "No results found",
+        "searchFailed": "Search failed, please try again"
+      }
     }
   },
   "coupons": {

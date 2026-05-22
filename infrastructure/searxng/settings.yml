@@ -1,0 +1,24 @@
+use_default_settings: true
+
+general:
+  instance_name: "BabiesPicks Search"
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+    - rss
+
+server:
+  secret_key: "dev-secret-key-change-in-prod"
+
+engines:
+  - name: google
+    engine: google
+    shortcut: go
+    disabled: false
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false

@@ -9,9 +9,16 @@ import { CoordinatorModule } from '../../agents/coordinator/coordinator.module';
 import { PublishingModule } from '../../infrastructure/publishing/publishing.module';
 import { AiOsModule } from '../ai-os/ai-os.module';
 import { PublisherModule } from '../../agents/publisher/publisher.module';
+import { AffiliateDiscoveryModule } from './affiliate-discovery/affiliate-discovery.module';
 
 @Module({
-  imports: [CoordinatorModule, PublishingModule, AiOsModule, PublisherModule],
+  imports: [
+    CoordinatorModule,
+    PublishingModule,
+    AiOsModule,
+    PublisherModule,
+    AffiliateDiscoveryModule,
+  ],
   controllers: [
     AdminController,
     AnalyticsController,
