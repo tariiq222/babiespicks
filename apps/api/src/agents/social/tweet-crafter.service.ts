@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat, AIModel } from '../../infrastructure/openrouter';
+import { chat, AIModel, parseJsonResponse } from '../../infrastructure/openrouter';
 import { SettingsService } from '../../features/settings/settings.service';
 
 export interface TweetItem {
@@ -94,7 +94,7 @@ Return JSON in this format:
       ],
     });
 
-    const parsed: { tweets: TweetItem[]; singleTweet: string } = JSON.parse(result.content);
+    const parsed = parseJsonResponse<{ tweets: TweetItem[]; singleTweet: string }>(result.content);
 
     // Log agent job
     await this.prisma.agentJob.create({

@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { chat } from '../../../infrastructure/openrouter';
+import { chat, parseJsonResponse } from '../../../infrastructure/openrouter';
 
 const logger = new Logger('SmartScorer');
 
@@ -77,7 +77,7 @@ Return a JSON array (no wrapper object): [{"index": 1, "searchVolume": 2, "compe
     // The model returns JSON — parse it
     let parsed: unknown;
     try {
-      parsed = JSON.parse(result.content);
+      parsed = parseJsonResponse(result.content);
     } catch {
       logger.warn(`Smart scorer: invalid JSON response — falling back`);
       return new Map();

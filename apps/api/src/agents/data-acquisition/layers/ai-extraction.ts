@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { chat, type CostInfo } from '../../../infrastructure/openrouter';
+import { chat, parseJsonResponse, type CostInfo } from '../../../infrastructure/openrouter';
 import type { SchemaOrgProduct } from './schema-org';
 
 export interface AIExtractionResult {
@@ -57,7 +57,7 @@ If you cannot find a field, set it to null. Extract from the text, not from code
       ],
     });
 
-    const parsed = JSON.parse(result.content);
+    const parsed = parseJsonResponse<any>(result.content);
 
     const product: SchemaOrgProduct = {
       name: parsed.name || undefined,

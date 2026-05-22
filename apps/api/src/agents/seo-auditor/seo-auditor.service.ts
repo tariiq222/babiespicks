@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat, AIModel } from '../../infrastructure/openrouter';
+import { chat, AIModel, parseJsonResponse } from '../../infrastructure/openrouter';
 import { SettingsService } from '../../features/settings/settings.service';
 
 export interface SEOAuditResult {
@@ -170,7 +170,7 @@ ${content.contentEn.substring(0, 4000)}`,
       ],
     });
 
-    const parsed: SEOAuditResult = JSON.parse(result.content);
+    const parsed = parseJsonResponse<SEOAuditResult>(result.content);
 
     // Log agent job
     await this.prisma.agentJob.create({

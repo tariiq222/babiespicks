@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat, AIModel } from '../../infrastructure/openrouter';
+import { chat, AIModel, parseJsonResponse } from '../../infrastructure/openrouter';
 import { SettingsService } from '../../features/settings/settings.service';
 
 export interface SocialComplianceIssue {
@@ -72,7 +72,7 @@ Return JSON:
       ],
     });
 
-    const parsed: SocialComplianceResult = JSON.parse(result.content);
+    const parsed = parseJsonResponse<SocialComplianceResult>(result.content);
 
     // Log agent job
     await this.prisma.agentJob.create({

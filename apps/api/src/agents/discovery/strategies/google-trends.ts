@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { Logger } from '@nestjs/common';
-import { chat } from '../../../infrastructure/openrouter';
+import { chat, parseJsonResponse } from '../../../infrastructure/openrouter';
 
 const logger = new Logger('GoogleTrends');
 
@@ -96,7 +96,7 @@ Return a JSON object: { "products": [...] }`,
 
   let suggestions: TrendingSuggestion[] = [];
   try {
-    const parsed = JSON.parse(content) as { products?: TrendingSuggestion[] };
+    const parsed = parseJsonResponse<{ products?: TrendingSuggestion[] }>(content);
     suggestions = parsed.products ?? [];
   } catch (error) {
     logger.warn(`Failed to parse AI trending response: ${(error as Error).message}`);

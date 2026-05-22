@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { chat, AIModel } from '../../infrastructure/openrouter';
+import { chat, AIModel, parseJsonResponse } from '../../infrastructure/openrouter';
 import { SettingsService } from '../../features/settings/settings.service';
 
 @Injectable()
@@ -60,7 +60,7 @@ Return JSON: {"hashtags": ["baby_products", "babiespicks", ...]}`;
       ],
     });
 
-    const parsed: { hashtags: string[] } = JSON.parse(result.content);
+    const parsed = parseJsonResponse<{ hashtags: string[] }>(result.content);
 
     // Log agent job
     await this.prisma.agentJob.create({

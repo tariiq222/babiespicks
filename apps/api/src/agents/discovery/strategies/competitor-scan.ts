@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { Logger } from '@nestjs/common';
-import { chat } from '../../../infrastructure/openrouter';
+import { chat, parseJsonResponse } from '../../../infrastructure/openrouter';
 import { searxngSearch } from './searxng-search';
 
 const logger = new Logger('CompetitorScan');
@@ -64,7 +64,7 @@ Return a JSON object: { "products": [...] }`,
 
   let suggestions: GapSuggestion[] = [];
   try {
-    const parsed = JSON.parse(content) as { products?: GapSuggestion[] };
+    const parsed = parseJsonResponse<{ products?: GapSuggestion[] }>(content);
     suggestions = parsed.products ?? [];
   } catch (error) {
     logger.warn(`Failed to parse AI competitor gap response: ${(error as Error).message}`);
