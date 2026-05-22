@@ -643,6 +643,8 @@
     "runCandidates": "Candidates",
     "runSucceeded": "Succeeded",
     "runFailed": "Failed",
+    "generateEnrichment": "Generate enrichment",
+    "enrichmentCreated": "Enrichment created",
     "publicOfferDraftActionSuccess": {
       "approve": "Public offer approved",
       "reject": "Public offer rejected",

@@ -752,6 +752,26 @@ export default function AffiliateOsPage() {
     void poll();
   }
 
+  async function enrichApprovedDraft(draftId: string) {
+    const actionKey = `product:${draftId}:enrich`;
+    setActionLoading(actionKey);
+    try {
+      const res = await adminFetch(`${API_BASE}/admin/product-drafts/${draftId}/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const payload: unknown = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getErrorMessage(payload, `HTTP ${res.status}`));
+      showToast('success', t('enrichmentCreated'));
+      void fetchAllData();
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : t('loadFailed'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function createDraftFromTrendSignal(signalId: string) {
     const actionKey = `trend:${signalId}:create-draft`;
     setActionLoading(actionKey);
@@ -1513,6 +1533,18 @@ export default function AffiliateOsPage() {
                                   void runDraftAction(draft, 'reject');
                                 }}
                               />
+                              {draft.status === 'APPROVED' && (
+                                <ActionButton
+                                  icon="ti-sparkles"
+                                  label={t('generateEnrichment')}
+                                  loading={actionLoading === `product:${draft.id}:enrich`}
+                                  disabled={isBusy}
+                                  variant="primary"
+                                  onClick={() => {
+                                    void enrichApprovedDraft(draft.id);
+                                  }}
+                                />
+                              )}
                             </div>
                           </td>
                         </tr>

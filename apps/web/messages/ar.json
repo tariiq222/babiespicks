@@ -643,6 +643,8 @@
     "runCandidates": "مرشحون",
     "runSucceeded": "نجح",
     "runFailed": "فشل",
+    "generateEnrichment": "توليد إثراء",
+    "enrichmentCreated": "تم إنشاء الإثراء",
     "publicOfferDraftActionSuccess": {
       "approve": "تم اعتماد العرض العام",
       "reject": "تم رفض العرض العام",
