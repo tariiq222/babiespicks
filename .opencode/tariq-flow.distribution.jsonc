@@ -115,11 +115,13 @@
     "actualExecutors": {
       "role": "Workers that read/edit files, run tests, and validate results within their TaskSpec scope.",
       "workers": {
-        "frontend-worker": "kimi-for-coding/k2p6",
-        "backend-worker": "kimi-for-coding/k2p6",
-        "database-worker": "kimi-for-coding/k2p6",
-        "test-worker": "kimi-for-coding/k2p6",
-        "docs-worker": "anthropic/claude-sonnet-4-6"
+        "frontend-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+        "backend-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+        "database-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+        "test-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+        "docs-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+        "security-review-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+        "final-review-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed"
       }
     },
     "rule": "Managers create, dispatch, monitor, and review TaskSpecs; executors read, edit, run tests, and validate only within assigned scope."
@@ -153,13 +155,13 @@
       "scope-worker": "openai/gpt-5.5",
       "risk-worker": "openai/gpt-5.5",
       "todo-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
-      "frontend-worker": "kimi-for-coding/k2p6",
-      "backend-worker": "kimi-for-coding/k2p6",
-      "database-worker": "kimi-for-coding/k2p6",
-      "test-worker": "kimi-for-coding/k2p6",
-      "docs-worker": "anthropic/claude-sonnet-4-6",
-      "security-review-worker": "openai/gpt-5.5",
-      "final-review-worker": "openai/gpt-5.5",
+      "frontend-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "backend-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "database-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "test-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "docs-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "security-review-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
+      "final-review-worker": "minimax-coding-plan/MiniMax-M2.7-highspeed",
       "summary-worker": "anthropic/claude-sonnet-4-6",
       "risk-report-worker": "anthropic/claude-sonnet-4-6",
       "handoff-worker": "anthropic/claude-sonnet-4-6"
@@ -219,6 +221,7 @@
     "This file is a distribution draft only and must not be treated as active OpenCode configuration.",
     "No provider credentials, API keys, tokens, or secrets belong in this file.",
     "Claude is connected as a candidate provider, but may require allowlist policy approval before activation.",
+    "Actual executors under execution-manager use MiniMax; Kimi remains available for specialist review or risk handling outside direct execution when explicitly routed.",
     "Tariq is the primary orchestrator and owner; managers coordinate the five flow steps and workers execute bounded tasks.",
     "Managers coordinate and workers execute; keep worker TaskSpecs small, bounded, and testable.",
     "Before activating any part of this distribution, copy only the needed pieces into a validated OpenCode config shape."
