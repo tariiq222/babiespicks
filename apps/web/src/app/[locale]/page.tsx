@@ -8,7 +8,7 @@ import { ProductImage } from '@/shared/components/product-image';
 import { SectionHead } from '@/shared/components/section-head';
 import { NewsletterSection } from '@/shared/components/newsletter-section';
 import { JsonLd } from '@/shared/components/json-ld';
-import { getProducts, getVerdictVariant, getLocalizedName, Product } from '@/shared/lib/api';
+import { getAllProducts, getVerdictVariant, getLocalizedName, Product } from '@/shared/lib/api';
 import { getAlternates } from '@/shared/lib/metadata';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
@@ -39,7 +39,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const t = await getTranslations('home');
   const tc = await getTranslations('common');
   const tcat = await getTranslations('categories');
-  const { data: products } = await getProducts(locale, 8);
+  const products = await getAllProducts(locale);
   const featured = getFeaturedProducts(products ?? []);
   const todaysPick = products[2] ?? null;
   const topProductsByCategory = CATEGORIES.map((cat) => {
@@ -54,92 +54,56 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       {/* HERO */}
       <section className="relative overflow-hidden" style={{ background: 'linear-gradient(160deg, #E8EFE9 0%, #F0EDE6 40%, #FAF8F5 100%)' }}>
         <div className="relative max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pt-12 md:pt-20 pb-10 md:pb-14">
-          <div className="grid lg:grid-cols-[1fr_auto] gap-10 items-start">
-            <div className="max-w-2xl">
-              <span className="inline-flex items-center gap-2 bg-lavender text-lavender-text rounded-full px-4 py-[6px] text-[12px]">
-                <span className="w-1.5 h-1.5 rounded-full bg-lavender-border"></span>
-                <span>{t('badge')}</span>
-              </span>
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-2 bg-lavender text-lavender-text rounded-full px-4 py-[6px] text-[12px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-lavender-border"></span>
+              <span>{t('badge')}</span>
+            </span>
 
-              <h1 className="text-[36px] md:text-[52px] lg:text-[64px] leading-[1.08] text-charcoal mt-6 tracking-[-0.025em] font-medium">
-                {t('heroTitle')}<br />
-                <span className="text-sage-deep font-semibold">{t('heroTitleAccent')}</span>
-              </h1>
+            <h1 className="text-[36px] md:text-[52px] lg:text-[64px] leading-[1.08] text-charcoal mt-6 tracking-[-0.025em] font-medium">
+              {t('heroTitle')}<br />
+              <span className="text-sage-deep font-semibold">{t('heroTitleAccent')}</span>
+            </h1>
 
-              <p className="text-[14px] md:text-[16px] text-stone mt-5 leading-[1.85] max-w-xl">
-                {t('heroSubtitle')}
-              </p>
+            <p className="text-[14px] md:text-[16px] text-stone mt-5 leading-[1.85] max-w-xl">
+              {t('heroSubtitle')}
+            </p>
 
-              {/* Five criteria strip */}
-              <div className="mt-6 flex flex-wrap gap-2">
-                {[
-                  { icon: 'ti-shield-check', label: t('axisSafety') },
-                  { icon: 'ti-award', label: t('axisQuality') },
-                  { icon: 'ti-star', label: t('axisReviews') },
-                  { icon: 'ti-tag', label: t('axisPrice') },
-                  { icon: 'ti-infinity', label: t('axisLongTerm') },
-                ].map((c) => (
-                  <span key={c.label} className="inline-flex items-center gap-1.5 bg-cream hairline rounded-full px-3 py-1.5 text-[11px] text-stone">
-                    <i className={`ti ${c.icon} text-sage text-[13px]`} aria-hidden="true"></i>
-                    {c.label}
-                  </span>
-                ))}
-              </div>
+            {/* Search */}
+            <form action={`/${locale}/search`} method="get" className="mt-7 bg-cream hairline rounded-full flex items-center gap-3 px-5 py-3 md:py-[14px] shadow-sm">
+              <i className="ti ti-search text-stone text-[18px]" aria-hidden="true"></i>
+              <input
+                type="search"
+                name="q"
+                className="bg-transparent flex-1 text-[14px] outline-none text-start placeholder:text-stone/70"
+                placeholder={t('searchPlaceholder')}
+                aria-label={t('searchAriaLabel')}
+              />
+              <button type="submit" className="bg-sage text-cream rounded-full px-6 py-[7px] text-[12px] font-medium hover:bg-sage-hover transition-colors">{t('searchButton')}</button>
+            </form>
 
-              {/* Search */}
-              <form action={`/${locale}/search`} method="get" className="mt-7 bg-cream hairline rounded-full flex items-center gap-3 px-5 py-3 md:py-[14px] shadow-sm">
-                <i className="ti ti-search text-stone text-[18px]" aria-hidden="true"></i>
-                <input
-                  type="search"
-                  name="q"
-                  className="bg-transparent flex-1 text-[14px] outline-none text-start placeholder:text-stone/70"
-                  placeholder={t('searchPlaceholder')}
-                  aria-label={t('searchAriaLabel')}
-                />
-                <button type="submit" className="bg-sage text-cream rounded-full px-6 py-[7px] text-[12px] font-medium hover:bg-sage-hover transition-colors">{t('searchButton')}</button>
-              </form>
-
-              {/* Trust strip */}
-              <div className="mt-8 flex flex-wrap justify-start gap-x-6 gap-y-2 text-[12px] md:text-[13px] text-stone">
-                <span className="flex items-center gap-1.5"><i className="ti ti-shield-check text-sage text-[15px]" aria-hidden="true"></i> {t('trustIndependent')}</span>
-                <span className="flex items-center gap-1.5"><i className="ti ti-users text-sage text-[15px]" aria-hidden="true"></i> {t('trustMoms')}</span>
-                <span className="flex items-center gap-1.5"><i className="ti ti-sparkles text-sage text-[15px]" aria-hidden="true"></i> {t('trustAI')}</span>
-                <span className="flex items-center gap-1.5"><i className="ti ti-flag text-sage text-[15px]" aria-hidden="true"></i> {t('trustLocal')}</span>
-              </div>
+            {/* Five criteria strip */}
+            <div className="mt-3 opacity-70 flex flex-wrap gap-2">
+              {[
+                { icon: 'ti-shield-check', label: t('axisSafety') },
+                { icon: 'ti-award', label: t('axisQuality') },
+                { icon: 'ti-star', label: t('axisReviews') },
+                { icon: 'ti-tag', label: t('axisPrice') },
+                { icon: 'ti-infinity', label: t('axisLongTerm') },
+              ].map((c) => (
+                <span key={c.label} className="inline-flex items-center gap-1.5 bg-cream hairline rounded-full px-3 py-1.5 text-[11px] text-stone">
+                  <i className={`ti ${c.icon} text-sage text-[13px]`} aria-hidden="true"></i>
+                  {c.label}
+                </span>
+              ))}
             </div>
 
-            {/* Editorial verdict callouts — right side on large screens */}
-            <div className="hidden lg:flex flex-col gap-3 w-56 pt-16">
-              {products[3] && (
-                <div className="bg-cream hairline rounded-2xl p-5 text-center">
-                  <div className="text-[11px] text-stone mb-2">{t('verdictCalloutLabel')}</div>
-                  <VerdictPill
-                    variant={getVerdictVariant(products[3].verdict?.type)}
-                    score={products[3].verdict?.overallScore}
-                    label={products[3].verdict?.type ? tc(`verdict.${products[3].verdict.type}`) : undefined}
-                  />
-                  <div className="text-[12px] text-charcoal mt-3 leading-snug">
-                    <Link href={`/products/${products[3].slug}`} className="hover:text-sage transition-colors">
-                      {getLocalizedName(products[3], locale)}
-                    </Link>
-                  </div>
-                </div>
-              )}
-              {products[4] && (
-                <div className="bg-cream hairline rounded-2xl p-5 text-center">
-                  <div className="text-[11px] text-stone mb-2">{t('verdictCalloutLabel')}</div>
-                  <VerdictPill
-                    variant={getVerdictVariant(products[4].verdict?.type)}
-                    score={products[4].verdict?.overallScore}
-                    label={products[4].verdict?.type ? tc(`verdict.${products[4].verdict.type}`) : undefined}
-                  />
-                  <div className="text-[12px] text-charcoal mt-3 leading-snug">
-                    <Link href={`/products/${products[4].slug}`} className="hover:text-sage transition-colors">
-                      {getLocalizedName(products[4], locale)}
-                    </Link>
-                  </div>
-                </div>
-              )}
+            {/* Trust strip */}
+            <div className="mt-8 flex flex-wrap justify-start gap-x-6 gap-y-2 text-[12px] md:text-[13px] text-stone">
+              <span className="flex items-center gap-1.5"><i className="ti ti-shield-check text-sage text-[15px]" aria-hidden="true"></i> {t('trustIndependent')}</span>
+              <span className="flex items-center gap-1.5"><i className="ti ti-users text-sage text-[15px]" aria-hidden="true"></i> {t('trustMoms')}</span>
+              <span className="flex items-center gap-1.5"><i className="ti ti-sparkles text-sage text-[15px]" aria-hidden="true"></i> {t('trustAI')}</span>
+              <span className="flex items-center gap-1.5"><i className="ti ti-flag text-sage text-[15px]" aria-hidden="true"></i> {t('trustLocal')}</span>
             </div>
           </div>
         </div>
@@ -310,9 +274,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         </section>
       )}
 
-      {/* RECENT VERDICTS — from API with score stars */}
+      {/* STOREFRONT / ALL PRODUCTS — all products grid */}
       <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12 md:mt-16">
-        <SectionHead action={t('all')} actionHref="/best">{t('recentVerdicts')}</SectionHead>
+        <SectionHead>{t('storefrontTitle')}</SectionHead>
+        <p className="text-[13px] text-stone mb-5 -mt-2">{t('storefrontSubtitle', { count: products.length })}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5">
           {products.map((p) => (
             <Link
@@ -387,31 +352,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             ))}
           </div>
         </div>
-      </section>
-
-      {/* FROM MOM TO MOM — real destination: Telegram community link */}
-      <section className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 mt-12 md:mt-16">
-        <a
-          href="https://t.me/babiespicks"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block bg-lavender rounded-2xl p-8 md:p-12 text-center hover:bg-lavender/80 active:scale-[0.99] transition-all group"
-        >
-          {/* Replace emoji with inline SVG icon */}
-          <div className="w-12 h-12 rounded-full bg-lavender-border/30 mx-auto mb-4 grid place-items-center">
-            <svg className="w-6 h-6 text-lavender-text" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-          </div>
-          <h2 className="text-[18px] md:text-[22px] text-lavender-text mb-3">{t('momToMom')}</h2>
-          <p className="text-[13px] md:text-[14px] text-lavender-text/90 leading-[1.9] max-w-xl mx-auto">
-            {t('momToMomDesc')}
-          </p>
-          <span className="inline-flex items-center gap-2 mt-5 bg-lavender-border/40 text-lavender-text text-[12px] rounded-full px-4 py-2 group-hover:bg-lavender-border/60 transition-colors">
-            <i className="ti ti-brand-telegram text-[16px]"></i>
-            {locale === 'ar' ? 'انضمي لمجتمعنا' : 'Join our community'}
-          </span>
-        </a>
       </section>
 
       {/* NEWSLETTER */}

@@ -24,6 +24,35 @@ import { getAlternates } from '@/shared/lib/metadata';
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+/**
+ * Returns a meaningful display description for a product, falling back to
+ * verdict reasoning when the raw description is essentially the product name/title.
+ */
+function getDisplayDescription(product: Product, name: string, locale: string): string | null {
+  const rawDesc = getLocalizedDesc(product, locale);
+  const verdictReasoning = locale === 'ar' ? product.verdict?.reasoningAr : product.verdict?.reasoningEn;
+
+  if (!rawDesc) return verdictReasoning ?? null;
+
+  const trimmedDesc = rawDesc.trim();
+  if (trimmedDesc.length <= 10) return verdictReasoning ?? null;
+
+  const nameTrimmed = name.trim();
+  // Exact match — not meaningful
+  if (trimmedDesc === nameTrimmed) return verdictReasoning ?? null;
+
+  // Normalize repeated whitespace for substring comparison
+  const normalizedDesc = trimmedDesc.replace(/\s+/g, ' ');
+  const normalizedName = nameTrimmed.replace(/\s+/g, ' ');
+
+  // Title is a substring of description — title-like store description
+  if (normalizedName.length > 0 && normalizedDesc.includes(normalizedName)) return verdictReasoning ?? null;
+  // Description is a substring of title — title-like
+  if (normalizedDesc.length > 0 && normalizedName.includes(normalizedDesc)) return verdictReasoning ?? null;
+
+  return trimmedDesc;
+}
+
 interface Props {
   params: Promise<{ locale: string; slug: string }>;
 }
@@ -34,9 +63,10 @@ export async function generateMetadata({ params }: Props): Promise<import('next'
   const product = await getProduct(slug, locale);
   if (!product) return {};
   const name = getLocalizedName(product, locale);
+  const description = getDisplayDescription(product, name, locale) ?? t('metaFallback', { name });
   return {
     title: name,
-    description: getLocalizedDesc(product, locale) || t('metaFallback', { name }),
+    description,
     alternates: getAlternates(`/products/${slug}`, locale),
   };
 }
@@ -47,11 +77,8 @@ export default async function ProductPage({ params }: Props) {
   if (!product) notFound();
 
   const name = getLocalizedName(product, locale);
-  const description = getLocalizedDesc(product, locale);
+  const displayDescription = getDisplayDescription(product, name, locale);
   const variant = product.verdict ? getVerdictVariant(product.verdict.type) : null;
-
-  // CRO: urgency — deterministic count based on slug hash to avoid hydration mismatch
-  const urgencyCount = 15 + (product.slug.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 31);
 
   const t = await getTranslations('product');
   const tc = await getTranslations('common');
@@ -116,7 +143,7 @@ export default async function ProductPage({ params }: Props) {
       {/* Breadcrumbs */}
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 pt-6">
         <nav aria-label={tc('breadcrumbLabel')} className="text-[12px] text-stone">
-          <ol className="flex items-center gap-1">
+          <ol className="flex items-center gap-1 min-w-0">
             <li>
               <Link href="/" className="hover:text-charcoal">
                 {tc('home')}
@@ -137,7 +164,7 @@ export default async function ProductPage({ params }: Props) {
                 </li>
               </>
             )}
-            <li aria-current="page" className="text-charcoal">
+            <li aria-current="page" className="text-charcoal truncate min-w-0">
               {name}
             </li>
           </ol>
@@ -150,7 +177,7 @@ export default async function ProductPage({ params }: Props) {
               '@context': 'https://schema.org',
               '@type': 'Product',
               name,
-              description: description || undefined,
+              description: displayDescription || undefined,
               image: product.imageUrl || undefined,
               brand: product.brand
                 ? { '@type': 'Brand', name: product.brand }
@@ -218,13 +245,7 @@ export default async function ProductPage({ params }: Props) {
               radius={16}
             />
           </div>
-          <div className="grid grid-cols-4 gap-3 mt-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`bg-linen rounded-lg p-3 ${i === 0 ? 'ring-1 ring-sage' : ''}`}>
-                <ProductImage width={100} height={100} alt={t('angle', { n: i + 1 })} radius={6} />
-              </div>
-            ))}
-          </div>
+          {/* No additional product images available — thumbnail strip omitted */}
         </div>
 
         {/* INFO COLUMN */}
@@ -234,17 +255,7 @@ export default async function ProductPage({ params }: Props) {
             <span className="text-[11px] text-stone">{t('brand')} {product.brand || '-'}</span>
           </div>
           <h1 className="text-[24px] md:text-[30px] text-charcoal leading-[1.3] mt-4">{name}</h1>
-          {description && <p className="text-[13px] md:text-[14px] text-stone mt-2">{description}</p>}
-
-          {/* CRO: urgency indicator */}
-          <div className="flex items-center gap-1.5 mt-3 text-[12px] text-terracotta">
-            <i className="ti ti-flame text-[14px]" aria-hidden="true"></i>
-            <span>
-              {locale === 'ar'
-                ? `${urgencyCount} شخصًا شاهدوا هذا المنتج اليوم`
-                : `${urgencyCount} people viewed this today`}
-            </span>
-          </div>
+          {displayDescription && <p className="text-[13px] md:text-[14px] text-stone mt-2">{displayDescription}</p>}
 
           {/* CRO: trust badges */}
           <div className="flex flex-wrap gap-2 mt-3">
@@ -252,10 +263,14 @@ export default async function ProductPage({ params }: Props) {
               <i className="ti ti-robot text-[13px]"></i>
               {locale === 'ar' ? 'مراجعة موثّقة بالذكاء الاصطناعي' : 'AI-verified review'}
             </span>
-            <span className="inline-flex items-center gap-1 text-[11px] text-verdict-good-text bg-verdict-good-bg px-2.5 py-1 rounded-full">
-              <i className="ti ti-tag text-[13px]"></i>
-              {locale === 'ar' ? 'مقارنة أسعار من 4 متاجر' : 'Price comparison across 4 stores'}
-            </span>
+            {sortedPrices.length > 1 && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-verdict-good-text bg-verdict-good-bg px-2.5 py-1 rounded-full">
+                <i className="ti ti-tag text-[13px]"></i>
+                {locale === 'ar'
+                  ? `مقارنة أسعار من ${sortedPrices.length} متاجر`
+                  : `Price comparison across ${sortedPrices.length} stores`}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 text-[11px] text-stone bg-cream px-2.5 py-1 rounded-full hairline">
               <i className="ti ti-refresh text-[13px]"></i>
               {locale === 'ar' ? 'محدَّث بانتظام' : 'Regularly updated'}

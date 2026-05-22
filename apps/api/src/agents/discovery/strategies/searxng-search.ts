@@ -88,13 +88,12 @@ export async function searxngSearch(
  */
 export async function findBabyProductsViaSearxng(maxPerQuery = 6): Promise<SearxngCandidate[]> {
   const queries = [
-    'site:amazon.sa /dp/ baby stroller',
-    'site:amazon.sa /dp/ baby car seat',
+    'site:amazon.sa /dp/ baby formula',
     'site:amazon.sa /dp/ baby diapers',
     'site:amazon.sa /dp/ baby bottle',
-    'site:amazon.sa /dp/ baby monitor',
-    'site:amazon.sa /dp/ baby crib',
-    'site:amazon.sa /dp/ baby formula',
+    'site:amazon.sa /dp/ car seat baby',
+    'site:amazon.sa /dp/ baby care',
+    'site:amazon.sa /dp/ educational baby toy',
   ];
 
   const all: SearxngCandidate[] = [];

@@ -16,6 +16,7 @@ export interface TrendingCandidate {
 interface TrendingSuggestion {
   productName: string;
   brand?: string;
+  category?: string;
   whyTrending: string;
   searchVolume: 'high' | 'medium' | 'low';
   amazonSearchQuery: string;
@@ -79,12 +80,14 @@ export async function findTrendingProducts(): Promise<TrendingCandidate[]> {
 For each product provide:
 - productName: string
 - brand: string (optional)
+- category: string (one of: formula, diapers, bottles, carseats, baby_care, educational_toys)
 - whyTrending: string (1 sentence)
 - searchVolume: "high" | "medium" | "low"
 - amazonSearchQuery: string (English search query for Amazon SA)
 
-Focus on: safety-critical products (car seats, monitors), high-spend categories (formula, diapers), 
-popular international brands available in Saudi Arabia, and seasonal items.
+IMPORTANT: Only suggest products in these EXACT categories: formula, diapers, bottles, carseats, baby_care, educational_toys.
+Do NOT suggest: strollers, cribs, monitors, baby carriers, or any product outside the six categories above.
+For each product, also provide the specific brand and model name where possible.
 
 Return a JSON object: { "products": [...] }`,
       },
@@ -117,6 +120,7 @@ Return a JSON object: { "products": [...] }`,
         source: 'trending',
         score: 0,
         trendReason: s.whyTrending,
+        category: s.category,
       });
     }
 

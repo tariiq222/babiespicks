@@ -12,7 +12,9 @@ export class ProductsController {
 
   @Get()
   async findAll(@Query() dto: FindProductsDto) {
-    const cacheKey = `products:${dto.locale || 'ar'}:${dto.cursor || 'initial'}`;
+    const locale = dto.locale || 'ar';
+    const limit = dto.limit ?? 20;
+    const cacheKey = `products:${locale}:limit=${limit}:cursor=${dto.cursor || 'none'}:category=${dto.categorySlug || 'none'}`;
     const cached = this.cache.get(cacheKey);
     if (cached) {
       return cached;

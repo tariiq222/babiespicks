@@ -21,6 +21,7 @@ type FaqKey = (typeof FAQ_ITEMS)[number];
 
 export default function FaqPage() {
   const t = useTranslations('faq');
+  const tc = useTranslations('contact');
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   const toggle = (i: number) => setOpenIndex((prev) => (prev === i ? null : i));
@@ -81,21 +82,21 @@ export default function FaqPage() {
       </div>
 
       {/* Still have questions CTA */}
-      <div className="mt-12 bg-linen rounded-xl p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center gap-5">
+        <div className="mt-12 bg-linen rounded-xl p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center gap-5">
         <div className="w-12 h-12 rounded-full bg-cream grid place-items-center shrink-0">
           <i className="ti ti-message-circle text-sage text-[22px]"></i>
         </div>
         <div className="flex-1">
           <div className="text-[15px] text-charcoal font-medium mb-1">
-            {t('contact.heroTitle', { ns: 'contact' })}
+            {tc('heroTitle')}
           </div>
-          <p className="text-[13px] text-stone">{t('contact.heroSubtitle', { ns: 'contact' })}</p>
+          <p className="text-[13px] text-stone">{tc('heroSubtitle')}</p>
         </div>
         <Link
           href="/contact"
           className="shrink-0 inline-flex items-center gap-2 bg-sage text-white rounded-lg px-5 py-2.5 text-[13px] font-medium hover:bg-sage-hover transition-colors"
         >
-          {t('contact.contactEmail', { ns: 'contact' })}
+          {tc('contactEmail')}
           <i className="ti ti-arrow-right text-[16px] flip-x"></i>
         </Link>
       </div>

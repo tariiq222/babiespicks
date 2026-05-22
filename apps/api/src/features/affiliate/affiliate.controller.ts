@@ -44,26 +44,22 @@ export class AffiliateController {
       })
       .catch(() => {});
 
-    // Find the product price URL for this store (include affiliateNetwork for wrapping)
-    const price = await this.prisma.productPrice.findFirst({
-      where: { productId, storeId },
-      orderBy: { scrapedAt: 'desc' },
-      include: { store: { select: { affiliateNetwork: true, url: true } } },
-    });
-
-    if (price?.url) {
+    try {
       const redirectResult = await this.affiliateService.getSmartRedirectUrl(
         productId,
         storeId,
       );
       return res.redirect(302, redirectResult.url);
+    } catch (error) {
+      // Fallback: redirect to store homepage when no URL is available for this store
+      if (error instanceof NotFoundException) {
+        const store = await this.prisma.store.findUnique({
+          where: { id: storeId },
+        });
+        return res.redirect(302, store?.url || 'https://babiespicks.com');
+      }
+      throw error;
     }
-
-    // Fallback: redirect to store homepage
-    const store = await this.prisma.store.findUnique({
-      where: { id: storeId },
-    });
-    return res.redirect(302, store?.url || 'https://babiespicks.com');
   }
 
   @Get('go/best/:productId')

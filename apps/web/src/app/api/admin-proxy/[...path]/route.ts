@@ -17,6 +17,7 @@ const ALLOWED_ADMIN_PROXY_PREFIXES = [
   'admin/approvals',
   'admin/ai-os',
   'admin/analytics',
+  'admin/discovery',
   'admin/circuit-breakers',
   'admin/public-offer-drafts',
   'admin/content-drafts',

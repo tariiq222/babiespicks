@@ -9,5 +9,6 @@ import { NoonAffiliateService } from './networks/noon.service';
 @Module({
   controllers: [AffiliateController],
   providers: [AffiliateService, ArabClicksService, AdmitadService, AmazonAssociatesService, NoonAffiliateService],
+  exports: [AffiliateService],
 })
 export class AffiliateModule {}

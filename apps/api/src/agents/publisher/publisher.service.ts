@@ -4,6 +4,7 @@ import { QualityGuardService } from '../quality-guard/quality-guard.service';
 import { IndexNowService } from '../../infrastructure/publishing/indexnow.service';
 import { GscIndexingService } from '../../infrastructure/publishing/gsc-indexing.service';
 import { SocialCoordinatorService } from '../social/social-coordinator.service';
+import { AffiliateService } from '../../features/affiliate/affiliate.service';
 import { recordApprovalAuditEvent } from '../../infrastructure/approval/approval-audit';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class PublisherService {
     private readonly indexNow: IndexNowService,
     private readonly gscIndexing: GscIndexingService,
     private readonly socialCoordinator: SocialCoordinatorService,
+    private readonly affiliateService: AffiliateService,
   ) {}
 
   /**
@@ -187,17 +189,25 @@ export class PublisherService {
   }
 
   /**
-   * Publish a product verdict
+   * Publish a product verdict.
+   * Persists affiliate-wrapped URLs and marks the verdict published inside a single
+   * Prisma transaction so that both operations are atomic.
    */
   async publishVerdict(productId: string): Promise<{ published: boolean }> {
+    // Confirm verdict exists before entering the transaction
     const verdict = await this.prisma.verdict.findUnique({ where: { productId } });
     if (!verdict) {
       return { published: false };
     }
 
-    await this.prisma.verdict.update({
-      where: { productId },
-      data: { isPublished: true },
+    await this.prisma.$transaction(async (tx) => {
+      // Persist affiliate-wrapped URLs for all product prices inside the transaction
+      await this.affiliateService.persistAffiliateUrlsForProduct(productId, tx);
+
+      await tx.verdict.update({
+        where: { productId },
+        data: { isPublished: true },
+      });
     });
 
     this.logger.log(`Verdict published for product ${productId}: ${verdict.type}`);

@@ -10,6 +10,7 @@ import { AiOsService } from '../ai-os/ai-os.service';
 import { SchedulerService } from './scheduler.service';
 import { AnalyticsService } from '../affiliate-ai-os/analytics.service';
 import { ConnectorService } from '../affiliate-ai-os/connector.service';
+import { PRODUCT_INTELLIGENCE_PIPELINE } from '../../agents/product-intelligence/pipeline';
 
 @Injectable()
 export class CronService {
@@ -177,47 +178,30 @@ export class CronService {
     }
   }
 
-  // Discover Amazon SA products daily at 6 AM Saudi time (03:00 UTC)
+  // Product Intelligence Pipeline: discover all sources daily at 6 AM Saudi time (03:00 UTC)
   @Cron('0 3 * * *')
   async discoverAmazonProducts() {
     const runId = await this.aiOs.startLegacyRun({
       type: AiRunType.DISCOVERY,
-      name: 'cron:discover-amazon',
+      name: PRODUCT_INTELLIGENCE_PIPELINE,
       source: 'cron',
-      input: { source: 'amazon', maxProducts: 10 },
+      input: { source: 'all', maxProducts: 10 },
     });
-    await this.aiOs.addLegacyEvent(runId, 'INFO', 'Amazon SA discovery started');
+    await this.aiOs.addLegacyEvent(runId, 'INFO', 'Product Intelligence Pipeline started');
 
-    this.logger.log('Running Amazon SA product discovery...');
+    this.logger.log('Running Product Intelligence Pipeline discovery (all sources)...');
     try {
-      const result = await this.coordinator.runDiscoveryPipeline(10, 'amazon');
-      this.logger.log(`Amazon discovery: ${result.succeeded}/${result.total} processed`);
-      await this.aiOs.completeLegacyRun(runId, { discovered: result.discovered, succeeded: result.succeeded, failed: result.failed });
+      const result = await this.coordinator.runDiscoveryPipeline(10, 'all');
+      this.logger.log(`Product Intelligence Pipeline: ${result.succeeded}/${result.total} processed`);
+      await this.aiOs.completeLegacyRun(runId, {
+        discovered: result.discovered,
+        succeeded: result.succeeded,
+        failed: result.failed,
+        total: result.total,
+      });
     } catch (error) {
       await this.aiOs.failLegacyRun(runId, (error as Error).message);
-      this.logger.error(`Amazon discovery failed: ${(error as Error).message}`);
-    }
-  }
-
-  // Discover Noon SA products daily at 1 PM Saudi time (10:00 UTC)
-  @Cron('0 10 * * *')
-  async discoverNoonProducts() {
-    const runId = await this.aiOs.startLegacyRun({
-      type: AiRunType.DISCOVERY,
-      name: 'cron:discover-noon',
-      source: 'cron',
-      input: { source: 'noon', maxProducts: 10 },
-    });
-    await this.aiOs.addLegacyEvent(runId, 'INFO', 'Noon SA discovery started');
-
-    this.logger.log('Running Noon SA product discovery...');
-    try {
-      const result = await this.coordinator.runDiscoveryPipeline(10, 'noon');
-      this.logger.log(`Noon discovery: ${result.succeeded}/${result.total} processed`);
-      await this.aiOs.completeLegacyRun(runId, { discovered: result.discovered, succeeded: result.succeeded, failed: result.failed });
-    } catch (error) {
-      await this.aiOs.failLegacyRun(runId, (error as Error).message);
-      this.logger.error(`Noon discovery failed: ${(error as Error).message}`);
+      this.logger.error(`Product Intelligence Pipeline failed: ${(error as Error).message}`);
     }
   }
 

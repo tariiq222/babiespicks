@@ -54,7 +54,7 @@ export function VerdictCard({
 }) {
   return (
     <div
-      className={`rounded-xl overflow-hidden p-4 md:p-5 ${VERDICT_CLASS[variant]}`}
+      className={`relative rounded-xl overflow-hidden p-4 md:p-5 ${VERDICT_CLASS[variant]}`}
     >
       {/* Decorative top bar */}
       <div className={`absolute top-0 left-0 right-0 h-1 ${

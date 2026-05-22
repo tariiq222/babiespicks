@@ -24,10 +24,13 @@ import { AutomationRulesController } from './automation-rules.controller';
 import { AutomationRulesService } from './automation-rules.service';
 import { OsDashboardController } from './os-dashboard.controller';
 import { OsDashboardService } from './os-dashboard.service';
+import { DiscoveryController } from './discovery.controller';
+import { DiscoveryService } from './discovery.service';
 import { AiOsModule } from '../ai-os/ai-os.module';
+import { CoordinatorModule } from '../../agents/coordinator/coordinator.module';
 
 @Module({
-  imports: [AiOsModule],
+  imports: [AiOsModule, CoordinatorModule],
   controllers: [
     ProductDraftsController,
     TrendSignalsController,
@@ -43,6 +46,7 @@ import { AiOsModule } from '../ai-os/ai-os.module';
     AnalyticsController,
     AutomationRulesController,
     OsDashboardController,
+    DiscoveryController,
   ],
   providers: [
     TrendIntelligenceService,
@@ -58,6 +62,7 @@ import { AiOsModule } from '../ai-os/ai-os.module';
     AnalyticsService,
     AutomationRulesService,
     OsDashboardService,
+    DiscoveryService,
   ],
   exports: [
     TrendIntelligenceService,
@@ -73,6 +78,7 @@ import { AiOsModule } from '../ai-os/ai-os.module';
     AnalyticsService,
     AutomationRulesService,
     OsDashboardService,
+    DiscoveryService,
   ],
 })
 export class AffiliateAiOsModule {}

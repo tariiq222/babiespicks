@@ -24,10 +24,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale, storeSlug } = await params;
   const store = STORE_MAP[storeSlug];
   if (!store) return {};
+  const t = await getTranslations('coupons');
   return {
     alternates: getAlternates(`/coupons/${storeSlug}`, locale),
-    title: `${store.name} — كوبونات وخصومات`,
-    description: `احصلي على أفضل كوبونات وأكواد خصم ${store.name} على بيبيز بيكس`,
+    title: t('storeMetaTitle', { store: store.name }),
+    description: t('storeMetaDesc', { store: store.name }),
   };
 }
 
@@ -61,11 +62,11 @@ export default async function StoreCouponsPage({ params }: Props) {
         className="px-5 md:px-8 lg:px-12 py-10 md:py-16"
       >
         <div className="max-w-7xl mx-auto">
-          <nav aria-label="breadcrumb" className="text-[12px] mb-4 flex items-center gap-1" style={{ color: 'var(--color-cat-hero-text)' }}>
+          <nav aria-label={t('storeBreadcrumbAria')} className="text-[12px] mb-4 flex items-center gap-1" style={{ color: 'var(--color-cat-hero-text)' }}>
             <ol className="flex items-center gap-1">
-              <li><Link href="/" className="hover:text-sage-deep">الرئيسية</Link></li>
+              <li><Link href="/" className="hover:text-sage-deep">{t('breadcrumbHome')}</Link></li>
               <li aria-hidden="true" className="opacity-60"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
-              <li><Link href="/coupons" className="hover:text-sage-deep">{t('coupons')}</Link></li>
+              <li><Link href="/coupons" className="hover:text-sage-deep">{t('heroTitle')}</Link></li>
               <li aria-hidden="true" className="opacity-60"><i className="ti ti-chevron-right flip-x text-[12px]" aria-hidden="true"></i></li>
               <li aria-current="page" className="text-sage-deep">{storeName}</li>
             </ol>

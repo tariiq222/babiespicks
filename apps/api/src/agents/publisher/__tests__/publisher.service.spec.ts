@@ -5,14 +5,16 @@ import type { QualityGuardService } from '../../quality-guard/quality-guard.serv
 import type { IndexNowService } from '../../../infrastructure/publishing/indexnow.service';
 import type { GscIndexingService } from '../../../infrastructure/publishing/gsc-indexing.service';
 import type { SocialCoordinatorService } from '../../social/social-coordinator.service';
+import type { AffiliateService } from '../../../features/affiliate/affiliate.service';
 import { PublisherService } from '../publisher.service';
 
 describe('PublisherService approval publishing idempotency', () => {
-  function createService(prisma: unknown) {
+  function createService(prisma: unknown, affiliateService?: unknown) {
     const qualityGuard = {} as QualityGuardService;
     const indexNow = { notifyAll: vi.fn().mockResolvedValue(undefined) };
     const gscIndexing = { requestIndexing: vi.fn().mockResolvedValue(undefined) };
     const socialCoordinator = { runSocialPipeline: vi.fn().mockResolvedValue(undefined) };
+    const affiliate = (affiliateService ?? { persistAffiliateUrlsForProduct: vi.fn().mockResolvedValue(0) }) as AffiliateService;
 
     return {
       service: new PublisherService(
@@ -21,10 +23,12 @@ describe('PublisherService approval publishing idempotency', () => {
         indexNow as unknown as IndexNowService,
         gscIndexing as unknown as GscIndexingService,
         socialCoordinator as unknown as SocialCoordinatorService,
+        affiliate,
       ),
       indexNow,
       gscIndexing,
       socialCoordinator,
+      affiliate,
     };
   }
 
@@ -128,5 +132,78 @@ describe('PublisherService approval publishing idempotency', () => {
       select: { id: true },
     });
     expect(prisma.publishedPost.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('PublisherService.publishVerdict affiliate persistence', () => {
+  function createService(prisma: unknown, affiliateService?: unknown) {
+    const qualityGuard = {} as QualityGuardService;
+    const indexNow = { notifyAll: vi.fn().mockResolvedValue(undefined) };
+    const gscIndexing = { requestIndexing: vi.fn().mockResolvedValue(undefined) };
+    const socialCoordinator = { runSocialPipeline: vi.fn().mockResolvedValue(undefined) };
+    const affiliate = (affiliateService ?? { persistAffiliateUrlsForProduct: vi.fn().mockResolvedValue(0) }) as AffiliateService;
+
+    return {
+      service: new PublisherService(
+        prisma as PrismaService,
+        qualityGuard,
+        indexNow as unknown as IndexNowService,
+        gscIndexing as unknown as GscIndexingService,
+        socialCoordinator as unknown as SocialCoordinatorService,
+        affiliate,
+      ),
+    };
+  }
+
+  it('calls persistAffiliateUrlsForProduct before marking verdict published', async () => {
+    let callOrder: string[] = [];
+    let capturedTx: unknown;
+
+    const persistMock = vi.fn().mockImplementation((productId: string, tx?: unknown) => {
+      callOrder.push('affiliate.persist');
+      capturedTx = tx;
+      return Promise.resolve(1);
+    });
+    const prisma = {
+      verdict: {
+        findUnique: vi.fn().mockResolvedValue({ productId: 'prod_1', type: 'WORTH_IT', isPublished: false }),
+        update: vi.fn().mockImplementation(() => { callOrder.push('verdict.update'); return {}; }),
+      },
+      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
+        // Simulate a real transaction by passing a tx object
+        const fakeTx = {
+          verdict: prisma.verdict,
+        };
+        return fn(fakeTx);
+      }),
+    };
+    const affiliate = { persistAffiliateUrlsForProduct: persistMock };
+
+    const { service } = createService(prisma, affiliate);
+    const result = await service.publishVerdict('prod_1');
+
+    expect(result).toEqual({ published: true });
+    expect(persistMock).toHaveBeenCalledWith('prod_1', expect.any(Object));
+    // Verify tx was passed to persistAffiliateUrlsForProduct (transaction context)
+    expect(capturedTx).toBeDefined();
+    expect(callOrder).toEqual(['affiliate.persist', 'verdict.update']);
+  });
+
+  it('returns published:false when verdict does not exist', async () => {
+    const persistMock = vi.fn();
+    const prisma = {
+      verdict: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({}),
+      },
+    };
+    const affiliate = { persistAffiliateUrlsForProduct: persistMock };
+
+    const { service } = createService(prisma, affiliate);
+    const result = await service.publishVerdict('nonexistent');
+
+    expect(result).toEqual({ published: false });
+    expect(persistMock).not.toHaveBeenCalled();
+    expect(prisma.verdict.update).not.toHaveBeenCalled();
   });
 });

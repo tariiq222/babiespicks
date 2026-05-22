@@ -50,6 +50,81 @@ export class AffiliateService {
     };
   }
 
+  /**
+   * Persists affiliate-wrapped URLs for all ProductPrice rows of a product.
+   * Wraps raw URLs with the appropriate network deep-link wrapper.
+   * Idempotent: already-wrapped URLs are skipped.
+   * Networks: Noon (s.noon.com), ArabClicks (arabclicks.com/click), Admitad (ad.admitad.com/g).
+   *
+   * @param db - Optional transaction-capable Prisma client (e.g. tx from $transaction).
+   *             Defaults to this.prisma when omitted.
+   */
+  async persistAffiliateUrlsForProduct(
+    productId: string,
+    db?: Pick<PrismaService, 'productPrice'>,
+  ): Promise<number> {
+    const client = db ?? this.prisma;
+    const prices = await client.productPrice.findMany({
+      where: { productId, url: { not: null } },
+      include: { store: { select: { affiliateNetwork: true, slug: true } } },
+    });
+
+    const updates: Promise<unknown>[] = [];
+
+    for (const price of prices) {
+      const rawUrl = price.url;
+      if (!rawUrl) continue;
+
+      const wrappedUrl = this.wrapAffiliateUrl(rawUrl, price.store);
+      if (wrappedUrl !== rawUrl) {
+        updates.push(
+          client.productPrice.update({
+            where: { id: price.id },
+            data: { url: wrappedUrl },
+          }),
+        );
+      }
+    }
+
+    if (updates.length === 0) return 0;
+    await Promise.all(updates);
+    return updates.length;
+  }
+
+  /**
+   * Wraps a raw product URL with the appropriate affiliate network deep-link.
+   * Idempotent: returns the URL unchanged if already wrapped.
+   */
+  private wrapAffiliateUrl(
+    rawUrl: string,
+    store: { affiliateNetwork: string | null; slug?: string | null },
+  ): string {
+    // Noon: skip if already wrapped (s.noon.com)
+    if (rawUrl.includes('s.noon.com')) return rawUrl;
+    if (this.noon.isNoonStore({ ...store, slug: store.slug ?? undefined }) || this.noon.isNoonUrl(rawUrl)) {
+      return this.noon.generateAffiliateUrl(rawUrl);
+    }
+
+    // ArabClicks: skip if already wrapped (arabclicks.com/click)
+    if (rawUrl.includes('arabclicks.com/click')) return rawUrl;
+    if (this.arabClicks.isArabClicksStore(store)) {
+      return this.arabClicks.generateDeepLink(rawUrl);
+    }
+
+    // Admitad: skip if already wrapped (ad.admitad.com/g)
+    if (rawUrl.includes('ad.admitad.com/g')) return rawUrl;
+    if (this.admitad.isAdmitadStore(store)) {
+      return this.admitad.generateDeepLink(rawUrl);
+    }
+
+    // Amazon
+    if (this.amazon.isAmazonStore(store) || this.amazon.isAmazonUrl(rawUrl)) {
+      return this.amazon.generateAffiliateUrl(rawUrl);
+    }
+
+    return rawUrl;
+  }
+
   async getSmartRedirectUrl(
     productId: string,
     storeId?: string,
@@ -64,62 +139,32 @@ export class AffiliateService {
       const price = await this.prisma.productPrice.findFirst({
         where: { productId, storeId, url: { not: null } },
         orderBy: { scrapedAt: 'desc' },
-        include: { store: { select: { affiliateNetwork: true } } },
       });
 
       if (price?.url) {
-        const resolvedUrl = this.resolveAffiliateUrl(price.url, price.store);
         return {
-          url: resolvedUrl,
+          url: price.url,
           storeId: price.storeId,
           price: price.price.toNumber(),
           currency: price.currency,
         };
       }
+
+      // storeId was explicitly requested — do NOT fall back to best price
+      throw new NotFoundException(
+        `No affiliate URL found for product ${productId} at store ${storeId}`,
+      );
     }
 
+    // No storeId → use best price (legacy /best/:productId path)
     const best = await this.getBestPrice(productId);
     if (best) {
-      // Re-fetch store network for best-price result to apply affiliate wrapping if needed
-      const store = await this.prisma.store.findUnique({
-        where: { id: best.storeId },
-        select: { affiliateNetwork: true },
-      });
-      if (store) {
-        best.url = this.resolveAffiliateUrl(best.url, store);
-      }
       return best;
     }
 
     throw new NotFoundException(
       `No affiliate URL found for product ${productId}`,
     );
-  }
-
-  /**
-   * Resolves the final affiliate URL for a given raw product URL and store.
-   * Applies network-specific deep link wrapping based on the store's affiliateNetwork.
-   * Priority: Amazon → Noon → ArabClicks → Admitad → raw URL
-   */
-  private resolveAffiliateUrl(
-    rawUrl: string,
-    store: { affiliateNetwork: string | null; slug?: string },
-  ): string {
-    // Amazon Associates: tag by network designation OR by URL pattern
-    if (this.amazon.isAmazonStore(store) || this.amazon.isAmazonUrl(rawUrl)) {
-      return this.amazon.generateAffiliateUrl(rawUrl);
-    }
-    // Noon: by network designation, store slug, or URL pattern
-    if (this.noon.isNoonStore(store) || this.noon.isNoonUrl(rawUrl)) {
-      return this.noon.generateAffiliateUrl(rawUrl);
-    }
-    if (this.arabClicks.isArabClicksStore(store)) {
-      return this.arabClicks.generateDeepLink(rawUrl);
-    }
-    if (this.admitad.isAdmitadStore(store)) {
-      return this.admitad.generateDeepLink(rawUrl);
-    }
-    return rawUrl;
   }
 
   async getClickStats(

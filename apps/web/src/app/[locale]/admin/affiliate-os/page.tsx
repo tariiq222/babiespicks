@@ -693,7 +693,7 @@ export default function AffiliateOsPage() {
     }
   }
 
-  async function triggerPipeline(kind: 'amazon_discovery' | 'noon_discovery' | 'product_pipeline' | 'content_pipeline') {
+  async function triggerPipeline(kind: 'content_pipeline') {
     const actionKey = `trigger:${kind}`;
     setActionLoading(actionKey);
     let runId: string | null = null;
@@ -1293,6 +1293,18 @@ export default function AffiliateOsPage() {
           </div>
         </section>
 
+        <a
+          href={`/${locale}/admin/discovery`}
+          className="flex items-center gap-3 rounded-2xl border border-sage/20 bg-sage/10 px-5 py-4 hover:bg-sage/20 transition-colors group"
+        >
+          <span className="ti ti-brain text-xl text-sage" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-charcoal">{t('goToProductIntelligence')}</p>
+            <p className="text-xs text-stone">{t('productIntelligencePipelineSubtitle')}</p>
+          </div>
+          <span className="ti ti-arrow-left text-sage group-hover:translate-x-1 transition-transform rtl:rotate-180" />
+        </a>
+
         <section className="rounded-2xl border border-beige bg-white px-5 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -1303,9 +1315,6 @@ export default function AffiliateOsPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {([
-              { kind: 'amazon_discovery', label: t('runAmazonDiscovery'), icon: 'ti-search' },
-              { kind: 'noon_discovery', label: t('runNoonDiscovery'), icon: 'ti-search' },
-              { kind: 'product_pipeline', label: t('runProductPipeline'), icon: 'ti-package' },
               { kind: 'content_pipeline', label: t('runContentPipeline'), icon: 'ti-file-text' },
             ] as const).map((btn) => {
               const isLoading = actionLoading === `trigger:${btn.kind}`;

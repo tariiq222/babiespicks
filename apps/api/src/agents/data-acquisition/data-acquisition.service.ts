@@ -129,43 +129,48 @@ export class DataAcquisitionService {
   /**
    * Save extracted product to database
    */
-  async saveProduct(url: string, result: ExtractionResult, storeSlug?: string) {
+  async saveProduct(url: string, result: AcquisitionResult, storeSlug?: string) {
     if (!result.success || !result.data) {
       throw new Error('Cannot save: no product data');
     }
 
     const data = result.data;
-    const slug = this.generateSlug(data.name || 'product');
+    // Guard against missing/empty names — never allow null into DB
+    const name = (data.name || '').trim() || 'Unknown Product';
+    const description = (data.description || '').trim() || null;
+    const slug = this.generateSlug(name);
 
     // Find or create store
     const store = storeSlug
       ? await this.prisma.store.findUnique({ where: { slug: storeSlug } })
       : null;
 
+    const dataSource = result.source === 'schema_org' ? 'SCHEMA_ORG' : 'AI_EXTRACTION';
+
     const product = await this.prisma.product.upsert({
       where: { sourceUrl: url },
       create: {
-        name: data.name || 'Unknown Product',
+        name,
         slug,
-        brand: data.brand,
-        imageUrl: data.image,
+        brand: data.brand || null,
+        imageUrl: data.image || null,
         sourceUrl: url,
-        dataSource: 'SCHEMA_ORG',
+        dataSource,
         confidence: result.confidence,
-        storeId: store?.id,
+        storeId: store?.id ?? null,
         updatedAt: new Date(),
         translations: {
           create: [
             {
               locale: 'ar',
-              name: data.name || 'منتج',
-              description: data.description,
+              name,
+              description,
               slug,
             },
             {
               locale: 'en',
-              name: data.name || 'Product',
-              description: data.description,
+              name,
+              description,
               slug,
             },
           ],
@@ -176,7 +181,7 @@ export class DataAcquisitionService {
                 create: {
                   storeId: store.id,
                   price: data.price,
-                  originalPrice: data.originalPrice,
+                  originalPrice: data.originalPrice ?? null,
                   currency: data.currency || 'SAR',
                   url,
                 },
@@ -185,10 +190,10 @@ export class DataAcquisitionService {
           : {}),
       },
       update: {
-        name: data.name || undefined,
-        brand: data.brand,
-        imageUrl: data.image,
-        dataSource: 'SCHEMA_ORG',
+        name,                       // never undefined — always set
+        brand: data.brand || null,
+        imageUrl: data.image || null,
+        dataSource,
         confidence: result.confidence,
         ...(store ? { storeId: store.id } : {}),
         updatedAt: new Date(),
@@ -198,6 +203,20 @@ export class DataAcquisitionService {
         prices: true,
       },
     });
+
+    // Sync translations on update (upsert block above only creates on insert)
+    await this.prisma.$transaction([
+      this.prisma.productTranslation.upsert({
+        where: { productId_locale: { productId: product.id, locale: 'ar' } },
+        create: { productId: product.id, locale: 'ar', name, description, slug },
+        update: { name, description, slug },
+      }),
+      this.prisma.productTranslation.upsert({
+        where: { productId_locale: { productId: product.id, locale: 'en' } },
+        create: { productId: product.id, locale: 'en', name, description, slug },
+        update: { name, description, slug },
+      }),
+    ]);
 
     this.logger.log(`Saved product: ${product.name} (${product.id})`);
     return product;

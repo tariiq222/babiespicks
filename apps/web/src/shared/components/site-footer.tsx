@@ -40,7 +40,7 @@ export function SiteFooter() {
             <li><Link className="hover:text-charcoal" href="/about">{t('howWeReview')}</Link></li>
             <li><Link className="hover:text-charcoal" href="/categories">{t('categories')}</Link></li>
             <li><Link className="hover:text-charcoal" href="/best">{t('bestLists')}</Link></li>
-            <li><Link className="hover:text-charcoal" href="/coupons">الكوبونات</Link></li>
+            <li><Link className="hover:text-charcoal" href="/coupons">{t('coupons')}</Link></li>
             <li><Link className="hover:text-charcoal" href="/tools">{t('tools')}</Link></li>
             <li><Link className="hover:text-charcoal" href="/contact">{t('contact')}</Link></li>
           </ul>
@@ -62,7 +62,7 @@ export function SiteFooter() {
             <li><a href="https://snapchat.com/add/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('snapchat')}</a></li>
             <li><a href="https://t.me/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('telegram')}</a></li>
             <li><a href="https://x.com/babiespicks" target="_blank" rel="noopener noreferrer" className="hover:text-charcoal">{t('twitter')}</a></li>
-            <li><Link href="#newsletter" className="hover:text-charcoal">{t('newsletter')}</Link></li>
+            <li><Link href="/#newsletter" className="hover:text-charcoal">{t('newsletter')}</Link></li>
           </ul>
         </div>
       </div>

@@ -52,6 +52,9 @@ next-env.d.ts
 .claude/
 .playwright-mcp/
 agent-os/
+.obsidian/
+.opencode/agent/
+ai-memory/
 
 # Test scripts (temp)
 apps/api/test-*.js

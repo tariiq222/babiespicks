@@ -6,6 +6,12 @@ import { findCompetitorGaps } from './strategies/competitor-scan';
 import { scrapeNoonBestsellers } from './strategies/noon-bestsellers';
 import { findBabyProductsViaSearxng } from './strategies/searxng-search';
 import { smartScoreCandidates } from './scoring/smart-scorer';
+import {
+  isAllowedCandidate,
+  PRODUCT_INTELLIGENCE_PIPELINE,
+  PIPELINE_STAGES,
+  ALLOWED_CATEGORIES,
+} from '../product-intelligence/pipeline';
 
 export type DiscoverySource = 'amazon' | 'noon' | 'all';
 
@@ -89,6 +95,17 @@ export class DiscoveryService {
     });
     this.logger.log(`After dedup: ${candidates.length} candidates`);
 
+    // ── Product Intelligence Pipeline: category filter ───────────────────────
+    let rejectedOutOfScope = 0;
+    candidates = candidates.filter((c) => {
+      if (!isAllowedCandidate({ name: c.name, category: c.category, snippet: c.snippet })) {
+        rejectedOutOfScope++;
+        return false;
+      }
+      return true;
+    });
+    this.logger.log(`After scope filter: ${candidates.length} candidates (rejected ${rejectedOutOfScope} out-of-scope)`);
+
     // Filter out products already in the DB
     const existingUrls = await this.prisma.product.findMany({
       where: { sourceUrl: { not: null } },
@@ -132,13 +149,20 @@ export class DiscoveryService {
           agentName: 'discovery',
           status: 'COMPLETED',
           input: {
+            pipeline: PRODUCT_INTELLIGENCE_PIPELINE,
+            stages: PIPELINE_STAGES,
+            allowedCategories: ALLOWED_CATEGORIES,
             source,
             strategies: strategyNames,
             aiScoringEnabled: aiScores.size > 0,
           },
           output: {
+            pipeline: PRODUCT_INTELLIGENCE_PIPELINE,
+            stages: PIPELINE_STAGES,
+            allowedCategories: ALLOWED_CATEGORIES,
             totalDiscovered,
             newCandidates: candidates.length,
+            rejectedOutOfScope,
             aiScoredCount: aiScores.size,
             candidates: candidates.map((c) => ({
               name: c.name,

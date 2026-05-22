@@ -42,6 +42,30 @@ export async function getProducts(locale = 'ar', limit = 20): Promise<{ data: Pr
   return res.json();
 }
 
+export async function getAllProducts(locale = 'ar'): Promise<Product[]> {
+  const LIMIT = 100;
+  const MAX_TOTAL = 500;
+  let all: Product[] = [];
+  let cursor: string | null = null;
+
+  while (all.length < MAX_TOTAL) {
+    let url: string;
+    if (cursor) {
+      url = `${API_URL}/products?locale=${locale}&limit=${LIMIT}&cursor=${cursor}`;
+    } else {
+      url = `${API_URL}/products?locale=${locale}&limit=${LIMIT}`;
+    }
+    const res = await fetch(url, { next: { revalidate: 3600, tags: ['products'] } });
+    if (!res.ok) break;
+    const json: { data: Product[]; nextCursor: string | null } = await res.json();
+    all = all.concat(json.data);
+    if (!json.nextCursor || json.data.length === 0) break;
+    cursor = json.nextCursor;
+  }
+
+  return all.slice(0, MAX_TOTAL);
+}
+
 export async function getProduct(slug: string, locale = 'ar'): Promise<Product | null> {
   const res = await fetch(`${API_URL}/products/${slug}?locale=${locale}`, {
     next: { revalidate: 3600, tags: ['products', `products:${slug}`] },

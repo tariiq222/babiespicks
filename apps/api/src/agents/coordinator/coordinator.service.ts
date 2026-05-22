@@ -147,13 +147,7 @@ export class CoordinatorService {
         return result;
       }
 
-      const product = await this.dataAcquisition.saveProduct(url, {
-        success: true,
-        data: acquisition.data,
-        confidence: acquisition.confidence,
-        source: 'schema_org',
-        rawSchemas: [],
-      }, storeSlug);
+      const product = await this.dataAcquisition.saveProduct(url, acquisition, storeSlug);
 
       result.productId = product.id;
       result.productName = product.name;
