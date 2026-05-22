@@ -7,7 +7,7 @@ import { getAlternates } from '@/shared/lib/metadata';
 import { StoreCouponsClient } from './store-coupons-client';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
+const API_URL = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
 
 const STORE_MAP: Record<string, { id: string; name: string }> = {
   'amazon-sa': { id: 'amazon-sa', name: 'أمازون السعودية' },

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
+const API_URL = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const locales = ['ar', 'en'];
