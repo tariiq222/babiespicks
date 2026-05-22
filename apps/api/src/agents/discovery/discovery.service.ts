@@ -4,6 +4,7 @@ import { scrapeAmazonBestsellers } from './strategies/amazon-bestsellers';
 import { findTrendingProducts } from './strategies/google-trends';
 import { findCompetitorGaps } from './strategies/competitor-scan';
 import { scrapeNoonBestsellers } from './strategies/noon-bestsellers';
+import { findBabyProductsViaSearxng } from './strategies/searxng-search';
 import { smartScoreCandidates } from './scoring/smart-scorer';
 
 export type DiscoverySource = 'amazon' | 'noon' | 'all';
@@ -14,10 +15,12 @@ export interface DiscoveryCandidate {
   price?: number;
   rating?: number;
   category?: string;
-  source: 'amazon_bestseller' | 'trending' | 'competitor_gap' | 'noon_bestseller';
+  source: 'amazon_bestseller' | 'trending' | 'competitor_gap' | 'noon_bestseller' | 'searxng_baby' | 'searxng_competitor';
   score: number;
   trendReason?: string;
   competitorReason?: string;
+  thumbnail?: string;
+  snippet?: string;
 }
 
 export interface DiscoveryResult {
@@ -47,7 +50,8 @@ export class DiscoveryService {
       strategyPromises.push(scrapeAmazonBestsellers());
       strategyPromises.push(findTrendingProducts());
       strategyPromises.push(findCompetitorGaps());
-      strategyNames.push('amazon_bestsellers', 'trending', 'competitor_gaps');
+      strategyPromises.push(findBabyProductsViaSearxng(6) as Promise<DiscoveryCandidate[]>);
+      strategyNames.push('amazon_bestsellers', 'trending', 'competitor_gaps', 'searxng_baby');
     }
 
     // Noon strategies

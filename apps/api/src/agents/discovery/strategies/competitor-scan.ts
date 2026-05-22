@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { Logger } from '@nestjs/common';
 import { chat } from '../../../infrastructure/openrouter';
+import { searxngSearch } from './searxng-search';
 
 const logger = new Logger('CompetitorScan');
 
@@ -22,40 +23,9 @@ interface GapSuggestion {
 }
 
 async function fetchFirstAmazonResult(query: string): Promise<string | null> {
-  const encoded = encodeURIComponent(query);
-  const searchUrl = `https://www.amazon.sa/s?k=${encoded}`;
-
-  try {
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ar-SA,ar;q=0.9,en;q=0.8',
-      },
-      signal: AbortSignal.timeout(12000),
-    });
-
-    if (!response.ok) return null;
-
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    let productUrl: string | null = null;
-    $('a.a-link-normal[href*="/dp/"], [data-asin] a[href*="/dp/"]').each((_, el) => {
-      if (productUrl) return false;
-      const href = $(el).attr('href') ?? '';
-      const dpMatch = href.match(/\/dp\/([A-Z0-9]{10})/);
-      if (dpMatch) {
-        productUrl = `https://www.amazon.sa/dp/${dpMatch[1]}`;
-      }
-    });
-
-    return productUrl;
-  } catch (error) {
-    logger.warn(`Search failed for "${query}": ${(error as Error).message}`);
-    return null;
-  }
+  // Amazon SA blocks datacenter IPs — route lookups through SearXNG instead.
+  const rows = await searxngSearch(`site:amazon.sa /dp/ ${query}`, 'searxng_competitor', 5);
+  return rows[0]?.url ?? null;
 }
 
 export async function findCompetitorGaps(): Promise<CompetitorGapCandidate[]> {

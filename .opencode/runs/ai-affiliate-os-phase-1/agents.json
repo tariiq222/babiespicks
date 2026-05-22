@@ -1,9 +1,0 @@
-{
-  "orchestrator": {
-    "name": "OpenCode",
-    "role": "CTO run artifact creator",
-    "model": "openai/gpt-5.5"
-  },
-  "delegatedAgents": [],
-  "reasonNoDelegation": "No sub-agent invocation tool was available in this runtime; execution was constrained to the user-provided TaskSpec scope."
-}
