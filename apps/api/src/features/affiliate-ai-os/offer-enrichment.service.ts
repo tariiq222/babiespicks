@@ -308,43 +308,43 @@ export class OfferEnrichmentService {
     const title = draft.title ?? 'Untitled Product';
     const category = draft.category ?? 'Baby Product';
 
+    const join = (arr: string[]) => arr.filter(Boolean).join('\n• ');
     return {
       offerTitle: `${title} - ${category}`,
       targetAudience: 'Saudi parents with babies and toddlers',
-      keyBenefits: [
+      keyBenefits: '• ' + join([
         `High-quality ${category.toLowerCase()} for babies`,
         draft.affiliateUrl ? 'Available with affiliate link' : 'Competitive pricing',
         draft.trendScore > 70 ? 'Trending product' : 'Popular choice',
-      ],
-      painPoints: [
+      ]),
+      painPoints: '• ' + join([
         'Finding trustworthy baby products',
         'Concerns about product safety',
         'Value for money considerations',
-      ],
-      objections: [
+      ]),
+      objections: '• ' + join([
         'Is it safe for my baby?',
         'Is it worth the price?',
         'How does it compare to alternatives?',
-      ],
+      ]),
       positioningAngle: `Premium ${category.toLowerCase()} trusted by Saudi parents`,
-      contentAngles: [
+      contentAngles: '• ' + join([
         'Safety and quality focus',
         'Value proposition for parents',
         'Trend and popularity angle',
-      ],
-      suggestedHooks: [
+      ]),
+      suggestedHooks: '• ' + join([
         `Discover the best ${category.toLowerCase()} for your baby`,
         `Why Saudi parents love this ${title.toLowerCase()}`,
         `Top-rated ${category.toLowerCase()} - our complete guide`,
-      ],
+      ]),
       keywords: [
         title.toLowerCase(),
         category.toLowerCase(),
         'baby product',
         'Saudi Arabia',
         'parenting',
-        'レビュー',
-      ],
+      ].join(', '),
       confidenceScore: 0.7,
       enrichmentReason: `Enriched from approved draft: ${draft.title}`,
       status: OFFER_ENRICHMENT_STATUS_PENDING,
