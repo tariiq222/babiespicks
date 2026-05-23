@@ -1,0 +1,202 @@
+app:
+  name: babiespicks-discovery
+  description: Discover trending baby products and run them through the BabiesPicks pipeline
+  mode: workflow
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.4
+workflow:
+  graph:
+    nodes:
+      - id: start
+        data:
+          type: start
+          title: Start
+          variables:
+            - variable: max_products
+              type: number
+              default: 10
+              required: false
+            - variable: triggered_by
+              type: text-input
+              default: manual
+              required: false
+        position: { x: 0, y: 0 }
+
+      - id: health_check
+        data:
+          type: http-request
+          title: NestJS health pre-flight
+          method: GET
+          url: "{{#env.NESTJS_BASE#}}/agents/dify/health"
+          timeout: 5
+        position: { x: 200, y: 0 }
+
+      - id: tavily_search
+        data:
+          type: tool
+          title: Trend search (Tavily)
+          provider_name: langgenius/tavily/tavily
+          tool_name: tavily_search
+          tool_parameters:
+            query: "trending baby products 2026 Saudi Arabia"
+            max_results: 20
+            search_depth: advanced
+        position: { x: 400, y: 0 }
+
+      - id: reddit_search
+        data:
+          type: tool
+          title: Reddit hot threads
+          provider_name: langgenius/reddit/reddit
+          tool_name: reddit_search
+          tool_parameters:
+            subreddit: "Parenting+beyondthebump"
+            sort: hot
+            limit: 25
+        position: { x: 400, y: 150 }
+
+      - id: youtube_search
+        data:
+          type: tool
+          title: YouTube reviews
+          provider_name: langgenius/youtube/youtube
+          tool_name: youtube_search
+          tool_parameters:
+            query: "best baby product 2026"
+            max_results: 15
+        position: { x: 400, y: 300 }
+
+      - id: unify
+        data:
+          type: code
+          title: Unify candidates
+          code_language: python3
+          code: |
+            def main(tavily: list, reddit: list, youtube: list) -> dict:
+                candidates = []
+                for r in tavily or []:
+                    candidates.append({"name": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", ""), "source": "tavily"})
+                for r in reddit or []:
+                    candidates.append({"name": r.get("title", ""), "url": r.get("permalink", ""), "snippet": r.get("selftext", "")[:300], "source": "reddit"})
+                for r in youtube or []:
+                    candidates.append({"name": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("description", "")[:300], "source": "youtube"})
+                return {"candidates": candidates}
+          variables:
+            tavily: "{{#tavily_search.output#}}"
+            reddit: "{{#reddit_search.output#}}"
+            youtube: "{{#youtube_search.output#}}"
+        position: { x: 600, y: 150 }
+
+      - id: score
+        data:
+          type: llm
+          title: Score & Rank
+          model:
+            provider: langgenius/openai_api_compatible/openai_api_compatible
+            name: claude-sonnet-4-6
+            mode: chat
+            completion_params: { temperature: 0.3 }
+          prompt_template:
+            - role: system
+              text: |
+                You rank candidate baby/maternity products for the Saudi market.
+                Return STRICT JSON: an array of up to 10 items.
+                Each item: { "name": string, "trend_score": 0-10, "discovery_reason": string, "category": string }
+                Skip generic categories. Skip duplicates. Prefer products mentioned across multiple sources.
+            - role: user
+              text: |
+                Candidates:
+                {{#unify.candidates#}}
+        position: { x: 800, y: 150 }
+
+      - id: loop_products
+        data:
+          type: iteration
+          title: Per-product processing
+          iterator_selector: "{{#score.output#}}"
+        position: { x: 1000, y: 150 }
+
+      - id: marketplace_search
+        data:
+          type: http-request
+          title: Marketplace lookup
+          method: POST
+          url: "{{#env.NESTJS_BASE#}}/agents/dify/marketplace-search"
+          headers:
+            X-Dify-Token: "{{#env.DIFY_API_TOKEN#}}"
+            X-Idempotency-Key: "{{#sys.workflow_id#}}-mk-{{#loop_products.index#}}"
+            Content-Type: application/json
+          body: |
+            { "name": "{{#loop_products.item.name#}}", "category": "{{#loop_products.item.category#}}" }
+          timeout: 30
+        position: { x: 1200, y: 150 }
+
+      - id: skip_if_unavailable
+        data:
+          type: if-else
+          title: Available?
+          conditions:
+            - variable_selector: ["marketplace_search", "data", "available"]
+              comparison_operator: "is"
+              value: true
+        position: { x: 1400, y: 150 }
+
+      - id: process_product
+        data:
+          type: http-request
+          title: Process product pipeline
+          method: POST
+          url: "{{#env.NESTJS_BASE#}}/agents/dify/process-product"
+          headers:
+            X-Dify-Token: "{{#env.DIFY_API_TOKEN#}}"
+            X-Idempotency-Key: "{{#sys.workflow_id#}}-pp-{{#loop_products.index#}}"
+            Content-Type: application/json
+          body: |
+            {
+              "url": "{{#marketplace_search.data.url#}}",
+              "platform": "{{#marketplace_search.data.platform#}}",
+              "trend_score": {{#loop_products.item.trend_score#}},
+              "discovery_reason": "{{#loop_products.item.discovery_reason#}}",
+              "dify_run_id": "{{#sys.workflow_id#}}"
+            }
+          timeout: 600
+        position: { x: 1600, y: 150 }
+
+      - id: end
+        data:
+          type: end
+          title: End
+          outputs:
+            - variable: processed
+              value_selector: ["loop_products", "output"]
+        position: { x: 1800, y: 150 }
+
+    edges:
+      - source: start
+        target: health_check
+      - source: health_check
+        target: tavily_search
+      - source: health_check
+        target: reddit_search
+      - source: health_check
+        target: youtube_search
+      - source: tavily_search
+        target: unify
+      - source: reddit_search
+        target: unify
+      - source: youtube_search
+        target: unify
+      - source: unify
+        target: score
+      - source: score
+        target: loop_products
+      - source: loop_products
+        target: marketplace_search
+      - source: marketplace_search
+        target: skip_if_unavailable
+      - source: skip_if_unavailable
+        target: process_product
+        condition: "true"
+      - source: process_product
+        target: end
