@@ -469,6 +469,11 @@ model ContentPage {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  discoverySource String?       @map("discovery_source")
+  trendScore      Int?          @map("trend_score") @db.SmallInt
+  difyRunId       String?       @map("dify_run_id") @db.Uuid
+  difyRun         DifyRun?      @relation(fields: [difyRunId], references: [id])
+
   translations                ContentPageTranslation[]
   publishedPosts              PublishedPost[]
   socialPosts                 SocialPost[]
@@ -479,6 +484,7 @@ model ContentPage {
   @@index([type])
   @@index([categoryId])
   @@index([status])
+  @@index([difyRunId])
   @@map("content_pages")
 }
 
@@ -1144,4 +1150,20 @@ model RecommendationInsight {
   @@index([sourceType, sourceId])
   @@index([insightType])
   @@map("recommendation_insights")
+}
+
+model DifyRun {
+  id                String        @id @default(uuid()) @db.Uuid
+  startedAt         DateTime      @default(now()) @map("started_at")
+  finishedAt        DateTime?     @map("finished_at")
+  totalCandidates   Int           @default(0) @map("total_candidates")
+  succeeded         Int           @default(0)
+  failed            Int           @default(0)
+  triggeredBy       String        @map("triggered_by")
+  triggeredByUserId String?       @map("triggered_by_user_id") @db.Uuid
+  error             Json?
+  contentPages      ContentPage[]
+
+  @@index([startedAt])
+  @@map("dify_runs")
 }
