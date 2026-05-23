@@ -6,10 +6,11 @@ import {
 } from './dify-orchestration.controller';
 import { DifyOrchestrationService } from './dify-orchestration.service';
 import { DifyAuthGuard } from './dify-auth.guard';
+import { IdempotencyInterceptor } from './idempotency.interceptor';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [DifyOrchestrationController, DifyOrchestrationGuardedController],
-  providers: [DifyOrchestrationService, DifyAuthGuard],
+  providers: [DifyOrchestrationService, DifyAuthGuard, IdempotencyInterceptor],
 })
 export class DifyOrchestrationModule {}
