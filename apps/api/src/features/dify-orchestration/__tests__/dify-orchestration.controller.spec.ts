@@ -65,3 +65,36 @@ describe('DifyOrchestrationGuardedController', () => {
     expect((result as { ok: true; data: { status: string } }).data.status).toBe('PENDING_APPROVAL');
   });
 });
+
+describe('DifyOrchestrationGuardedController.runStart / runFinish', () => {
+  it('runStart returns ok with dify_run_id', async () => {
+    const service = {
+      searchMarketplace: vi.fn(),
+      processProduct: vi.fn(),
+      startRun: vi.fn().mockResolvedValue({ dify_run_id: 'r-1' }),
+      finishRun: vi.fn(),
+    };
+    const ctrl = new DifyOrchestrationGuardedController(service as never);
+    const result = await ctrl.runStart({ triggered_by: 'manual' });
+    expect(result).toEqual({ ok: true, data: { dify_run_id: 'r-1' } });
+  });
+
+  it('runFinish returns ok with run summary', async () => {
+    const service = {
+      searchMarketplace: vi.fn(),
+      processProduct: vi.fn(),
+      startRun: vi.fn(),
+      finishRun: vi.fn().mockResolvedValue({
+        dify_run_id: 'r-1',
+        total_candidates: 5,
+        succeeded: 3,
+        failed: 2,
+        started_at: '2026-05-23T10:00:00.000Z',
+        finished_at: '2026-05-23T10:10:00.000Z',
+      }),
+    };
+    const ctrl = new DifyOrchestrationGuardedController(service as never);
+    const result = await ctrl.runFinish({ dify_run_id: 'r-1', succeeded: 3, failed: 2 });
+    expect((result as { ok: true; data: { succeeded: number } }).data.succeeded).toBe(3);
+  });
+});

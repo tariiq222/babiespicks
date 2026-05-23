@@ -32,6 +32,21 @@ workflow:
           timeout: 5
         position: { x: 200, y: 0 }
 
+      - id: run_start
+        data:
+          type: http-request
+          title: Start dify_run
+          method: POST
+          url: "{{#env.NESTJS_BASE#}}/agents/dify/run-start"
+          headers:
+            X-Dify-Token: "{{#env.DIFY_API_TOKEN#}}"
+            X-Idempotency-Key: "{{#sys.workflow_id#}}-runstart"
+            Content-Type: application/json
+          body: |
+            { "triggered_by": "{{#start.triggered_by#}}" }
+          timeout: 10
+        position: { x: 200, y: 100 }
+
       - id: tavily_search
         data:
           type: tool
@@ -158,10 +173,25 @@ workflow:
               "platform": "{{#marketplace_search.data.platform#}}",
               "trend_score": {{#loop_products.item.trend_score#}},
               "discovery_reason": "{{#loop_products.item.discovery_reason#}}",
-              "dify_run_id": "{{#sys.workflow_id#}}"
+              "dify_run_id": "{{#run_start.data.dify_run_id#}}"
             }
           timeout: 600
         position: { x: 1600, y: 150 }
+
+      - id: run_finish
+        data:
+          type: http-request
+          title: Finish dify_run
+          method: POST
+          url: "{{#env.NESTJS_BASE#}}/agents/dify/run-finish"
+          headers:
+            X-Dify-Token: "{{#env.DIFY_API_TOKEN#}}"
+            X-Idempotency-Key: "{{#sys.workflow_id#}}-runfinish"
+            Content-Type: application/json
+          body: |
+            { "dify_run_id": "{{#run_start.data.dify_run_id#}}", "succeeded": 0, "failed": 0 }
+          timeout: 10
+        position: { x: 1700, y: 150 }
 
       - id: end
         data:
@@ -176,10 +206,12 @@ workflow:
       - source: start
         target: health_check
       - source: health_check
+        target: run_start
+      - source: run_start
         target: tavily_search
-      - source: health_check
+      - source: run_start
         target: reddit_search
-      - source: health_check
+      - source: run_start
         target: youtube_search
       - source: tavily_search
         target: unify
@@ -199,4 +231,6 @@ workflow:
         target: process_product
         condition: "true"
       - source: process_product
+        target: run_finish
+      - source: run_finish
         target: end

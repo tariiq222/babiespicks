@@ -11,6 +11,7 @@ import { DifyAuthGuard } from './dify-auth.guard';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
 import { MarketplaceSearchDto } from './dto/marketplace-search.dto';
 import { ProcessProductDto } from './dto/process-product.dto';
+import { RunStartDto, RunFinishDto } from './dto/run-lifecycle.dto';
 import { ok } from './dto/dify-response';
 
 @Controller('agents/dify')
@@ -38,5 +39,15 @@ export class DifyOrchestrationGuardedController {
   @Post('process-product')
   async processProduct(@Body() dto: ProcessProductDto) {
     return ok(await this.service.processProduct(dto));
+  }
+
+  @Post('run-start')
+  async runStart(@Body() dto: RunStartDto) {
+    return ok(await this.service.startRun(dto));
+  }
+
+  @Post('run-finish')
+  async runFinish(@Body() dto: RunFinishDto) {
+    return ok(await this.service.finishRun(dto));
   }
 }

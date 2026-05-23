@@ -126,3 +126,55 @@ describe('DifyOrchestrationService.processProduct', () => {
     expect(prisma.contentPage.update).not.toHaveBeenCalled();
   });
 });
+
+describe('DifyOrchestrationService.startRun', () => {
+  it('creates a dify_runs row', async () => {
+    const prisma = {
+      product: { findFirst: vi.fn() },
+      contentPage: { update: vi.fn(), findFirst: vi.fn() },
+      difyRun: {
+        create: vi.fn().mockResolvedValue({ id: 'run-1' }),
+      },
+    };
+    const svc = new DifyOrchestrationService(prisma as never, {} as never, {} as never);
+    const result = await svc.startRun({ triggered_by: 'manual', total_candidates: 5 });
+    expect(prisma.difyRun.create).toHaveBeenCalledWith({
+      data: { triggeredBy: 'manual', totalCandidates: 5 },
+      select: { id: true },
+    });
+    expect(result.dify_run_id).toBe('run-1');
+  });
+});
+
+describe('DifyOrchestrationService.finishRun', () => {
+  it('updates run with counts and finished_at', async () => {
+    const prisma = {
+      product: { findFirst: vi.fn() },
+      contentPage: { update: vi.fn(), findFirst: vi.fn() },
+      difyRun: {
+        update: vi.fn().mockResolvedValue({
+          id: 'run-1',
+          totalCandidates: 5,
+          succeeded: 3,
+          failed: 2,
+          startedAt: new Date('2026-05-23T10:00:00Z'),
+          finishedAt: new Date('2026-05-23T10:10:00Z'),
+        }),
+      },
+    };
+    const svc = new DifyOrchestrationService(prisma as never, {} as never, {} as never);
+    const result = await svc.finishRun({
+      dify_run_id: 'run-1',
+      succeeded: 3,
+      failed: 2,
+    });
+    expect(prisma.difyRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'run-1' },
+        data: expect.objectContaining({ succeeded: 3, failed: 2 }),
+      }),
+    );
+    expect(result.succeeded).toBe(3);
+    expect(result.finished_at).toBe('2026-05-23T10:10:00.000Z');
+  });
+});

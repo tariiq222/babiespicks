@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { DiscoveryService } from '../../agents/discovery/discovery.service';
 import { CoordinatorService } from '../../agents/coordinator/coordinator.service';
@@ -7,6 +8,12 @@ import {
   MarketplaceSearchResult,
 } from './dto/marketplace-search.dto';
 import { ProcessProductDto, ProcessProductResult } from './dto/process-product.dto';
+import {
+  RunStartDto,
+  RunFinishDto,
+  RunStartResult,
+  RunFinishResult,
+} from './dto/run-lifecycle.dto';
 
 @Injectable()
 export class DifyOrchestrationService {
@@ -111,6 +118,53 @@ export class DifyOrchestrationService {
         publish: result.steps.publish,
         time_ms: result.totalTimeMs,
       },
+    };
+  }
+
+  async startRun(dto: RunStartDto): Promise<RunStartResult> {
+    const run = await this.prisma.difyRun.create({
+      data: {
+        triggeredBy: dto.triggered_by,
+        totalCandidates: dto.total_candidates ?? 0,
+      },
+      select: { id: true },
+    });
+    this.logger.log(`Dify run started: ${run.id} (triggered_by=${dto.triggered_by})`);
+    return { dify_run_id: run.id };
+  }
+
+  async finishRun(dto: RunFinishDto): Promise<RunFinishResult> {
+    const run = await this.prisma.difyRun.update({
+      where: { id: dto.dify_run_id },
+      data: {
+        finishedAt: new Date(),
+        succeeded: dto.succeeded,
+        failed: dto.failed,
+        error: dto.error
+          ? typeof dto.error === 'string'
+            ? { message: dto.error }
+            : (dto.error as Prisma.InputJsonValue)
+          : Prisma.DbNull,
+      },
+      select: {
+        id: true,
+        totalCandidates: true,
+        succeeded: true,
+        failed: true,
+        startedAt: true,
+        finishedAt: true,
+      },
+    });
+    this.logger.log(
+      `Dify run finished: ${run.id} succeeded=${run.succeeded} failed=${run.failed}`,
+    );
+    return {
+      dify_run_id: run.id,
+      total_candidates: run.totalCandidates,
+      succeeded: run.succeeded,
+      failed: run.failed,
+      started_at: run.startedAt.toISOString(),
+      finished_at: run.finishedAt!.toISOString(),
     };
   }
 }
