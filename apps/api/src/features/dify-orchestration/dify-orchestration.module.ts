@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../../infrastructure/database/database.module';
 import { DiscoveryModule } from '../../agents/discovery/discovery.module';
+import { CoordinatorModule } from '../../agents/coordinator/coordinator.module';
 import {
   DifyOrchestrationController,
   DifyOrchestrationGuardedController,
@@ -10,7 +11,7 @@ import { DifyAuthGuard } from './dify-auth.guard';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
 
 @Module({
-  imports: [DatabaseModule, DiscoveryModule],
+  imports: [DatabaseModule, DiscoveryModule, CoordinatorModule],
   controllers: [DifyOrchestrationController, DifyOrchestrationGuardedController],
   providers: [DifyOrchestrationService, DifyAuthGuard, IdempotencyInterceptor],
 })
