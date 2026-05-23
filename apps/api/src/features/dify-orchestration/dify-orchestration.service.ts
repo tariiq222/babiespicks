@@ -133,6 +133,160 @@ export class DifyOrchestrationService {
     return { dify_run_id: run.id };
   }
 
+  /**
+   * Admin endpoint: list the most recent Dify runs.
+   * Returned shape uses snake_case for direct UI consumption.
+   */
+  async listRuns(limit: number): Promise<
+    Array<{
+      id: string;
+      started_at: string;
+      finished_at: string | null;
+      triggered_by: string;
+      total_candidates: number;
+      succeeded: number;
+      failed: number;
+      status: 'running' | 'completed' | 'failed';
+    }>
+  > {
+    const safeLimit = Math.min(Math.max(1, Math.floor(limit) || 20), 100);
+    const runs = await this.prisma.difyRun.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        startedAt: true,
+        finishedAt: true,
+        triggeredBy: true,
+        totalCandidates: true,
+        succeeded: true,
+        failed: true,
+        error: true,
+      },
+    });
+    return runs.map((run) => ({
+      id: run.id,
+      started_at: run.startedAt.toISOString(),
+      finished_at: run.finishedAt ? run.finishedAt.toISOString() : null,
+      triggered_by: run.triggeredBy,
+      total_candidates: run.totalCandidates,
+      succeeded: run.succeeded,
+      failed: run.failed,
+      status: !run.finishedAt
+        ? ('running' as const)
+        : run.error
+        ? ('failed' as const)
+        : ('completed' as const),
+    }));
+  }
+
+  /**
+   * Admin endpoint: list products associated with a run.
+   * Strategy: prefer direct ContentPage.difyRunId link; if none found,
+   * fall back to a timestamp window [started_at, finished_at + 1min].
+   */
+  async getRunProducts(runId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      slug: string;
+      source: string | null;
+      trend_score: number | null;
+      created_at: string;
+      content_page_id: string | null;
+    }>
+  > {
+    const run = await this.prisma.difyRun.findUnique({
+      where: { id: runId },
+      select: { startedAt: true, finishedAt: true },
+    });
+    if (!run) return [];
+
+    // First try: pages with explicit relation to this run
+    const linkedPages = await this.prisma.contentPage.findMany({
+      where: { difyRunId: runId },
+      select: { id: true, trendScore: true, discoverySource: true, createdAt: true },
+    });
+
+    const windowEnd = run.finishedAt
+      ? new Date(run.finishedAt.getTime() + 60_000)
+      : new Date();
+
+    // Fetch products created within the run window.
+    const products = await this.prisma.product.findMany({
+      where: {
+        createdAt: { gte: run.startedAt, lte: windowEnd },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        createdAt: true,
+        dataSource: true,
+      },
+    });
+
+    return products.map((product) => {
+      // Best-effort association: pick any linked page (we can't FK products
+      // to runs in the current schema; this is for UX hinting only).
+      const linked = linkedPages[0];
+      return {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        source: linked?.discoverySource ?? String(product.dataSource ?? ''),
+        trend_score: linked?.trendScore ?? null,
+        created_at: product.createdAt.toISOString(),
+        content_page_id: linked?.id ?? null,
+      };
+    });
+  }
+
+  /**
+   * Admin endpoint: kick off the Dify discovery workflow.
+   * Reads DIFY_BASE_URL, DIFY_WORKFLOW_API_KEY, DIFY_DISCOVERY_WORKFLOW_ID
+   * from env. Returns the Dify workflow_run_id + status.
+   */
+  async triggerWorkflow(): Promise<{ workflow_run_id: string; status: string }> {
+    const base = process.env.DIFY_BASE_URL;
+    const key = process.env.DIFY_WORKFLOW_API_KEY;
+    const workflowId = process.env.DIFY_DISCOVERY_WORKFLOW_ID;
+
+    if (!base || !key || !workflowId) {
+      throw new Error(
+        'Dify env not configured (DIFY_BASE_URL, DIFY_WORKFLOW_API_KEY, DIFY_DISCOVERY_WORKFLOW_ID)',
+      );
+    }
+
+    const response = await fetch(`${base}/v1/workflows/${workflowId}/run`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: { max_products: 10, triggered_by: 'admin' },
+        user: 'admin-ui',
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '<no body>');
+      throw new Error(`Dify trigger failed: HTTP ${response.status} ${detail}`);
+    }
+    const data = (await response.json()) as {
+      workflow_run_id?: string;
+      status?: string;
+    };
+    this.logger.log(`Dify workflow triggered: ${data.workflow_run_id}`);
+    return {
+      workflow_run_id: data.workflow_run_id ?? '',
+      status: data.status ?? 'started',
+    };
+  }
+
   async finishRun(dto: RunFinishDto): Promise<RunFinishResult> {
     const run = await this.prisma.difyRun.update({
       where: { id: dto.dify_run_id },

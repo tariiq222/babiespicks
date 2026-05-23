@@ -146,6 +146,179 @@ describe('DifyOrchestrationService.startRun', () => {
   });
 });
 
+describe('DifyOrchestrationService.listRuns', () => {
+  it('maps Prisma rows to admin shape with computed status', async () => {
+    const prisma = {
+      product: { findFirst: vi.fn() },
+      contentPage: { update: vi.fn(), findFirst: vi.fn() },
+      difyRun: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'run-1',
+            startedAt: new Date('2026-05-23T10:00:00Z'),
+            finishedAt: new Date('2026-05-23T10:10:00Z'),
+            triggeredBy: 'cron',
+            totalCandidates: 5,
+            succeeded: 4,
+            failed: 1,
+            error: null,
+          },
+          {
+            id: 'run-2',
+            startedAt: new Date('2026-05-23T11:00:00Z'),
+            finishedAt: null,
+            triggeredBy: 'manual',
+            totalCandidates: 0,
+            succeeded: 0,
+            failed: 0,
+            error: null,
+          },
+          {
+            id: 'run-3',
+            startedAt: new Date('2026-05-23T12:00:00Z'),
+            finishedAt: new Date('2026-05-23T12:01:00Z'),
+            triggeredBy: 'manual',
+            totalCandidates: 3,
+            succeeded: 0,
+            failed: 3,
+            error: { message: 'boom' },
+          },
+        ]),
+      },
+    };
+    const svc = new DifyOrchestrationService(prisma as never, {} as never, {} as never);
+    const result = await svc.listRuns(20);
+    expect(prisma.difyRun.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 20, orderBy: { startedAt: 'desc' } }),
+    );
+    expect(result[0].status).toBe('completed');
+    expect(result[1].status).toBe('running');
+    expect(result[2].status).toBe('failed');
+    expect(result[0].started_at).toBe('2026-05-23T10:00:00.000Z');
+    expect(result[1].finished_at).toBeNull();
+  });
+
+  it('clamps the limit to safe bounds', async () => {
+    const prisma = {
+      product: { findFirst: vi.fn() },
+      contentPage: { update: vi.fn(), findFirst: vi.fn() },
+      difyRun: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const svc = new DifyOrchestrationService(prisma as never, {} as never, {} as never);
+    await svc.listRuns(9999);
+    expect(prisma.difyRun.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 100 }),
+    );
+    await svc.listRuns(0);
+    expect(prisma.difyRun.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ take: 20 }),
+    );
+  });
+});
+
+describe('DifyOrchestrationService.getRunProducts', () => {
+  it('returns [] for unknown run', async () => {
+    const prisma = {
+      product: { findFirst: vi.fn(), findMany: vi.fn() },
+      contentPage: { update: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
+      difyRun: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    const svc = new DifyOrchestrationService(prisma as never, {} as never, {} as never);
+    const result = await svc.getRunProducts('does-not-exist');
+    expect(result).toEqual([]);
+    expect(prisma.product.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns products in the run window, hinting via linked content page', async () => {
+    const start = new Date('2026-05-23T10:00:00Z');
+    const finish = new Date('2026-05-23T10:30:00Z');
+    const prisma = {
+      product: {
+        findFirst: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'prod-1',
+            name: 'Stokke',
+            slug: 'stokke',
+            createdAt: new Date('2026-05-23T10:05:00Z'),
+            dataSource: 'AGENT',
+          },
+        ]),
+      },
+      contentPage: {
+        update: vi.fn(),
+        findFirst: vi.fn(),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { id: 'cp-1', trendScore: 8, discoverySource: 'dify-workflow', createdAt: start },
+          ]),
+      },
+      difyRun: {
+        findUnique: vi.fn().mockResolvedValue({ startedAt: start, finishedAt: finish }),
+      },
+    };
+    const svc = new DifyOrchestrationService(prisma as never, {} as never, {} as never);
+    const result = await svc.getRunProducts('run-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('prod-1');
+    expect(result[0].source).toBe('dify-workflow');
+    expect(result[0].trend_score).toBe(8);
+    expect(result[0].content_page_id).toBe('cp-1');
+  });
+});
+
+describe('DifyOrchestrationService.triggerWorkflow', () => {
+  const ORIGINAL_ENV = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it('throws when Dify env vars are missing', async () => {
+    delete process.env.DIFY_BASE_URL;
+    delete process.env.DIFY_WORKFLOW_API_KEY;
+    delete process.env.DIFY_DISCOVERY_WORKFLOW_ID;
+    const svc = new DifyOrchestrationService({} as never, {} as never, {} as never);
+    await expect(svc.triggerWorkflow()).rejects.toThrow(/Dify env not configured/);
+  });
+
+  it('calls Dify and returns workflow_run_id', async () => {
+    process.env.DIFY_BASE_URL = 'https://dify.example.com';
+    process.env.DIFY_WORKFLOW_API_KEY = 'test-key';
+    process.env.DIFY_DISCOVERY_WORKFLOW_ID = 'wf-123';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ workflow_run_id: 'wr-1', status: 'running' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const svc = new DifyOrchestrationService({} as never, {} as never, {} as never);
+    const result = await svc.triggerWorkflow();
+    expect(result.workflow_run_id).toBe('wr-1');
+    expect(result.status).toBe('running');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://dify.example.com/v1/workflows/wf-123/run',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    fetchSpy.mockRestore();
+  });
+
+  it('throws on non-OK response', async () => {
+    process.env.DIFY_BASE_URL = 'https://dify.example.com';
+    process.env.DIFY_WORKFLOW_API_KEY = 'test-key';
+    process.env.DIFY_DISCOVERY_WORKFLOW_ID = 'wf-123';
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('nope', { status: 500 }));
+    const svc = new DifyOrchestrationService({} as never, {} as never, {} as never);
+    await expect(svc.triggerWorkflow()).rejects.toThrow(/HTTP 500/);
+    fetchSpy.mockRestore();
+  });
+});
+
 describe('DifyOrchestrationService.finishRun', () => {
   it('updates run with counts and finished_at', async () => {
     const prisma = {

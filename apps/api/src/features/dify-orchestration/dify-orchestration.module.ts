@@ -6,6 +6,7 @@ import { CoordinatorModule } from '../../agents/coordinator/coordinator.module';
 import {
   DifyOrchestrationController,
   DifyOrchestrationGuardedController,
+  DifyOrchestrationAdminController,
 } from './dify-orchestration.controller';
 import { DifyOrchestrationService } from './dify-orchestration.service';
 import { DifyAuthGuard } from './dify-auth.guard';
@@ -15,7 +16,11 @@ import { DifyExceptionFilter } from './dify-exception.filter';
 
 @Module({
   imports: [DatabaseModule, DiscoveryModule, CoordinatorModule],
-  controllers: [DifyOrchestrationController, DifyOrchestrationGuardedController],
+  controllers: [
+    DifyOrchestrationController,
+    DifyOrchestrationGuardedController,
+    DifyOrchestrationAdminController,
+  ],
   providers: [
     DifyOrchestrationService,
     DifyAuthGuard,

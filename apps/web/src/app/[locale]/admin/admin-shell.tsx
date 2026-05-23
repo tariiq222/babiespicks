@@ -98,7 +98,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label={t('adminPrimaryNavigation')}>
-          <NavItem href="/admin/affiliate-os" icon="ti-chart-arcs" label={t('affiliateOs')} pathname={pathname} />
+          <NavItem href="/admin/dify-flow" icon="ti-flow-merge" label={t('difyFlow')} pathname={pathname} />
           <NavItem href="/admin/discovery" icon="ti-antenna-signal" label={t('discoveryNav')} pathname={pathname} />
 
           <div className="h-px bg-beige my-2.5 mx-1" />

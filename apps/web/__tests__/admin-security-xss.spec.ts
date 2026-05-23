@@ -6,9 +6,9 @@ import { adminFetch } from '../src/shared/lib/admin-fetch';
 
 const repoRoot = process.cwd();
 const webSrcRoot = path.join(repoRoot, 'apps/web/src');
-const adminAffiliateOsPagePath = path.join(
+const adminDifyFlowPagePath = path.join(
   webSrcRoot,
-  'app/[locale]/admin/affiliate-os/page.tsx',
+  'app/[locale]/admin/dify-flow/page.tsx',
 );
 const adminFetchPath = path.join(webSrcRoot, 'shared/lib/admin-fetch.ts');
 const adminAuthPath = path.join(webSrcRoot, 'shared/lib/admin-auth.ts');
@@ -30,9 +30,9 @@ function listSourceFiles(dir: string): string[] {
   });
 }
 
-describe('admin Affiliate OS stored-XSS guardrails', () => {
+describe('admin Dify Flow stored-XSS guardrails', () => {
   it('does not render approval body fields with dangerouslySetInnerHTML', () => {
-    const source = readSource(adminAffiliateOsPagePath);
+    const source = readSource(adminDifyFlowPagePath);
 
     expect(/\bdangerouslySetInnerHTML\b/.test(source)).toBe(false);
   });

@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 
 function getSafeNextPath(locale: string) {
-  if (typeof window === 'undefined') return `/${locale}/admin/affiliate-os`;
+  if (typeof window === 'undefined') return `/${locale}/admin/dify-flow`;
 
   const next = new URLSearchParams(window.location.search).get('next');
-  const fallback = `/${locale}/admin/affiliate-os`;
+  const fallback = `/${locale}/admin/dify-flow`;
   if (!next || next.includes('\\') || next.startsWith('//')) return fallback;
   if (!next.startsWith(`/${locale}/admin`)) return fallback;
   if (next.startsWith(`/${locale}/admin/login`)) return fallback;

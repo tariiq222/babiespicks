@@ -31,7 +31,7 @@ export function AdminLoginForm({ locale }: { locale: string }) {
         return;
       }
 
-      router.replace(`/${locale}/admin/affiliate-os`);
+      router.replace(`/${locale}/admin/dify-flow`);
       router.refresh();
     });
   }

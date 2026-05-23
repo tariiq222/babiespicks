@@ -13,7 +13,7 @@ export default async function AdminLoginPage({
   const { locale } = await params;
 
   if (await hasValidAdminSession()) {
-    redirect(`/${locale}/admin/affiliate-os`);
+    redirect(`/${locale}/admin/dify-flow`);
   }
 
   const t = await getTranslations('admin');
