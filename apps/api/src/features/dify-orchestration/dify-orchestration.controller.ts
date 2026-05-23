@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { DifyOrchestrationService } from './dify-orchestration.service';
+import { DifyAuthGuard } from './dify-auth.guard';
 
 @Controller('agents/dify')
 export class DifyOrchestrationController {
@@ -9,4 +10,10 @@ export class DifyOrchestrationController {
   health() {
     return { ok: true };
   }
+}
+
+@Controller('agents/dify')
+@UseGuards(DifyAuthGuard)
+export class DifyOrchestrationGuardedController {
+  constructor(private readonly service: DifyOrchestrationService) {}
 }
