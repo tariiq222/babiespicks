@@ -21,10 +21,17 @@ export class DifyOrchestrationService {
   async searchMarketplace(dto: MarketplaceSearchDto): Promise<MarketplaceSearchResult> {
     const normalized = dto.name.toLowerCase().trim();
 
-    const existing = await this.prisma.product.findFirst({
-      where: { name: { contains: normalized, mode: 'insensitive' } },
+    let existing = await this.prisma.product.findFirst({
+      where: { name: { equals: dto.name, mode: 'insensitive' } },
       select: { id: true, sourceUrl: true, store: { select: { slug: true } } },
     });
+
+    if (!existing && normalized.length >= 10) {
+      existing = await this.prisma.product.findFirst({
+        where: { name: { contains: normalized, mode: 'insensitive' } },
+        select: { id: true, sourceUrl: true, store: { select: { slug: true } } },
+      });
+    }
 
     if (existing) {
       this.logger.log(`Marketplace search hit existing product ${existing.id}`);

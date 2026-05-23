@@ -42,4 +42,21 @@ describe('IdempotencyInterceptor', () => {
       firstValueFrom(interceptor.intercept(mockContext({}), mockHandler({}))),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('does not collide when same key used on different routes', async () => {
+    const key = 'shared-key-abc123';
+    await firstValueFrom(
+      interceptor.intercept(
+        { switchToHttp: () => ({ getRequest: () => ({ headers: { 'x-idempotency-key': key }, url: '/route-a', method: 'POST' }) }) } as never,
+        mockHandler({ ok: true, id: 1 }),
+      ),
+    );
+    const second = await firstValueFrom(
+      interceptor.intercept(
+        { switchToHttp: () => ({ getRequest: () => ({ headers: { 'x-idempotency-key': key }, url: '/route-b', method: 'POST' }) }) } as never,
+        mockHandler({ ok: true, id: 2 }),
+      ),
+    );
+    expect(second).toEqual({ ok: true, id: 2 });
+  });
 });

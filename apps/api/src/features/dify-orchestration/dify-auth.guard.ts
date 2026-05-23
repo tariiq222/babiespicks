@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
 
 type HeaderValue = string | string[] | undefined;
 type HttpHeaders = Record<string, HeaderValue>;
@@ -14,7 +15,9 @@ export class DifyAuthGuard implements CanActivate {
     }
 
     const provided = this.readHeader(request.headers, 'x-dify-token');
-    if (provided !== expected) {
+    const providedBuf = Buffer.from(provided ?? '', 'utf8');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    if (providedBuf.length !== expectedBuf.length || !timingSafeEqual(providedBuf, expectedBuf)) {
       throw new UnauthorizedException('Invalid Dify token');
     }
     return true;

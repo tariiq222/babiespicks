@@ -49,6 +49,17 @@ describe('DifyOrchestrationService.searchMarketplace', () => {
 
     expect(result.available).toBe(false);
   });
+
+  it('does not dedup on short ambiguous names', async () => {
+    prisma.product.findFirst.mockResolvedValue(null); // first call returns null (no exact match)
+    // second call (contains) should NOT fire because name is short
+    discovery.findOnMarketplace.mockResolvedValue(null);
+
+    const result = await service.searchMarketplace({ name: 'Bibs' });
+
+    expect(prisma.product.findFirst).toHaveBeenCalledTimes(1); // only equals, not contains
+    expect(result.available).toBe(false);
+  });
 });
 
 describe('DifyOrchestrationService.processProduct', () => {

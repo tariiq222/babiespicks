@@ -17,15 +17,21 @@ export class IdempotencyInterceptor implements NestInterceptor {
   private readonly TTL_MS = 60 * 60 * 1000; // 1h
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const request = context.switchToHttp().getRequest<{ headers: Record<string, string | string[] | undefined> }>();
+    const request = context.switchToHttp().getRequest<{
+      headers: Record<string, string | string[] | undefined>;
+      url: string;
+      method: string;
+    }>();
     const rawKey = request.headers['x-idempotency-key'] ?? request.headers['X-Idempotency-Key'];
-    const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+    const rawKeyValue = Array.isArray(rawKey) ? rawKey[0] : rawKey;
 
-    if (!key || typeof key !== 'string' || key.length < 8) {
+    if (!rawKeyValue || typeof rawKeyValue !== 'string' || rawKeyValue.length < 8) {
       return throwError(
         () => new BadRequestException('X-Idempotency-Key header required (min 8 chars)'),
       );
     }
+
+    const key = `${request.method}:${request.url}:${rawKeyValue}`;
 
     const now = Date.now();
     this.purgeExpired(now);
