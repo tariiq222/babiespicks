@@ -96,6 +96,47 @@ function parseNoonProducts(html: string, category: string): NoonCandidate[] {
   return candidates;
 }
 
+/**
+ * Search Noon SA by product name and return the first product detail link.
+ * Returns null when no `/p/` link is parseable from the search results.
+ *
+ * Used by DiscoveryService.findOnMarketplace as the primary lookup
+ * for the Dify orchestration "search marketplace" workflow.
+ */
+export async function searchNoonByName(
+  query: string,
+  _category?: string,
+): Promise<{ url: string; sku: string | null } | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  const searchUrl = `https://www.noon.com/saudi-en/search/?q=${encodeURIComponent(trimmed)}`;
+  logger.log(`Noon search: ${searchUrl}`);
+
+  const html = await fetchNoonPage(searchUrl);
+  if (!html) return null;
+
+  const $ = cheerio.load(html);
+  let foundHref: string | null = null;
+
+  $('a[href*="/p/"]').each((_, el) => {
+    if (foundHref) return false;
+    const href = $(el).attr('href') ?? '';
+    const fullUrl = href.startsWith('http') ? href : `https://www.noon.com${href}`;
+    const cleanUrl = fullUrl.replace(/[?#].*$/, '');
+    if (cleanUrl.match(/\/p\/[A-Z0-9]+/i)) {
+      foundHref = cleanUrl;
+      return false;
+    }
+  });
+
+  if (!foundHref) return null;
+  const url: string = foundHref;
+  const skuMatch = url.match(/\/p\/([A-Z0-9]+)/i);
+  const sku = skuMatch ? skuMatch[1] : null;
+  return { url, sku };
+}
+
 export async function scrapeNoonBestsellers(): Promise<NoonCandidate[]> {
   logger.log('Scraping Noon SA baby product pages...');
   const all: NoonCandidate[] = [];

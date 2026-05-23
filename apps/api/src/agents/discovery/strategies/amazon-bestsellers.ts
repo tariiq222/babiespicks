@@ -152,6 +152,43 @@ function parseBestsellers(html: string, category: string): BestsellerCandidate[]
   return candidates;
 }
 
+/**
+ * Search Amazon SA by product name and return the first /dp/ ASIN match.
+ * Returns null when no ASIN link is parseable from the search results.
+ *
+ * Used by DiscoveryService.findOnMarketplace as the fallback lookup
+ * after Noon misses.
+ */
+export async function searchAmazonByName(
+  query: string,
+  _category?: string,
+): Promise<{ url: string; sku: string | null } | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  const searchUrl = `https://www.amazon.sa/s?k=${encodeURIComponent(trimmed)}`;
+  logger.log(`Amazon search: ${searchUrl}`);
+
+  const html = await fetchPage(searchUrl);
+  if (!html) return null;
+
+  const $ = cheerio.load(html);
+  let asin: string | null = null;
+
+  $('a[href*="/dp/"]').each((_, el) => {
+    if (asin) return false;
+    const href = $(el).attr('href') ?? '';
+    const m = href.match(/\/dp\/([A-Z0-9]{10})/);
+    if (m) {
+      asin = m[1];
+      return false;
+    }
+  });
+
+  if (!asin) return null;
+  return { url: `https://www.amazon.sa/dp/${asin}`, sku: asin };
+}
+
 export async function scrapeAmazonBestsellers(): Promise<BestsellerCandidate[]> {
   logger.log('Scraping Amazon SA bestseller pages...');
   const all: BestsellerCandidate[] = [];

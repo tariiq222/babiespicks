@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import { scrapeAmazonBestsellers } from './strategies/amazon-bestsellers';
+import { scrapeAmazonBestsellers, searchAmazonByName } from './strategies/amazon-bestsellers';
 import { findTrendingProducts } from './strategies/google-trends';
 import { findCompetitorGaps } from './strategies/competitor-scan';
-import { scrapeNoonBestsellers } from './strategies/noon-bestsellers';
+import { scrapeNoonBestsellers, searchNoonByName } from './strategies/noon-bestsellers';
 import { findBabyProductsViaSearxng } from './strategies/searxng-search';
 import { smartScoreCandidates } from './scoring/smart-scorer';
 import {
@@ -186,6 +186,44 @@ export class DiscoveryService {
     );
 
     return { discovered: totalDiscovered, newCandidates: candidates.length, candidates };
+  }
+
+  /**
+   * Look up a single product by name on Noon first, then Amazon as fallback.
+   * Returns the first hit, or null when neither marketplace has a match.
+   *
+   * Used by the Dify orchestration "search marketplace" workflow.
+   * Errors from individual strategies are swallowed and treated as misses so
+   * one flaky marketplace does not block the other.
+   */
+  async findOnMarketplace(
+    name: string,
+    category?: string,
+  ): Promise<{ url: string; platform: 'noon' | 'amazon'; sku: string | null } | null> {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+
+    // Try Noon first
+    try {
+      const noonHit = await searchNoonByName(trimmed, category);
+      if (noonHit) {
+        return { url: noonHit.url, platform: 'noon', sku: noonHit.sku };
+      }
+    } catch (error) {
+      this.logger.warn(`Noon lookup failed for "${trimmed}": ${(error as Error).message}`);
+    }
+
+    // Fall back to Amazon
+    try {
+      const amazonHit = await searchAmazonByName(trimmed, category);
+      if (amazonHit) {
+        return { url: amazonHit.url, platform: 'amazon', sku: amazonHit.sku };
+      }
+    } catch (error) {
+      this.logger.warn(`Amazon lookup failed for "${trimmed}": ${(error as Error).message}`);
+    }
+
+    return null;
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────

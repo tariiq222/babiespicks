@@ -34,8 +34,7 @@ export class DifyOrchestrationService {
       };
     }
 
-    // TODO Task 7: remove cast once findOnMarketplace exists on DiscoveryService
-    const found = await (this.discovery as any).findOnMarketplace(dto.name, dto.category);
+    const found = await this.discovery.findOnMarketplace(dto.name, dto.category);
     if (!found) {
       return { url: '', platform: 'noon', sku: null, available: false };
     }
