@@ -9,10 +9,11 @@ import {
 import { DifyOrchestrationService } from './dify-orchestration.service';
 import { DifyAuthGuard } from './dify-auth.guard';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
+import { DifyCronService } from './dify-cron.service';
 
 @Module({
   imports: [DatabaseModule, DiscoveryModule, CoordinatorModule],
   controllers: [DifyOrchestrationController, DifyOrchestrationGuardedController],
-  providers: [DifyOrchestrationService, DifyAuthGuard, IdempotencyInterceptor],
+  providers: [DifyOrchestrationService, DifyAuthGuard, IdempotencyInterceptor, DifyCronService],
 })
 export class DifyOrchestrationModule {}
