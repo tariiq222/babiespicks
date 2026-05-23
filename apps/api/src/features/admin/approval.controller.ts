@@ -86,6 +86,8 @@ export class ApprovalController {
         revisionNotes: page.revisionNotes,
         rejectionReason: page.rejectionReason,
         scheduledAt: page.scheduledAt,
+        discoverySource: page.discoverySource,
+        trendScore: page.trendScore,
         createdAt: page.createdAt,
         updatedAt: page.updatedAt,
       };

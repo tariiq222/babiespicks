@@ -80,6 +80,8 @@ interface ContentApproval {
   titleEn?: string | null;
   seoScore?: number | null;
   qualityScore?: number | null;
+  discoverySource?: string | null;
+  trendScore?: number | null;
   createdAt?: string | null;
 }
 
@@ -1598,7 +1600,7 @@ export default function AffiliateOsPage() {
             )}
           </Panel>
 
-          {false && (<Panel title={t('contentApprovals')} icon="ti-file-check">
+          <Panel title={t('contentApprovals')} icon="ti-file-check">
             {loading ? (
               <StateBlock icon="ti-loader-2 animate-spin" title={t('running')} />
             ) : data.contentApprovals.length === 0 ? (
@@ -1612,6 +1614,8 @@ export default function AffiliateOsPage() {
                       <TableHeader>{t('content')}</TableHeader>
                       <TableHeader>{t('type')}</TableHeader>
                       <TableHeader>{t('status')}</TableHeader>
+                      <TableHeader>{t('discoverySource')}</TableHeader>
+                      <TableHeader>{t('trendScore')}</TableHeader>
                       <TableHeader>{t('approvalDecision')}</TableHeader>
                     </tr>
                   </thead>
@@ -1624,6 +1628,12 @@ export default function AffiliateOsPage() {
                         <td className="px-4 py-3 text-stone"><bdi dir="auto">{item.type ?? '—'}</bdi></td>
                         <td className="px-4 py-3">
                           <StatusBadge status={item.status} />
+                        </td>
+                        <td className="px-4 py-3 text-stone text-xs">
+                          <bdi dir="auto">{item.discoverySource ?? '—'}</bdi>
+                        </td>
+                        <td className="px-4 py-3 text-charcoal tabular-nums">
+                          {item.trendScore != null ? `${item.trendScore}/10` : '—'}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1673,7 +1683,7 @@ export default function AffiliateOsPage() {
                 </table>
               </div>
             )}
-          </Panel>)}
+          </Panel>
 
           <Panel title={t('offerEnrichments')} icon="ti-sparkles">
             {loading ? (

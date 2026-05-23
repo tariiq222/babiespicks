@@ -549,6 +549,7 @@
     "source": "Source",
     "title": "Title",
     "discoveryReason": "Discovery reason",
+    "discoverySource": "Discovery source",
     "createDraft": "Create draft",
     "trendSignalDraftCreated": "Product draft created from trend signal",
     "platform": "Platform",

@@ -568,6 +568,7 @@
     "source": "المصدر",
     "title": "العنوان",
     "discoveryReason": "سبب الاكتشاف",
+    "discoverySource": "مصدر الاكتشاف",
     "createDraft": "إنشاء مسودة",
     "trendSignalDraftCreated": "تم إنشاء مسودة منتج من إشارة الترند",
     "platform": "المنصة",
