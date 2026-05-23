@@ -28,6 +28,7 @@ import { SocialModule } from './agents/social/social.module';
 import { AiOsModule } from './features/ai-os/ai-os.module';
 import { AffiliateAiOsModule } from './features/affiliate-ai-os/affiliate-ai-os.module';
 import { AnalyticsModule } from './infrastructure/analytics/analytics.module';
+import { DifyOrchestrationModule } from './features/dify-orchestration/dify-orchestration.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { AnalyticsModule } from './infrastructure/analytics/analytics.module';
     AiOsModule,
     AffiliateAiOsModule,
     AnalyticsModule,
+    DifyOrchestrationModule,
   ],
   controllers: [AppController],
   providers: [
