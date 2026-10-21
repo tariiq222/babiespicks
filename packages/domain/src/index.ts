@@ -35,7 +35,8 @@ async function writeProduct(tx:Prisma.TransactionClient,a:any,actor:ActorContext
   uniqueLocales(a.translations);
   if((a.verdict||a.reviewSummary)&&!a.sources?.length)throw new DomainError('INVALID_INPUT','Editorial review data requires sources');
   const data:any={};
-  for(const field of ['name','brand','imageUrl','categoryId','sources'])if(a[field]!==undefined)data[field]=a[field];
+  for(const field of ['name','brand','imageUrl','imageUrls','categoryId','sources'])if(a[field]!==undefined)data[field]=a[field];
+  if(!update&&data.imageUrl===undefined&&a.imageUrls?.length)data.imageUrl=a.imageUrls[0];
   let id=a.id;
   if(update){
     const old=await tx.product.findUnique({where:{id}});

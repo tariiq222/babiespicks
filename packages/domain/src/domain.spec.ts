@@ -83,6 +83,15 @@ integration('real PostgreSQL content contract',()=>{
     expect(results.map((x:any)=>x.value.version)).toEqual([2,2]);
     expect(await db.contentRevision.count({where:{entityType:'product',entityId:created.id}})).toBe(2);
   });
+  it('persists ordered galleries and preserves them on unrelated partial edits',async()=>{
+    const imageUrls=['https://m.media-amazon.com/first.jpg','https://m.media-amazon.com/second.jpg'];
+    const created=await run('bp_create_product',{name:'Gallery',slug:`gallery-${suffix}`,imageUrls,idempotencyKey:'gallery-create'});
+    expect(created.imageUrls).toEqual(imageUrls);expect(created.imageUrl).toBe(imageUrls[0]);
+    const updated=await run('bp_update_product',{id:created.id,expectedVersion:1,name:'Gallery renamed',idempotencyKey:'gallery-update'});
+    expect(updated.imageUrls).toEqual(imageUrls);
+    const cleared=await run('bp_update_product',{id:created.id,expectedVersion:2,imageUrls:[],idempotencyKey:'gallery-clear'});
+    expect(cleared.imageUrls).toEqual([]);expect(cleared.imageUrl).toBe(imageUrls[0]);
+  });
   it('never accepts injected actor, publication or unknown inputs from tools',async()=>{
     await expect(run('bp_create_product',{name:'fake',publishStatus:'PUBLISHED',actor:owner,idempotencyKey:'fake'},editor)).rejects.toMatchObject({code:'INVALID_INPUT'});
   });

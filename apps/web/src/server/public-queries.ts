@@ -16,9 +16,19 @@ const contentInclude = { translations: true, category: true } satisfies Prisma.C
 type ContentRow = Prisma.ContentPageGetPayload<{ include: typeof contentInclude }>;
 const strings = (value: unknown): string[] | null => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : null;
 
+function displaySources(value: unknown): NonNullable<Product['sources']> {
+  if(!Array.isArray(value)) return [];
+  return value.flatMap(source=>{
+    if(!source || typeof source!=='object' || typeof source.url!=='string' || typeof source.field!=='string' || typeof source.checkedAt!=='string' || !Number.isFinite(Date.parse(source.checkedAt))) return [];
+    try { const url=new URL(source.url); if(url.protocol!=='https:' || url.username || url.password) return []; } catch { return []; }
+    return [{url:source.url,field:source.field,checkedAt:source.checkedAt}];
+  });
+}
+
 function productView(row: ProductRow): Product {
   return {
     id: row.id, name: row.name, slug: row.slug, brand: row.brand, imageUrl: row.imageUrl, isActive: row.isActive,
+    imageUrls: row.imageUrls ?? [], sources: displaySources(row.sources),
     translations: row.translations.map(({ locale, name, slug, description }) => ({ locale, name, slug, description })),
     category: row.category,
     specs: row.specs.map(({ key, value, locale }) => ({ key, value, locale })),

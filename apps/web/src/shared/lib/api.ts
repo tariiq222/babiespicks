@@ -5,6 +5,8 @@ export interface Product {
   slug: string;
   brand: string | null;
   imageUrl: string | null;
+  imageUrls?: string[];
+  sources?: {url:string;field:string;checkedAt:string}[];
   isActive: boolean;
   translations: { locale: string; name: string; description: string | null; slug: string }[];
   verdict: {

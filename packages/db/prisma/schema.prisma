@@ -276,6 +276,7 @@ model Product {
   slug       String        @unique
   brand      String?
   imageUrl   String?
+  imageUrls  String[]      @default([])
   storeId    String?
   store      Store?        @relation(fields: [storeId], references: [id])
   categoryId String?

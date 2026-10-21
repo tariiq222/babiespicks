@@ -93,3 +93,11 @@ it('never advertises a purchase link for a missing or invalid latest destination
   db.product.findFirst.mockResolvedValue({ ...row, prices: [{ storeId: 's', store, price: 20, originalPrice: null, currency: 'SAR', scrapedAt: now, inStock: true, url: 'https://www.amazon.sa/dp/VALID' }] } as never);
   expect((await createPublicQueries(db as never).getProduct('p'))?.prices).toHaveLength(1);
 });
+
+it('projects galleries and display sources without exposing internal source notes',async()=>{
+ const db=database();
+ db.product.findFirst.mockResolvedValue({id:'p',name:'Product',slug:'p',translations:[],prices:[],specs:[],category:null,verdict:null,reviewSummary:null,imageUrls:['https://m.media-amazon.com/one.jpg'],sources:[{url:'https://www.amazon.sa/dp/X',field:'reviewSummary',checkedAt:'2026-10-21T12:00:00Z',note:'internal note'},{url:'javascript:alert(1)',field:'reviewSummary',checkedAt:'2026-10-21T12:00:00Z'}]} as never);
+ const product=await createPublicQueries(db as never).getProduct('p');
+ expect(product?.imageUrls).toEqual(['https://m.media-amazon.com/one.jpg']);
+ expect(product?.sources).toEqual([{url:'https://www.amazon.sa/dp/X',field:'reviewSummary',checkedAt:'2026-10-21T12:00:00Z'}]);
+});

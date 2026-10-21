@@ -1,0 +1,11 @@
+# Product clarity and images
+
+Approved by Tariq in chat on 2026-10-22: gallery, short introduction, Amazon /5 with review count and source, BabiesPicks /10 with reasoning, strengths, cautions, specs and prices. Square contained images across product surfaces, never invent unavailable ratings or photos.
+
+Keep current Arabic-first typography, sage/linen palette, RTL and responsive layout. Signature: two clearly labeled independent rating panels rather than one ambiguous star score. Desktop gallery beside purchase summary; details below. Mobile gallery first, then title, ratings and prices. Existing descriptions retain their content, with known inline headings separated and purchase URLs replaced by existing store buttons. Markdown is rendered without raw HTML. Reviewer strengths/cautions come from existing structured fields.
+
+Add optional imageUrls (up to 12) through existing MCP product creation/update contracts. Keep imageUrl as the compatible cover; gallery merges and deduplicates cover + imageUrls. Empty or omitted galleries preserve old products. Same transaction/version/idempotency/publication permissions as existing edits. Additive database migration, no existing data rewritten. Product.sources provides rating provenance; label a review Amazon only for an explicit reviewSummary source on an allowed Amazon host, never from a price source or description. Missing data gets an honest unavailable state. No new AI, scoring formula or invented editorial assessment. No aggregateRating markup for republished third-party ratings.
+
+Update MCP writing guidance so future products have organized Markdown descriptions, actual image URLs, sourced reviewSummary and verdict separately. Existing editorial workflow remains compatible. User explicitly requested restoring visible product ratings; this supersedes the earlier offers-only restriction on product editorial display, not the retired editorial routes.
+
+Scope includes a shared image component, product detail page, public projection and MCP image persistence. Do not edit live product data concurrently with Grok without fresh version checks. Verify real additional photos for the exact linked variant before adding them. Preserve unknowns if sources cannot be retrieved.
