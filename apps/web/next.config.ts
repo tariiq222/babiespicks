@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   async redirects() {
     return [
+      { source: '/:path*', has: [{ type: 'host', value: 'www.babiespicks.com' }], destination: 'https://babiespicks.com/:path*', permanent: true },
       { source: '/:locale(ar|en)/tools/:path*', destination: '/:locale', permanent: false },
       { source: '/:locale(ar|en)/best/:path*', destination: '/:locale', permanent: false },
       { source: '/:locale(ar|en)/compare/:path*', destination: '/:locale', permanent: false },
