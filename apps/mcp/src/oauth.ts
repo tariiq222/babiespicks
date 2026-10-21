@@ -110,9 +110,12 @@ export function createOAuthRoutes(config: AppConfig): Hono {
     // Chrome send Origin:null, which correctly fails our strict CSRF check.
     c.header('Referrer-Policy','same-origin');
     // Chromium applies form-action to the redirect after form submission too.
-    // Permit only this validated registered callback origin, never arbitrary
-    // request text or all HTTPS destinations.
-    c.header('Content-Security-Policy',`default-src 'none'; form-action 'self' ${new URL(q.redirect_uri).origin}; base-uri 'none'; frame-ancestors 'none'`);
+    // Permit this validated callback origin. Grok's exact registered callback
+    // currently returns HTTP 308 from www.cursor.com to cursor.com; Chromium
+    // also checks that canonical hop. Other clients gain no extra origins.
+    const callbackOrigins = [new URL(q.redirect_uri).origin];
+    if(q.redirect_uri === 'https://www.cursor.com/agents/mcp/oauth/callback') callbackOrigins.push('https://cursor.com');
+    c.header('Content-Security-Policy',`default-src 'none'; form-action 'self' ${callbackOrigins.join(' ')}; base-uri 'none'; frame-ancestors 'none'`);
     return c.html(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BabiesPicks MCP</title></head><body><main><h1>تفويض إدارة BabiesPicks</h1><p>العميل: ${escape(q.client_id)}</p><p>العودة إلى: ${escape(q.redirect_uri)}</p><p>أدخل كلمة مرور المالك للسماح بإدارة المحتوى. صلاحية النشر مستقلة ومدتها 30 يومًا.</p><form method="post" action="/oauth/authorize"><input type="hidden" name="transaction" value="${transaction}"><label>كلمة مرور المالك <input type="password" name="password" required autocomplete="current-password"></label>${config.ENABLE_MCP_PUBLISH?'<p><label><input type="checkbox" name="allow_publish" value="yes"> أسمح لهذا الاتصال بنشر المحتوى وتحرير المنشور وأرشفته وإلغاء نشره.</label></p>':''}<button type="submit">السماح بالاتصال</button></form></main></body></html>`);
   });
   oauth.post('/oauth/authorize',async c=>{
