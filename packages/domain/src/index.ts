@@ -5,6 +5,7 @@ import { prisma, type PrismaClient, type Prisma } from '@babiespicks/db';
 import { DomainError } from './errors';
 import { schemas, type ActorContext, type ToolName } from './contracts';
 import { wrapAffiliateUrl } from './prices';
+import {validateVerdict, VERDICT_POLICY} from './verdict-policy';
 export { DomainError } from './errors';
 export { TOOL_DEFINITIONS, type ActorContext } from './contracts';
 export { selectLatestPrices, wrapAffiliateUrl, resolvePurchaseTarget } from './prices';
@@ -56,9 +57,7 @@ async function writeProduct(tx:Prisma.TransactionClient,a:any,actor:ActorContext
   if(a.specs){await tx.productSpec.deleteMany({where:{productId:id}});if(a.specs.length)await tx.productSpec.createMany({data:a.specs.map((s:any)=>({...s,productId:id}))})}
   if(a.verdict){
     const v=a.verdict;
-    const weighted=Math.round((v.safetyScore*.25+v.qualityScore*.25+v.reviewsScore*.2+v.priceScore*.15+v.longTermScore*.15)*10)/10;
-    const type=weighted>=7.5?'WORTH_IT':weighted>=6?'WORTH_IT_WITH':weighted>=4.5?'WAIT':'NOT_WORTH_IT';
-    if(Math.abs(weighted-v.overallScore)>.11||v.type!==type)throw new DomainError('INVALID_INPUT','Verdict must match weighted scores and thresholds');
+    const {score:weighted}=validateVerdict(v);
     const visible=(await tx.product.findUniqueOrThrow({where:{id}})).publishStatus==='PUBLISHED';
     await tx.verdict.upsert({where:{productId:id},create:{...v,productId:id,overallScore:weighted,isPublished:visible},update:{...v,overallScore:weighted,isPublished:visible}});
   }
@@ -163,7 +162,7 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
   const schema=schemas[name as ToolName];const parsed=schema.safeParse(input);
   if(!parsed.success)throw new DomainError('INVALID_INPUT',parsed.error.issues.map(x=>`${x.path.join('.')}: ${x.message}`).join('; '));
   const a:any=parsed.data;
-  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48};
+  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY};
   if(name==='bp_list_products')return db.product.findMany({where:a.status?{publishStatus:a.status}:{},include:productInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_product'){const p=await db.product.findUnique({where:{id:a.id},include:{...productInclude,prices:{include:{store:true},orderBy:{scrapedAt:'desc'},take:100}}});if(!p)throw new DomainError('NOT_FOUND','Product not found');return p}
   if(name==='bp_list_content')return db.contentPage.findMany({where:a.status?{publishStatus:a.status}:{},include:contentInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});

@@ -29,7 +29,8 @@ export function wrapAffiliateUrl(raw:string,storeSlug:string,env:Record<string,s
   }
 
   if(hostIs(host,'amazon.sa')||hostIs(host,'amazon.com')){
-    if(env.AMAZON_ASSOCIATES_TAG)u.searchParams.set('tag',env.AMAZON_ASSOCIATES_TAG);
+    const tag=env.AMAZON_ASSOCIATES_TAG?.trim()||(store?.url?new URL(store.url).searchParams.get('tag'):null);
+    if(tag)u.searchParams.set('tag',tag);
     return u.toString();
   }
   if(hostIs(host,'noon.com')){

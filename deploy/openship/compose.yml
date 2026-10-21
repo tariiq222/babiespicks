@@ -44,6 +44,7 @@ services:
       DATABASE_URL: postgresql://babiespicks:${POSTGRES_PASSWORD}@db:5432/babiespicks
       NEXT_PUBLIC_SITE_URL: https://babiespicks.com
       REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+      AMAZON_ASSOCIATES_TAG: babiespicks-21
       MEDIA_ROOT: /data/media
     depends_on: [db, migrate]
     volumes:
@@ -71,6 +72,7 @@ services:
       MCP_OAUTH_SECRET: ${MCP_OAUTH_SECRET}
       MCP_ADMIN_PASSWORD: ${MCP_ADMIN_PASSWORD}
       ENABLE_MCP_PUBLISH: 'true'
+      AMAZON_ASSOCIATES_TAG: babiespicks-21
       MEDIA_ROOT: /data/media
       WEB_REVALIDATE_URL: http://web:3000/api/revalidate
       WEB_REVALIDATE_ALLOW_INTERNAL_HTTP: 'true'
