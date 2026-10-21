@@ -5,7 +5,21 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  transpilePackages: ['@babiespicks/shared-types', '@babiespicks/ui'],
+  async redirects() {
+    return [
+      { source: '/:locale(ar|en)/tools/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/best/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/compare/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/categories/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/guides/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/reviews/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/search/:path*', destination: '/:locale', permanent: false },
+      { source: '/:locale(ar|en)/faq/:path*', destination: '/:locale/about', permanent: false },
+      { source: '/:locale(ar|en)/contact/:path*', destination: '/:locale/about', permanent: false },
+      { source: '/:locale(ar|en)/offers', destination: '/:locale', permanent: false },
+    ];
+  },
+  transpilePackages: ['@babiespicks/db', '@babiespicks/domain'],
   images: {
     formats: ['image/avif', 'image/webp'],
     qualities: [75, 90],

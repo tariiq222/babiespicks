@@ -19,8 +19,8 @@ export default async function NotFound() {
             <span>{t('home')}</span>
             <i className="ti ti-arrow-left text-[14px]"></i>
           </Link>
-          <Link href="/categories" className="border border-sage text-sage rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover-bg inline-flex items-center justify-center">
-            {t('categories')}
+          <Link href="/coupons" className="border border-sage text-sage rounded-lg px-6 py-3 text-[14px] hover:bg-sage-hover-bg inline-flex items-center justify-center">
+            {t('coupons')}
           </Link>
         </div>
       </div>

@@ -1,0 +1,86 @@
+name: babiespicks-simple
+services:
+  db:
+    image: postgres:16-alpine
+    profiles: [local-db]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: babiespicks
+      POSTGRES_DB: babiespicks
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for the optional local database}
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U babiespicks]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      target: web
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set the verified target DATABASE_URL}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      MEDIA_ROOT: /data/media
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:?Set REVALIDATE_SECRET}
+      AMAZON_ASSOCIATES_TAG: ${AMAZON_ASSOCIATES_TAG:-}
+      ARABCLICKS_PUBLISHER_ID: ${ARABCLICKS_PUBLISHER_ID:-}
+      ARABCLICKS_ADVERTISER_ID: ${ARABCLICKS_ADVERTISER_ID:-}
+      ADMITAD_CAMPAIGN_CODE: ${ADMITAD_CAMPAIGN_CODE:-}
+      NOON_AFFILIATE_CODE: ${NOON_AFFILIATE_CODE:-}
+      AFFILIATE_ALLOWED_HOSTS: ${AFFILIATE_ALLOWED_HOSTS:-}
+    ports: [127.0.0.1:3000:3000]
+    volumes: [media:/data/media:ro]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  mcp:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      target: mcp
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set the verified target DATABASE_URL}
+      MCP_PORT: 8765
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:?Set the independent canonical MCP origin}
+      MCP_OAUTH_SECRET: ${MCP_OAUTH_SECRET:?Set an independent MCP_OAUTH_SECRET}
+      MCP_ADMIN_PASSWORD: ${MCP_ADMIN_PASSWORD:?Set the owner password}
+      MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:-}
+      ENABLE_MCP_PUBLISH: ${ENABLE_MCP_PUBLISH:-false}
+      MEDIA_ROOT: /data/media
+      WEB_REVALIDATE_URL: http://web:3000/api/revalidate
+      WEB_REVALIDATE_ALLOW_INTERNAL_HTTP: "true"
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:?Set REVALIDATE_SECRET}
+      AMAZON_ASSOCIATES_TAG: ${AMAZON_ASSOCIATES_TAG:-}
+      ARABCLICKS_PUBLISHER_ID: ${ARABCLICKS_PUBLISHER_ID:-}
+      ARABCLICKS_ADVERTISER_ID: ${ARABCLICKS_ADVERTISER_ID:-}
+      ADMITAD_CAMPAIGN_CODE: ${ADMITAD_CAMPAIGN_CODE:-}
+      NOON_AFFILIATE_CODE: ${NOON_AFFILIATE_CODE:-}
+      AFFILIATE_ALLOWED_HOSTS: ${AFFILIATE_ALLOWED_HOSTS:-}
+    ports: [127.0.0.1:8765:8765]
+    volumes: [media:/data/media]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8765/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  migrate:
+    profiles: [maintenance]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      target: tools
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set the verified target DATABASE_URL}
+    restart: 'no'
+volumes:
+  postgres:
+  media:

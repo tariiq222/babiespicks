@@ -20,9 +20,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: {
     template: '%s | BabiesPicks',
-    default: 'BabiesPicks - مراجعات منتجات الأمومة والطفل',
+    default: 'BabiesPicks - عروض منتجات الأطفال',
   },
-  description: 'منصة سعودية ذكية لمراجعة منتجات الأمومة والطفل بالذكاء الاصطناعي. نراجع كل منتج بخمسة معايير ونعطيكِ رأياً واضحاً.',
+  description: 'عروض منتجات الأطفال وأسعارها والكوبونات المنشورة.',
   metadataBase: new URL('https://babiespicks.com'),
   openGraph: {
     type: 'website',

@@ -54,8 +54,8 @@ export default async function PrivacyPage() {
             <p>{t('sharingText')}</p>
             <ul className="list-disc pr-5 space-y-2 mt-2">
               <li>{t('sharingGA')}</li>
-              <li>{t('sharingCF')}</li>
-              <li>{t('sharingResend')}</li>
+              <li>{t('sharingDiagnostics')}</li>
+              <li>{t('sharingEmail')}</li>
             </ul>
           </section>
 
@@ -77,7 +77,7 @@ export default async function PrivacyPage() {
 
           <section>
             <h2 className="text-[18px] text-charcoal mb-3">{t('contactTitle')}</h2>
-            <p>{t('contactText')} <a href="mailto:privacy@babiespicks.com" className="text-sage hover:underline">privacy@babiespicks.com</a></p>
+            <p>{t('contactText')} <a href="mailto:hello@babiespicks.com" className="text-sage hover:underline">hello@babiespicks.com</a></p>
           </section>
         </div>
       </article>

@@ -1,6 +1,9 @@
-type VerdictVariant = 'good' | 'cond' | 'wait' | 'bad';
+import { EDITORIAL_SCORE_MAX } from '../lib/scores';
+
+type VerdictVariant = 'good' | 'cond' | 'wait' | 'bad' | 'unrated';
 
 const VERDICT_LABEL: Record<VerdictVariant, string> = {
+  unrated: 'غير مقيّم',
   good: 'يستاهل',
   cond: 'يستاهل بشرط',
   wait: 'انتظر',
@@ -8,6 +11,7 @@ const VERDICT_LABEL: Record<VerdictVariant, string> = {
 };
 
 const VERDICT_CLASS: Record<VerdictVariant, string> = {
+  unrated: 'bg-linen text-stone',
   good: 'bg-verdict-good-bg text-verdict-good-text',
   cond: 'bg-verdict-cond-bg text-verdict-cond-text',
   wait: 'bg-verdict-wait-bg text-verdict-wait-text',
@@ -15,6 +19,7 @@ const VERDICT_CLASS: Record<VerdictVariant, string> = {
 };
 
 const VERDICT_ICON: Record<VerdictVariant, string> = {
+  unrated: 'ti-minus',
   good: 'ti-check',
   cond: 'ti-alert-circle',
   wait: 'ti-clock',
@@ -22,7 +27,7 @@ const VERDICT_ICON: Record<VerdictVariant, string> = {
 };
 
 export function VerdictPill({
-  variant = 'good',
+  variant = 'unrated',
   score,
   label,
 }: {
@@ -44,7 +49,7 @@ export function VerdictPill({
 }
 
 export function VerdictCard({
-  variant = 'good',
+  variant = 'unrated',
   score,
   reason,
 }: {
@@ -79,7 +84,7 @@ export function VerdictCard({
         </div>
         <div className="flex flex-col items-end">
           <span className="text-[32px] leading-none font-bold">{score}</span>
-          <span className="text-[11px] opacity-60">/100</span>
+          <span className="text-[11px] opacity-60">/{EDITORIAL_SCORE_MAX}</span>
         </div>
       </div>
     </div>

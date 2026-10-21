@@ -1,0 +1,88 @@
+# OpenShip: GitHub main is the deployment source. No secrets in Git.
+# Its Compose parser supports build.args, not build.target.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: babiespicks
+      POSTGRES_DB: babiespicks
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /var/lib/webvue-apps/babiespicks/production/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U babiespicks -d babiespicks]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 512m
+    cpus: 1
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        RUNTIME_STAGE: tools
+    restart: 'no'
+    command: [node, scripts/deploy/migrate.mjs]
+    environment:
+      DATABASE_URL: postgresql://babiespicks:${POSTGRES_PASSWORD}@db:5432/babiespicks
+    depends_on: [db]
+    mem_limit: 512m
+    cpus: 1
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        RUNTIME_STAGE: web
+        NEXT_PUBLIC_SITE_URL: https://babiespicks.com
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://babiespicks:${POSTGRES_PASSWORD}@db:5432/babiespicks
+      NEXT_PUBLIC_SITE_URL: https://babiespicks.com
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+      MEDIA_ROOT: /data/media
+    depends_on: [db, migrate]
+    volumes:
+      - /var/lib/webvue-apps/babiespicks/production/media:/data/media:ro
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    mem_limit: 768m
+    cpus: 1
+
+  mcp:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile
+      args:
+        RUNTIME_STAGE: mcp
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://babiespicks:${POSTGRES_PASSWORD}@db:5432/babiespicks
+      MCP_PORT: '8765'
+      MCP_PUBLIC_URL: https://mcp.babiespicks.com
+      MCP_OAUTH_SECRET: ${MCP_OAUTH_SECRET}
+      MCP_ADMIN_PASSWORD: ${MCP_ADMIN_PASSWORD}
+      ENABLE_MCP_PUBLISH: 'true'
+      MEDIA_ROOT: /data/media
+      WEB_REVALIDATE_URL: http://web:3000/api/revalidate
+      WEB_REVALIDATE_ALLOW_INTERNAL_HTTP: 'true'
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+    depends_on: [db, migrate]
+    volumes:
+      - /var/lib/webvue-apps/babiespicks/production/media:/data/media
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8765/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    mem_limit: 512m
+    cpus: 1

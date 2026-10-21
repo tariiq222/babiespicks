@@ -2,14 +2,21 @@
   "name": "babiespicks",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-powered Saudi baby product review platform",
+  "description": "Saudi baby product editorial platform with MCP content management",
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "type-check": "turbo run type-check",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "build": "pnpm db:generate && pnpm --filter @babiespicks/web build && pnpm --filter @babiespicks/mcp build",
+    "dev": "pnpm --filter @babiespicks/web dev",
+    "lint": "eslint apps/web apps/mcp/src packages/domain/src packages/db/src scripts/simplification --config eslint.config.ts",
+    "test": "vitest run",
+    "type-check": "pnpm --filter @babiespicks/db type-check && pnpm --filter @babiespicks/domain type-check && pnpm --filter @babiespicks/web type-check && pnpm --filter @babiespicks/mcp type-check",
+    "dev:mcp": "node --env-file-if-exists=.env --import tsx apps/mcp/src/index.ts",
+    "test:simplification": "vitest run packages/domain apps/mcp apps/web",
+    "test:migration": "vitest run scripts/simplification/migration.spec.ts",
+    "migrate:legacy": "tsx scripts/simplification/migrate-cli.ts",
+    "db:generate": "pnpm --filter @babiespicks/db generate",
+    "db:deploy": "pnpm --filter @babiespicks/db migrate:deploy",
+    "verify:migration": "tsx scripts/simplification/verify-cli.ts",
+    "test:acceptance": "tsx scripts/simplification/acceptance.ts"
   },
   "packageManager": "pnpm@10.11.0",
   "engines": {
@@ -20,11 +27,11 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
     "typescript-eslint": "^8.0.0",
-    "turbo": "^2.9.14",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "@babiespicks/db": "workspace:*",
+    "@babiespicks/domain": "workspace:*",
+    "tsx": "^4.23.12"
   },
-  "dependencies": {
-    "@openrouter/sdk": "^0.12.35"
-  }
+  "type": "module"
 }

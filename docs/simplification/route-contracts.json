@@ -1,0 +1,33 @@
+{
+  "base": "87e0b40fc95b9fd2a1e62811d940f401caf0712c",
+  "publicPages": [
+    "/{ar|en}",
+    "/{ar|en}/about",
+    "/{ar|en}/best",
+    "/{ar|en}/best/[slug]",
+    "/{ar|en}/categories",
+    "/{ar|en}/categories/[slug]",
+    "/{ar|en}/compare",
+    "/{ar|en}/compare/[slug1]/vs/[slug2]",
+    "/{ar|en}/contact",
+    "/{ar|en}/coupons",
+    "/{ar|en}/coupons/[storeSlug]",
+    "/{ar|en}/disclosure",
+    "/{ar|en}/faq",
+    "/{ar|en}/guides/[slug]",
+    "/{ar|en}/offers/[slug]",
+    "/{ar|en}/privacy",
+    "/{ar|en}/products/[slug]",
+    "/{ar|en}/reviews/[slug]",
+    "/{ar|en}/search",
+    "/{ar|en}/terms",
+    "/{ar|en}/tools",
+    "/{ar|en}/tools/calculator",
+    "/{ar|en}/tools/finder"
+  ],
+  "purchaseRoutes": [
+    "/go/:productId/:storeId",
+    "/go/best/:productId"
+  ],
+  "legacyApiHostnameMustRemainRouted": true
+}

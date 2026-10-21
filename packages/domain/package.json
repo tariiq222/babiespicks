@@ -1,0 +1,22 @@
+{
+  "name": "@babiespicks/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@babiespicks/db": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@types/node": "^25.8.0",
+    "vitest": "^4.1.6"
+  }
+}

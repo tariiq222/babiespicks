@@ -1,98 +1,54 @@
 # BabiesPicks
 
-> منصة سعودية ذكية لمراجعة منتجات الأمومة والطفل بالذكاء الاصطناعي
+منصة عربية/إنجليزية لعروض منتجات الأطفال والأسعار المتاحة والكوبونات وروابط التسويق بالعمولة. إدارة المحتوى من المساعد عبر MCP، على نمط موقع طارق، مع فصل البيانات والاتصالات بين الموقعين.
 
-**AI-powered Saudi baby product review platform**
+## البنية
 
-## Live
+- `apps/web`: Next.js، الصفحات العامة والبحث والكوبونات والنشرة والتحويل إلى المتاجر.
+- `apps/mcp`: OAuth + MCP لإدارة المنتجات والمحتوى والأسعار والصور والنشر.
+- `packages/db`: Prisma/PostgreSQL، مخطط البيانات والترحيلات الإضافية.
+- `packages/domain`: قواعد النشر والتعديل والإصدارات والأسعار وروابط العمولة.
+- أُزيلت خدمات ووكلاء النظام السابق من الشيفرة. تبقى ترحيلات المخطط وأدوات استيراد البيانات الحقيقية؛ النسخة الأصلية قابلة للاسترجاع من Git.
 
-- **Website:** https://babiespicks.com
-- **API:** https://api.babiespicks.com
-- **Errors:** https://errors.webvue.pro (GlitchTip)
+لا يستدعي الموقع نماذج ذكاء اصطناعي. المساعد يجمع المصادر ويجهز المحتوى، ثم يستعمل الأدوات. تحديث السعر عملية مستقلة عن التحليل والتقييم. الكوبونات المنتهية تُستبعد عند القراءة. الاشتراك بالنشرة يحفظ البريد فقط، ولا يرسل رسائل تلقائيًا.
 
-## Tech Stack
+## التطوير
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16, Tailwind CSS 4, next-intl |
-| Backend | NestJS 11, Prisma 6, PostgreSQL 16 |
-| AI | OpenRouter (Claude Sonnet 4, Gemini Flash, GLM-4.5-Air) |
-| Infra | Dokploy, Cloudflare, Docker |
-| Monitoring | GlitchTip (Sentry-compatible) |
+Node.js 22+ وpnpm 10.11.0 وPostgreSQL 16. انسخ `.env.example` واضبط المتغيرات دون وضع الأسرار في Git. لواجهة Next.js ضع إعدادها المحلي في `apps/web/.env.local` أو صدّر المتغيرات إلى البيئة. خدمة MCP تقرأ `.env` الجذرية عبر أمر التطوير.
 
-## Architecture
-
-**Vertical Slice Architecture** — each feature is self-contained.
-
-```
-apps/
-  web/          → Next.js frontend (RTL Arabic + English)
-  api/          → NestJS backend
-    src/
-      features/   → Business slices (products, search, affiliate, auth, cron)
-      agents/     → AI agent slices (data-acquisition, review-analyzer, verdict-engine, content-writer, quality-guard, publisher, coordinator)
-      infrastructure/ → Shared (database, openrouter, queue)
-packages/
-  shared-types/ → TypeScript types
-  ui/           → Shared components
-  config/       → ESLint, TSConfig
+```sh
+pnpm install --frozen-lockfile
+pnpm db:generate
+pnpm dev
+# في طرفية ثانية بعد إعداد MCP_PUBLIC_URL والمصادقة وDATABASE_URL:
+pnpm dev:mcp
 ```
 
-## Quick Start
+`pnpm db:deploy` ينفذ ترحيلات المخطط فقط. لا ينقل نشر المحتوى القديم تلقائيًا. قبل استخدام قاعدة موجودة اتبع دليل الانتقال ولا تستخدم `db push` أو reset.
 
-```bash
-# Prerequisites: Node 22+, pnpm 10+
-git clone https://github.com/tariiq222/babiespicks.git
-cd babiespicks
-pnpm install
+## التحقق
 
-# Setup SSH tunnel to DB (needed for local dev)
-ssh -f -N -L 5433:localhost:54320 deqah
-
-# Copy env
-cp apps/api/.env.example apps/api/.env
-# Edit .env with your DATABASE_URL and OPENROUTER_API_KEY
-
-# Run dev
-pnpm turbo dev
-# Frontend: http://localhost:3000
-# API: http://localhost:3001
+```sh
+pnpm type-check
+pnpm lint
+pnpm test
+pnpm build
 ```
 
-## AI Pipeline
+اختبارات PostgreSQL والتكامل لا تُفعّل إلا بمتغير `TEST_DATABASE_URL` لقاعدة معزولة ينتهي اسمها بـ `_test`. بعض اختبارات دورة الحياة تستخدم `TEST_WEB_URL` لخادم محلي. أمر `pnpm test:acceptance` يكتب بيانات تجريبية ويُمنع على الإنتاج؛ يحتاج قاعدة `_test` وخادم localhost مطابقًا لها. عدم وجود متغير اختبار القاعدة يعني تخطي اختبارات التكامل، وليس إثبات نجاحها.
 
-```
-URL → DataAcquisition → ReviewAnalyzer → VerdictEngine → Publisher
-                                          ContentWriter → QualityGuard → Publisher
-```
+## النشر والتشغيل
 
-**Verdict Types:**
-- 🟢 WORTH_IT (≥7.5/10)
-- 🟡 WORTH_IT_WITH (6.0-7.4, with conditions)
-- 🟣 WAIT (4.5-5.9)
-- 🔴 NOT_WORTH_IT (<4.5)
+- Dockerfile موحد: `infrastructure/docker/Dockerfile`، أهداف `web` و`mcp` و`tools`.
+- Compose: `infrastructure/docker/compose.yml`. قاعدة `db` اختيارية عبر profile `local-db`؛ يمكن استخدام PostgreSQL موجودة.
+- الجاهزية: الويب `/api/ready` وMCP `/ready`، والحيوية `/api/health` و`/health`.
+- ربط المساعد على `<MCP_PUBLIC_URL>/mcp` باتصال OAuth مستقل. النشر يتطلب تمكين الخادم وموافقة المالك في صفحة التفويض.
+- احفظ `/data/media` في تخزين دائم مشترك: MCP يكتب، والويب يقرأ.
+- مضيف API السابق يحتاج استمرار توجيه روابط `/go/...` إلى الويب الجديد؛ نقل النطاق الرئيسي وحده لا يكفي.
 
-**5 Axes:** Safety (25%), Quality (25%), Reviews (20%), Price (15%), Long-term Value (15%)
+التفاصيل: `docs/simplification/cutover.md`, `rollback.md`, `automation.md`, `verification.md` و`apps/mcp/README.md`.
 
-## Deployment
 
-Auto-deployed via Dokploy on push to `main`.
+## النطاق الحالي
 
-- Web: `infrastructure/docker/Dockerfile.web`
-- API: `infrastructure/docker/Dockerfile.api`
-
-## Database
-
-20 products, 15 content pages, 6 categories, 4 stores.
-
-```bash
-# Seed data
-cd apps/api && npx ts-node src/seed.ts
-
-# Backup (runs daily at 4 AM on server)
-ssh deqah "/etc/dokploy/scripts/backup-babiespicks.sh"
-```
-
-## License
-
-Private. © 2026 BabiesPicks.
+الواجهة تركز على العروض والكوبونات. إدارة المنتجات والعروض والأسعار والنشر عبر MCP. أُزيلت واجهات الأدوات والمقارنة والتصنيفات والتوصيات والمراجعات، وتعيد روابطها القديمة إلى العروض. الأسعار الظاهرة حديثة ولها رابط متجر صالح وفق قاعدة النطاق المركزية؛ لا نعيد سعرًا أقدم إذا كانت أحدث ملاحظة غير صالحة. الاشتراك البريدي غير متاح.

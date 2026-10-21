@@ -1,11 +1,2 @@
-import { redirect } from 'next/navigation';
-
-type PageProps = {
-  params: Promise<{ locale: string }>;
-};
-
-export default async function Page({ params }: PageProps) {
-  const { locale } = await params;
-
-  redirect(`/${locale}/admin/dify-flow`);
-}
+export const metadata = { robots: { index: false, follow: false } };
+export default async function AdminPage({ params }: { params: Promise<{ locale: string }> }) { const { locale } = await params; const ar = locale === 'ar'; return <main lang={locale} dir={ar ? 'rtl' : 'ltr'} className="max-w-3xl mx-auto px-6 py-16"><h1 className="text-3xl mb-6">{ar ? 'إدارة العروض عبر MCP' : 'Offer management through MCP'}</h1><p className="leading-8">{ar ? 'تُدار العروض والمنتجات والأسعار والكوبونات من خلال خدمة MCP الموثقة. يتطلب النشر اتصال OAuth وصلاحية نشر من المالك. لا توجد لوحة تشغيل أو تسجيل دخول من هذه الصفحة.' : 'Offers, products, prices and coupons are managed through the authenticated MCP service. Publishing requires OAuth and an owner publishing grant. This page provides no management dashboard or login.'}</p></main>; }

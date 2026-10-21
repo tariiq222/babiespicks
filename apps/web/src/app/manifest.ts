@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'BabiesPicks - مراجعات منتجات الأطفال',
+    name: 'BabiesPicks - عروض منتجات الأطفال',
     short_name: 'BabiesPicks',
-    description: 'AI-powered baby product reviews for Saudi families',
+    description: 'Baby product offers and store coupons',
     start_url: '/ar',
     display: 'standalone',
     background_color: '#FAF8F5',

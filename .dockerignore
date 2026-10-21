@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+.env
+.env.*
+!**/.env.example
+work
+.superpowers
+**/*.tsbuildinfo
+
+# Runtime images do not need planning/history or their build recipe in copied sources.
+docs
+AGENTS.md
+infrastructure/docker/Dockerfile

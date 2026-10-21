@@ -71,10 +71,6 @@ export default async function DisclosurePage({ params }: Props) {
           <Link href="/about" className="text-sage hover:text-sage-hover underline">
             {t('howWeReviewLink')}
           </Link>
-          {' '}{t('faqText')}{' '}
-          <Link href="/faq" className="text-sage hover:text-sage-hover underline">
-            {t('faqLink')}
-          </Link>
           .
         </p>
       </div>

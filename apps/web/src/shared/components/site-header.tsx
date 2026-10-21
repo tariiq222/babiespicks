@@ -19,7 +19,7 @@ export function SiteHeader() {
     const form = e.currentTarget;
     const q = (form.elements.namedItem('q') as HTMLInputElement)?.value;
     if (q && q.length >= 2) {
-      router.push(`/search?q=${encodeURIComponent(q)}`);
+      router.push(`/?q=${encodeURIComponent(q)}`);
     }
   };
 
@@ -42,12 +42,8 @@ export function SiteHeader() {
 
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-5 me-1">
-          <Link href="/" className={`text-[13px] transition-colors ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.products')}</Link>
-          <Link href="/categories" className={`text-[13px] transition-colors ${pathname === '/categories' ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.categories')}</Link>
-          <Link href="/best" className={`text-[13px] transition-colors ${pathname?.startsWith('/best') ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.bestLists')}</Link>
+          <Link href="/" className={`text-[13px] transition-colors ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.offers')}</Link>
           <Link href="/coupons" className={`text-[13px] transition-colors ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.coupons')}</Link>
-          <Link href="/tools" className={`text-[13px] transition-colors ${pathname?.startsWith('/tools') ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.tools')}</Link>
-          <Link href="/about" className={`text-[13px] transition-colors ${pathname === '/about' ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.howWeReview')}</Link>
         </nav>
 
         {/* End cluster */}
@@ -64,7 +60,7 @@ export function SiteHeader() {
           </form>
 
           {/* Search icon (mobile) */}
-          <Link href="/search" className="lg:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone" aria-label={t('header.searchAriaLabel')}>
+          <Link href="/" className="lg:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone" aria-label={t('header.searchAriaLabel')}>
             <i className="ti ti-search text-[18px]"></i>
           </Link>
 
@@ -81,15 +77,6 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          {/* Newsletter CTA — bold with terracotta pulse indicator */}
-          <Link
-            href="/#newsletter"
-            className="hidden sm:inline-flex items-center gap-2 bg-sage text-cream rounded-full px-5 py-[9px] text-[12.5px] hover:bg-sage-hover relative overflow-hidden group"
-          >
-            <span className="absolute top-[7px] right-[7px] w-2 h-2 rounded-full bg-terracotta ring-2 ring-cream animate-pulse"></span>
-            <i className="ti ti-sparkles text-[14px]"></i>
-            <span className="font-medium">{t('header.newsletter')}</span>
-          </Link>
 
           {/* Mobile menu */}
           <button
@@ -105,20 +92,8 @@ export function SiteHeader() {
       {/* Mobile dropdown */}
       {open && (
         <div className="md:hidden hairline-t bg-cream px-5 py-3 flex flex-col gap-3">
-          <Link href="/" onClick={() => setOpen(false)} className={`text-[13px] ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.products')}</Link>
-          <Link href="/categories" onClick={() => setOpen(false)} className={`text-[13px] ${pathname === '/categories' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.categories')}</Link>
-          <Link href="/best" onClick={() => setOpen(false)} className={`text-[13px] ${pathname?.startsWith('/best') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.bestLists')}</Link>
+          <Link href="/" onClick={() => setOpen(false)} className={`text-[13px] ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.offers')}</Link>
           <Link href="/coupons" onClick={() => setOpen(false)} className={`text-[13px] ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.coupons')}</Link>
-          <Link href="/tools" onClick={() => setOpen(false)} className={`text-[13px] ${pathname?.startsWith('/tools') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.tools')}</Link>
-          <Link href="/about" onClick={() => setOpen(false)} className={`text-[13px] ${pathname === '/about' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.howWeReview')}</Link>
-          <Link
-            href="/#newsletter"
-            onClick={() => setOpen(false)}
-            className="mt-1 bg-sage text-cream rounded-lg px-4 py-2 text-[13px] flex items-center justify-center gap-2"
-          >
-            <i className="ti ti-sparkles text-[14px]"></i>
-            <span>{t('header.newsletterMobile')}</span>
-          </Link>
         </div>
       )}
     </header>

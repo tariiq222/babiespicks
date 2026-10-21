@@ -27,19 +27,11 @@ pnpm-debug.log*
 # Test
 coverage/
 
-# Prisma
-apps/api/prisma/*.db
-apps/api/prisma/migrations/*.sql.bak
-
-# MinIO data
-minio-data/
-
 # Uploaded images
 uploads/
 
 # Sentry
 .sentryclirc
-apps/api/.env
 
 # Build artifacts
 *.tsbuildinfo
@@ -56,11 +48,13 @@ agent-os/
 .opencode/agent/
 ai-memory/
 
-# Test scripts (temp)
-apps/api/test-*.js
-apps/api/batch-pipeline.js
-apps/api/verify-db.js
-
 # Graphify local knowledge graph
 graphify-out/
 .graphify_*.json
+
+# Local execution evidence and restored test data
+work/
+.superpowers/
+
+# Generated isolated test artifacts
+.test-artifacts/

@@ -32,7 +32,7 @@ export function ProductImage({
         height={fill ? undefined : height}
         fill={fill}
         className={className || 'object-contain'}
-        style={{ borderRadius: radius }}
+        style={{ borderRadius: radius, maxWidth: '100%', height: fill ? undefined : 'auto' }}
         priority={priority}
         quality={quality}
         sizes={sizes ?? '(max-width: 768px) 50vw, 25vw'}
@@ -45,6 +45,7 @@ export function ProductImage({
       className={`placeholder-stripe flex items-center justify-center text-[11px] text-stone/50 font-mono ${className}`}
       style={{
         width: width >= 500 ? '100%' : width,
+        maxWidth: '100%',
         height,
         borderRadius: radius,
         aspectRatio: `${width}/${height}`,

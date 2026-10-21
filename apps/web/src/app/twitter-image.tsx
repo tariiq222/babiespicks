@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
 
-export const alt = 'BabiesPicks - مراجعات منتجات الأمومة والطفل';
+export const alt = 'BabiesPicks - عروض منتجات الأطفال';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -54,7 +54,7 @@ export default function Image() {
             textAlign: 'center',
           }}
         >
-          Honest baby product reviews powered by AI
+          Baby product offers and store coupons
         </div>
       </div>
     ),

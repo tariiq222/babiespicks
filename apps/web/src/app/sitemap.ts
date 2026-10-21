@@ -1,91 +1,10 @@
 import type { MetadataRoute } from 'next';
-
+import { prisma } from '@babiespicks/db';
+import { getAllProducts, getPublishedOffers } from '@/server/queries';
+export const dynamic = 'force-dynamic';
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
-const API_URL = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const locales = ['ar', 'en'];
-
-// Static pages
-  const staticPages = ['', '/about', '/privacy', '/terms', '/search', '/contact', '/faq', '/compare'].flatMap((path) =>
-    locales.map((locale) => ({
-      url: `${BASE_URL}/${locale}${path}`,
-      lastModified: new Date(),
-      changeFrequency: path === '' || path === '/compare' ? 'daily' as const : 'monthly' as const,
-      priority: path === '' ? 1.0 : path === '/search' || path === '/contact' || path === '/faq' || path === '/compare' ? 0.6 : 0.5,
-      alternates: {
-        languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}${path}`])),
-      },
-    })),
-  );
-
-  // Store coupon pages
-  const storeSlugs = ['amazon-sa', 'noon', 'mumzworld', 'jarir'];
-  const couponPages = storeSlugs.flatMap((store) =>
-    locales.map((locale) => ({
-      url: `${BASE_URL}/${locale}/coupons/${store}`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.6,
-      alternates: {
-        languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}/coupons/${store}`])),
-      },
-    })),
-  );
-
-  // Category pages
-  const categorySlugs = ['formula', 'diapers', 'carseats', 'bottles', 'toys', 'care'];
-  const categoryPages = categorySlugs.flatMap((cat) =>
-    locales.map((locale) => ({
-      url: `${BASE_URL}/${locale}/categories/${cat}`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-      alternates: {
-        languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}/categories/${cat}`])),
-      },
-    })),
-  );
-
-  // Best-of pages (one per category)
-  const bestListPages = categorySlugs.flatMap((cat) =>
-    locales.map((locale) => ({
-      url: `${BASE_URL}/${locale}/best/${cat}`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-      alternates: {
-        languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}/best/${cat}`])),
-      },
-    })),
-  );
-
-  // Fetch products from API
-  let productPages: MetadataRoute.Sitemap = [];
-  try {
-    const productsRes = await fetch(`${API_URL}/products?locale=ar&limit=1000`, {
-      next: { revalidate: 3600 },
-    });
-    if (productsRes.ok) {
-      const { data: products } = await productsRes.json();
-      productPages = products
-        .filter((p: { isActive: boolean }) => p.isActive)
-        .flatMap((p: { slug: string }) =>
-          locales.map((locale) => ({
-            url: `${BASE_URL}/${locale}/products/${p.slug}`,
-            lastModified: new Date(),
-            changeFrequency: 'weekly' as const,
-            priority: 0.8,
-            alternates: {
-              languages: Object.fromEntries(locales.map((l) => [l, `${BASE_URL}/${l}/products/${p.slug}`])),
-            },
-          })),
-        );
-    }
-  } catch (e) {
-    // Fallback: no product pages if API unavailable
-    console.error('Failed to fetch products for sitemap:', e);
-  }
-
-  return [...staticPages, ...categoryPages, ...bestListPages, ...couponPages, ...productPages];
+  const [products, offers, stores] = await Promise.all([getAllProducts(), getPublishedOffers(), prisma.store.findMany({ where: { isActive: true, coupons: { some: { status: 'ACTIVE', AND: [{ OR: [{ validFrom: null }, { validFrom: { lte: new Date() } }] }, { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] }] } } }, select: { slug: true } })]);
+  const paths = ['', '/about', '/privacy', '/terms', '/disclosure', '/coupons', ...products.filter(p => p.prices.length > 0).map(p => `/products/${p.slug}`), ...offers.map(o => `/offers/${o.slug}`), ...stores.map(s => `/coupons/${s.slug}`)];
+  return [...new Set(paths)].flatMap(path => ['ar', 'en'].map(locale => ({ url: `${BASE_URL}/${locale}${path}`, changeFrequency: 'daily' as const, priority: path === '' ? 1 : 0.7 })));
 }

@@ -1,20 +1,11 @@
+import { getStoreBySlug } from '@/server/queries';
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
 import { Link } from '@/i18n/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { Metadata } from 'next';
 import { getAlternates } from '@/shared/lib/metadata';
-import { StoreCouponsClient } from './store-coupons-client';
-
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://babiespicks.com';
-const API_URL = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.babiespicks.com';
-
-const STORE_MAP: Record<string, { id: string; name: string }> = {
-  'amazon-sa': { id: 'amazon-sa', name: 'أمازون السعودية' },
-  noon: { id: 'noon', name: 'نون' },
-  mumzworld: { id: 'mumzworld', name: 'مامز ورلد' },
-  jarir: { id: 'jarir', name: 'جرير' },
-};
+import { CouponsClient } from '../coupons-client';
 
 interface Props {
   params: Promise<{ locale: string; storeSlug: string }>;
@@ -22,7 +13,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale, storeSlug } = await params;
-  const store = STORE_MAP[storeSlug];
+  const store = await getStoreBySlug(storeSlug);
   if (!store) return {};
   const t = await getTranslations('coupons');
   return {
@@ -32,28 +23,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-async function getStoreBySlug(slug: string) {
-  try {
-    const res = await fetch(`${API_URL}/stores/${slug}`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
-
 export default async function StoreCouponsPage({ params }: Props) {
   const { locale, storeSlug } = await params;
   const storeData = await getStoreBySlug(storeSlug);
-  const store = storeData?.data || STORE_MAP[storeSlug];
+  const store = storeData;
   const t = await getTranslations('coupons');
 
-  if (!store && !STORE_MAP[storeSlug]) {
+  if (!store) {
     notFound();
   }
 
-  const storeName = store?.name || STORE_MAP[storeSlug]?.name || storeSlug;
-  const storeLogoUrl = store?.logoUrl || null;
+  const storeName = store.name;
+  const storeLogoUrl = storeData?.logoUrl || null;
 
   return (
     <main>
@@ -94,7 +75,7 @@ export default async function StoreCouponsPage({ params }: Props) {
       </section>
 
       <section className="px-5 md:px-8 lg:px-12 py-10 max-w-7xl mx-auto">
-        <StoreCouponsClient storeSlug={storeSlug} locale={locale} />
+        <CouponsClient storeSlug={storeSlug} />
       </section>
     </main>
   );

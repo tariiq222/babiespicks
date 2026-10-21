@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextIntlClientProvider, hasLocale } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -6,7 +8,7 @@ import { PublicShell } from '@/shared/components/public-shell';
 import { SiteHeader } from '@/shared/components/site-header';
 import { SiteFooter } from '@/shared/components/site-footer';
 import { GlitchTipInit } from '@/shared/components/glitchtip-init';
-import Script from 'next/script';
+import { AnalyticsScripts } from '@/shared/components/analytics-scripts';
 
 export default async function LocaleLayout({
   children,
@@ -26,18 +28,7 @@ export default async function LocaleLayout({
   return (
     <>
       <GlitchTipInit />
-      <Script
-        src="https://www.googletagmanager.com/gtag/js?id=G-89JKJ8W16L"
-        strategy="afterInteractive"
-      />
-      <Script id="gtag-init" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'G-89JKJ8W16L');
-        `}
-      </Script>
+      <AnalyticsScripts measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
       <NextIntlClientProvider messages={messages}>
         <PublicShell
           header={<SiteHeader />}

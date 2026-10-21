@@ -1,14 +1,2 @@
-import { NextResponse } from 'next/server';
-import {
-  ADMIN_SESSION_COOKIE_NAME,
-  clearAdminSessionCookieOptions,
-} from '../../../lib/admin-session';
-
-export const runtime = 'nodejs';
-
-export async function POST() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(ADMIN_SESSION_COOKIE_NAME, '', clearAdminSessionCookieOptions());
-
-  return response;
-}
+function retired() { return Response.json({ message: 'Management has moved to the authenticated MCP service' }, { status: 410 }); }
+export { retired as GET, retired as POST, retired as PUT, retired as PATCH, retired as DELETE, retired as OPTIONS };
