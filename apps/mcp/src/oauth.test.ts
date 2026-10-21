@@ -108,6 +108,9 @@ describe('single owner OAuth authorization code flow', () => {
     expect((await app.request('/oauth/authorize',form({transaction:grant.transaction,password:config.MCP_ADMIN_PASSWORD!}))).status).toBe(400);
     const {client}=await registration(app);
     const page=await app.request(`/oauth/authorize?${new URLSearchParams({response_type:'code',client_id:client.client_id,redirect_uri:callback,code_challenge:challenge,code_challenge_method:'S256',resource:config.MCP_RESOURCE})}`);
+    // Chrome sends Origin:null on form POST under no-referrer. Preserve the
+    // same-origin Origin required below without leaking URLs cross-origin.
+    expect(page.headers.get('referrer-policy')).toBe('same-origin');
     const transaction=/name="transaction" value="([^"]+)"/.exec(await page.text())![1];
     const request=form({transaction,password:config.MCP_ADMIN_PASSWORD!},page.headers.get('set-cookie')!.split(';')[0]);
     request.headers.origin='https://evil.test';
