@@ -84,7 +84,10 @@ export function createOAuthRoutes(config: AppConfig): Hono {
     const redirects = metadata.redirect_uris;
     if(!Array.isArray(redirects) || !redirects.length || redirects.length>10 || !redirects.every(validRedirect)
       || (metadata.token_endpoint_auth_method !== undefined && metadata.token_endpoint_auth_method !== 'none')
-      || (metadata.grant_types !== undefined && (!Array.isArray(metadata.grant_types) || metadata.grant_types.length !== 1 || metadata.grant_types[0] !== 'authorization_code'))
+      // RFC 7591 allows registration to return a supported subset of requested
+      // metadata. Grok Bot also requests refresh_token; register code-only and
+      // keep refresh grants unavailable at the token endpoint.
+      || (metadata.grant_types !== undefined && (!Array.isArray(metadata.grant_types) || !metadata.grant_types.includes('authorization_code') || metadata.grant_types.some(grant=>grant !== 'authorization_code' && grant !== 'refresh_token')))
       || (metadata.response_types !== undefined && (!Array.isArray(metadata.response_types) || metadata.response_types.length !== 1 || metadata.response_types[0] !== 'code')))
       return c.json({error:'invalid_client_metadata'},400);
     const clientId = `bp-${nonce()}`;

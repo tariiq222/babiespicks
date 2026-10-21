@@ -26,6 +26,37 @@ async function exchange(app: ReturnType<typeof createOAuthRoutes>, grant: Awaite
   return app.request('/oauth/token', form({grant_type:'authorization_code',code:grant.code,client_id:grant.client.client_id,redirect_uri:callback,code_verifier:verifier,resource:config.MCP_RESOURCE,...extra}));
 }
 describe('single owner OAuth authorization code flow', () => {
+  it('registers Grok Bot metadata with only the supported authorization code grant', async () => {
+    const app = createOAuthRoutes(config);
+    const redirect = 'https://www.cursor.com/agents/mcp/oauth/callback';
+    const response = await app.request('/oauth/register', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+      redirect_uris:[redirect,'http://localhost:8787/callback'],
+      grant_types:['authorization_code','refresh_token'],response_types:['code'],
+      token_endpoint_auth_method:'none',client_name:'Cursor',
+    })});
+    expect(response.status).toBe(201);
+    const client = await response.json();
+    expect(client.grant_types).toEqual(['authorization_code']);
+    const page = await app.request(`/oauth/authorize?${new URLSearchParams({response_type:'code',client_id:client.client_id,redirect_uri:redirect,code_challenge:challenge,code_challenge_method:'S256',resource:config.MCP_RESOURCE})}`);
+    expect(page.status).toBe(200);
+    const transaction = /name="transaction" value="([^"]+)"/.exec(await page.text())![1];
+    const approved = await app.request('/oauth/authorize',form({transaction,password:config.MCP_ADMIN_PASSWORD!},page.headers.get('set-cookie')!.split(';')[0]));
+    const code = new URL(approved.headers.get('location')!).searchParams.get('code')!;
+    const token = await app.request('/oauth/token',form({grant_type:'authorization_code',code,client_id:client.client_id,redirect_uri:redirect,code_verifier:verifier,resource:config.MCP_RESOURCE}));
+    expect(token.status).toBe(200);
+    const credentials = await token.json();
+    expect(credentials.refresh_token).toBeUndefined();
+    expect(authenticate(`Bearer ${credentials.access_token}`,config)?.canPublish).toBe(false);
+    const refresh = await app.request('/oauth/token',form({grant_type:'refresh_token',refresh_token:'unsupported'}));
+    expect(refresh.status).toBe(400);
+    expect(await refresh.json()).toEqual({error:'unsupported_grant_type'});
+  });
+  it('rejects malformed or incompatible grant requests at registration', async () => {
+    for(const grant_types of [[],['refresh_token'],['client_credentials'],['authorization_code','implicit'],['authorization_code',42],'authorization_code']) {
+      const response = await createOAuthRoutes(config).request('/oauth/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({redirect_uris:[callback],grant_types})});
+      expect(response.status).toBe(400);
+    }
+  });
   it('advertises the canonical issuer and exact MCP resource independent of Host', async () => {
     const app = createOAuthRoutes(config);
     const metadata = await (await app.request('https://evil.test/.well-known/oauth-protected-resource/mcp')).json();
