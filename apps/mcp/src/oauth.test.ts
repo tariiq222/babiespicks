@@ -39,7 +39,7 @@ describe('single owner OAuth authorization code flow', () => {
     expect(client.grant_types).toEqual(['authorization_code']);
     const page = await app.request(`/oauth/authorize?${new URLSearchParams({response_type:'code',client_id:client.client_id,redirect_uri:redirect,code_challenge:challenge,code_challenge_method:'S256',resource:config.MCP_RESOURCE})}`);
     expect(page.status).toBe(200);
-    expect(page.headers.get('content-security-policy')).toContain("form-action 'self' https://www.cursor.com https://cursor.com;");
+    expect(page.headers.get('content-security-policy')).toContain("form-action 'self' https://www.cursor.com http://localhost:8787 https://cursor.com;");
     const transaction = /name="transaction" value="([^"]+)"/.exec(await page.text())![1];
     const approved = await app.request('/oauth/authorize',form({transaction,password:config.MCP_ADMIN_PASSWORD!},page.headers.get('set-cookie')!.split(';')[0]));
     const code = new URL(approved.headers.get('location')!).searchParams.get('code')!;
