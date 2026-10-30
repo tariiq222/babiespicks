@@ -45,6 +45,10 @@ services:
       DATABASE_URL: postgresql://babiespicks:${POSTGRES_PASSWORD}@db:5432/babiespicks
       NEXT_PUBLIC_SITE_URL: https://babiespicks.com
       REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+      DEPLOY_API_KEY: ${DEPLOY_API_KEY:-}
+      DEPLOY_API_URL: ${DEPLOY_API_URL:-https://api-cdn.deploy.com/api/v1}
+      CHAT_MODEL: ${CHAT_MODEL:-zai-org/glm-5.3-flash}
+      CHAT_DAILY_BUDGET_USD: ${CHAT_DAILY_BUDGET_USD:-2}
       AMAZON_ASSOCIATES_TAG: babiespicks-21
       MEDIA_ROOT: /data/media
     depends_on: [db, migrate]

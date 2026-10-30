@@ -1,6 +1,20 @@
 import {describe,it,expect} from 'vitest';
-import {getProductImages,getAmazonReviewSource,organizeProductDescription} from './product-details';
+import {getProductImages,getAmazonReviewSource,groupSpecs,organizeProductDescription,splitSentences,splitSpecList,stripConditionPrefix} from './product-details';
 describe('product detail presentation',()=>{
+ it('splits reasoning into sentences and keeps decimals whole',()=>{
+  expect(splitSentences('تقييمها 4.6 من 5. لم نختبرها بأنفسنا.')).toEqual(['تقييمها 4.6 من 5.','لم نختبرها بأنفسنا.']);
+ });
+ it('removes a repeated condition prefix only at the start',()=>{
+  expect(stripConditionPrefix('إذا كان عندك سجادة')).toBe('كان عندك سجادة');expect(stripConditionPrefix('If you travel')).toBe('you travel');expect(stripConditionPrefix('إذاعة')).toBe('إذاعة');
+ });
+ it('splits spec lists on top-level commas only',()=>{
+  expect(splitSpecList('فرشة لعب، 7 ألعاب (ميدالية، خشخيشة)، وسادة')).toEqual(['فرشة لعب','7 ألعاب (ميدالية، خشخيشة)','وسادة']);
+ });
+ it('separates buyer facts, long details and catalogue identifiers',()=>{
+  const specs=[{key:'ASIN',value:'B07'},{key:'رقم الطراز',value:'11749'},{key:'الوزن',value:'1.45 كغ'},{key:'المحتويات',value:'ا'.repeat(41)}];
+  const {facts,details,identifiers}=groupSpecs(specs);
+  expect(facts.map(spec=>spec.key)).toEqual(['الوزن']);expect(details.map(spec=>spec.key)).toEqual(['المحتويات']);expect(identifiers.map(spec=>spec.key)).toEqual(['ASIN','رقم الطراز']);
+ });
  it('keeps cover first and removes duplicates and unsafe gallery URLs',()=>{
   expect(getProductImages({imageUrl:'https://m.media-amazon.com/a.jpg',imageUrls:['https://m.media-amazon.com/a.jpg','https://m.media-amazon.com/b.jpg','javascript:alert(1)']})).toEqual(['https://m.media-amazon.com/a.jpg','https://m.media-amazon.com/b.jpg']);
   expect(getProductImages({imageUrl:null})).toEqual([]);

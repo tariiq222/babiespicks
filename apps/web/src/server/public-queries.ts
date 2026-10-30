@@ -28,7 +28,7 @@ function displaySources(value: unknown): NonNullable<Product['sources']> {
 function productView(row: ProductRow): Product {
   return {
     id: row.id, name: row.name, slug: row.slug, brand: row.brand, imageUrl: row.imageUrl, isActive: row.isActive, updatedAt: row.updatedAt?.toISOString(),
-    imageUrls: row.imageUrls ?? [], sources: displaySources(row.sources),
+    imageUrls: row.imageUrls ?? [], ageMinMonths: row.ageMinMonths, ageMaxMonths: row.ageMaxMonths, sources: displaySources(row.sources),
     translations: row.translations.map(({ locale, name, slug, description }) => ({ locale, name, slug, description })),
     category: row.category,
     specs: row.specs.map(({ key, value, locale }) => ({ key, value, locale })),
@@ -40,6 +40,7 @@ function productView(row: ProductRow): Product {
     }).map((p) => ({ price: Number(p.price), originalPrice: p.originalPrice === null ? null : Number(p.originalPrice), currency: p.currency, storeId: p.storeId, checkedAt: new Date(p.scrapedAt).toISOString(), store: p.store ? { id: p.store.id, name: p.store.name, slug: p.store.slug } : null })),
   };
 }
+export interface ActiveCoupon { id: string; code: string; description: string | null; discountPercent: number | null; discountAmount: number | null; validUntil: string | null; verified: boolean; store: { name: string; slug: string } }
 export interface ContentDetail extends ContentPage { content: string; metaTitle: string; excerpt: string; }
 function contentView(row: ContentRow, locale: string): ContentDetail | null {
   const translation = row.translations.find((t) => t.locale === locale) ?? row.translations.find((t) => t.locale === 'ar') ?? row.translations[0];
@@ -53,6 +54,11 @@ export function createPublicQueries(db: PrismaClient) {
     async getProducts(locale = 'ar', limit = 20): Promise<{ data: Product[]; nextCursor: string | null }> {
       const rows = await db.product.findMany({ where: { publishStatus: 'PUBLISHED', isActive: true }, include: productInclude, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: Math.min(Math.max(limit, 1), 1000) });
       return { data: rows.map(productView), nextCursor: null };
+    },
+    async getActiveCoupons(limit = 5): Promise<ActiveCoupon[]> {
+      const now = new Date();
+      const rows = await db.coupon.findMany({ where: { status: 'ACTIVE', store: { isActive: true }, AND: [{ OR: [{ validFrom: null }, { validFrom: { lte: now } }] }, { OR: [{ validUntil: null }, { validUntil: { gte: now } }] }] }, include: { store: { select: { name: true, slug: true } } }, orderBy: { createdAt: 'desc' }, take: Math.min(Math.max(limit, 1), 20) });
+      return rows.map((row) => ({ id: row.id, code: row.code, description: row.description, discountPercent: row.discountPercent, discountAmount: row.discountAmount === null ? null : Number(row.discountAmount), validUntil: row.validUntil?.toISOString() ?? null, verified: row.verified, store: row.store }));
     },
     async getAllProducts(locale = 'ar'): Promise<Product[]> {
       const rows = await db.product.findMany({ where: { publishStatus: 'PUBLISHED', isActive: true }, include: productInclude, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });

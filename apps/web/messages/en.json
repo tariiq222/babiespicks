@@ -168,7 +168,7 @@
   },
   "privacy": {
     "title": "Privacy Policy",
-    "lastUpdated": "Updated: 21 October 2026",
+    "lastUpdated": "Updated: 30 October 2026",
     "introTitle": "Introduction",
     "introText": "This page describes data used by the current BabiesPicks website. Contact us with questions about information held about you.",
     "dataTitle": "Data We Collect",
@@ -185,6 +185,7 @@
     "purpose4": "Detect abuse and protect the platform",
     "sharingTitle": "Data Sharing",
     "sharingText": "Analytics and diagnostics may be used when configured. Merchant links take you to external websites governed by their own policies.",
+    "sharingChat": "When you use the assistant, your messages are sent to an AI service provider outside Saudi Arabia to prepare a reply; its servers are in the United States. We do not store chat text on our servers, and it stays in your browser until the session closes. Do not share personal or health details.",
     "sharingGA": "Google Analytics for browsing analytics",
     "rightsTitle": "Privacy requests",
     "right1": "Right to access your personal data",

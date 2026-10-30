@@ -52,6 +52,7 @@ export default async function PrivacyPage() {
           <section>
             <h2 className="text-[18px] text-charcoal mb-3">{t('sharingTitle')}</h2>
             <p>{t('sharingText')}</p>
+            <p className="mt-3">{t('sharingChat')}</p>
             <ul className="list-disc pr-5 space-y-2 mt-2">
               <li>{t('sharingGA')}</li>
               <li>{t('sharingDiagnostics')}</li>

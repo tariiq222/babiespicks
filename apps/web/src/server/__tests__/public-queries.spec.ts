@@ -7,6 +7,12 @@ function database() {
 }
 
 describe('public publication boundary', () => {
+  it('returns only active, in-date coupons from active stores', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    await createPublicQueries({ coupon: { findMany } } as never).getActiveCoupons(5);
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.status).toBe('ACTIVE');expect(where.store).toEqual({ isActive: true });expect(where.AND).toHaveLength(2);
+  });
   it('requires PUBLISHED for listings, category, search and direct product lookup', async () => {
     const db = database();
     const queries = createPublicQueries(db as never);

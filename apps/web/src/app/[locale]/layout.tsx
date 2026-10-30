@@ -7,6 +7,7 @@ import { routing } from '@/i18n/routing';
 import { PublicShell } from '@/shared/components/public-shell';
 import { SiteHeader } from '@/shared/components/site-header';
 import { SiteFooter } from '@/shared/components/site-footer';
+import { ChatWidget } from '@/shared/components/chat-widget';
 import { GlitchTipInit } from '@/shared/components/glitchtip-init';
 import { AnalyticsScripts } from '@/shared/components/analytics-scripts';
 
@@ -36,6 +37,7 @@ export default async function LocaleLayout({
         >
           {children}
         </PublicShell>
+        {process.env.DEPLOY_API_KEY && <ChatWidget />}
       </NextIntlClientProvider>
     </>
   );

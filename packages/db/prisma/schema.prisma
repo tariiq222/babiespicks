@@ -278,6 +278,8 @@ model Product {
   brand      String?
   imageUrl   String?
   imageUrls  String[]      @default([])
+  ageMinMonths Int?
+  ageMaxMonths Int?
   storeId    String?
   store      Store?        @relation(fields: [storeId], references: [id])
   categoryId String?

@@ -6,6 +6,8 @@ export interface Product {
   brand: string | null;
   imageUrl: string | null;
   imageUrls?: string[];
+  ageMinMonths?: number | null;
+  ageMaxMonths?: number | null;
   sources?: {url:string;field:string;checkedAt:string}[];
   isActive: boolean;
   updatedAt?: string;
