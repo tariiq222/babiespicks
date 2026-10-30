@@ -104,11 +104,17 @@ body {
 /* RTL flip */
 [dir="rtl"] .flip-x { transform: scaleX(-1); }
 
+/* Focus */
+:where(a, button, input, select, summary):focus-visible { outline: 2px solid var(--color-sage-deep); outline-offset: 2px; }
+
+/* Keep the footer reachable above the mobile buy bar */
+@media (max-width: 767px) { body:has([data-sticky-buy]) { padding-bottom: 5rem; } }
+
 /* Selection */
 ::selection { background: color-mix(in oklab, var(--color-sage) 33%, transparent); }
 
 /* SAR currency */
-.sar { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+.sar { direction: ltr; unicode-bidi: isolate; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar { display: none; }

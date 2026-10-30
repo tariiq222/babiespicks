@@ -8,7 +8,7 @@ Historical NestJS/agents/Dify/search sources were removed at the owner’s clean
 
 ## Current public scope
 
-The owner narrowed public scope to offers, available prices, coupons and MCP management on 21 October 2026. Retired tools/comparison/ranking/category/editorial/search URLs redirect to locale home; FAQ/contact redirect to about. Preserve these redirects. Product pages show sourced Amazon ratings separately from BabiesPicks editorial assessments at the owner's request on 22 October 2026; no mailing promises. Domain schemas and historical tables remain for data integrity; they do not imply a public feature.
+The owner narrowed public scope to offers, available prices, coupons and MCP management on 21 October 2026. Retired tools/comparison/ranking/category/editorial/search URLs redirect to locale home; FAQ/contact redirect to about. Preserve these redirects. Product pages show sourced Amazon ratings separately from BabiesPicks editorial assessments at the owner's request on 22 October 2026; no mailing promises. Home page category and attribute filters use query parameters, not category URLs, at the owner's request on 30 October 2026; `/categories` stays redirected. Everything those filters read must stay writable through MCP. Domain schemas and historical tables remain for data integrity; they do not imply a public feature.
 
 ## Commands
 

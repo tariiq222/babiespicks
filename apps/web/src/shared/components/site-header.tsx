@@ -7,6 +7,7 @@ import { LogoMark } from './logo-mark';
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const t = useTranslations();
   const locale = useLocale();
   const pathname = usePathname();
@@ -17,8 +18,9 @@ export function SiteHeader() {
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const q = (form.elements.namedItem('q') as HTMLInputElement)?.value;
-    if (q && q.length >= 2) {
+    const q = (form.elements.namedItem('q') as HTMLInputElement)?.value.trim();
+    if (q) {
+      setSearchOpen(false);
       router.push(`/?q=${encodeURIComponent(q)}`);
     }
   };
@@ -60,15 +62,21 @@ export function SiteHeader() {
           </form>
 
           {/* Search icon (mobile) */}
-          <Link href="/" className="lg:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone" aria-label={t('header.searchAriaLabel')}>
-            <i className="ti ti-search text-[18px]"></i>
-          </Link>
+          <button
+            type="button"
+            onClick={() => { setSearchOpen((o) => !o); setOpen(false); }}
+            className="lg:hidden w-11 h-11 grid place-items-center rounded-full hover:bg-linen text-stone"
+            aria-label={t('header.searchAriaLabel')}
+            aria-expanded={searchOpen}
+          >
+            <i className={`ti text-[18px] ${searchOpen ? 'ti-x' : 'ti-search'}`}></i>
+          </button>
 
           {/* Language toggle */}
           <Link
             href={pathname}
             locale={otherLocale}
-            className="w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone relative"
+            className="w-11 h-11 grid place-items-center rounded-full hover:bg-linen text-stone relative"
             aria-label={t('header.langToggleAriaLabel')}
           >
             <i className="ti ti-world text-[18px]"></i>
@@ -80,20 +88,37 @@ export function SiteHeader() {
 
           {/* Mobile menu */}
           <button
-            onClick={() => setOpen((o) => !o)}
-            className="md:hidden w-10 h-10 grid place-items-center rounded-full hover:bg-linen text-stone"
+            onClick={() => { setOpen((o) => !o); setSearchOpen(false); }}
+            className="md:hidden w-11 h-11 grid place-items-center rounded-full hover:bg-linen text-stone"
             aria-label={t('header.menuAriaLabel')}
+            aria-expanded={open}
           >
             <i className={`ti text-[18px] ${open ? 'ti-x' : 'ti-menu-2'}`}></i>
           </button>
         </div>
       </div>
 
+      {/* Mobile search */}
+      {searchOpen && (
+        <form onSubmit={handleSearch} className="lg:hidden hairline-t bg-cream px-5 py-3 flex gap-2">
+          <input
+            name="q"
+            type="search"
+            autoFocus
+            maxLength={200}
+            className="min-w-0 flex-1 rounded-xl hairline bg-white px-4 py-2.5 text-base outline-none focus:border-sage"
+            placeholder={t('header.searchPlaceholder')}
+            aria-label={t('header.searchLabel')}
+          />
+          <button className="rounded-xl bg-sage-deep px-4 text-sm text-cream">{t('header.searchAriaLabel')}</button>
+        </form>
+      )}
+
       {/* Mobile dropdown */}
       {open && (
-        <div className="md:hidden hairline-t bg-cream px-5 py-3 flex flex-col gap-3">
-          <Link href="/" onClick={() => setOpen(false)} className={`text-[13px] ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.offers')}</Link>
-          <Link href="/coupons" onClick={() => setOpen(false)} className={`text-[13px] ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.coupons')}</Link>
+        <div className="md:hidden hairline-t bg-cream px-5 py-2 flex flex-col">
+          <Link href="/" onClick={() => setOpen(false)} className={`py-2 text-sm ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.offers')}</Link>
+          <Link href="/coupons" onClick={() => setOpen(false)} className={`py-2 text-sm ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.coupons')}</Link>
         </div>
       )}
     </header>

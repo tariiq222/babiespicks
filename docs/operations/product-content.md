@@ -10,6 +10,10 @@ Published edits require owner authorization, fresh expectedVersion, allowPublish
 
 The imageUrls schema migration is additive; old readers/writers remain compatible. Roll back the app if necessary while retaining the column and gallery data. Back up before migration and validate on an isolated restored database.
 
+## Categories and filters
+
+The public home page filters by category, brand, price band, discount, Amazon rating and our assessment using URL query parameters on the locale home. Every filter reads MCP-managed data; bp_get_capabilities.publicFilters lists each source. Create categories with bp_upsert_category (name for Arabic, nameEn for English, order for position), find unassigned products with bp_list_products uncategorized:true, then assign categoryId through bp_update_product under the usual published-edit rules. Keep brand spelling identical across products. Pass originalAmount to bp_record_price only when the store shows a higher pre-discount price. The category filter appears once at least one priced product has a category labelled for that locale.
+
 ## Editorial score policy
 Read bp_get_capabilities.verdictPolicy. Component weights: safety25%, quality25%, reviews20%, price15%, longTerm15%. Round the weighted sum to one decimal; the stored total is this computed value. The supplied total must be within0.11 and the supplied type must match: WORTH_IT >=7.5, WORTH_IT_WITH >=6 and <7.5, WAIT >=4.5 and <6, NOT_WORTH_IT <4.5. A proposed7.6 WORTH_IT_WITH is invalid under this existing policy. Do not lower evidence-based components to force a label; report the policy conflict.
 

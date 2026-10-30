@@ -131,7 +131,8 @@ async function mutate(tx:Prisma.TransactionClient,name:ToolName,a:any,actor:Acto
       const store=await tx.store.findUnique({where:{id:a.storeId}});if(!store)throw new DomainError('NOT_FOUND','Store not found');
       wrapAffiliateUrl(a.sourceUrl,store.slug,process.env,store);
       const at=new Date(a.checkedAt);if(at.getTime()>Date.now()+60000)throw new DomainError('INVALID_INPUT','Observation date is in the future');
-      return tx.productPrice.create({data:{productId:a.productId,storeId:a.storeId,price:a.amount,currency:a.currency,url:a.sourceUrl,inStock:a.inStock,scrapedAt:at}});
+      if(a.originalAmount!==undefined&&a.originalAmount<=a.amount)throw new DomainError('INVALID_INPUT','originalAmount must be higher than amount');
+      return tx.productPrice.create({data:{productId:a.productId,storeId:a.storeId,price:a.amount,originalPrice:a.originalAmount,currency:a.currency,url:a.sourceUrl,inStock:a.inStock,scrapedAt:at}});
     }
     case 'bp_upsert_store':{
       requirePublish(actor);const {id,idempotencyKey,...data}=a;
@@ -156,19 +157,29 @@ async function mutate(tx:Prisma.TransactionClient,name:ToolName,a:any,actor:Acto
     default:throw new DomainError('NOT_FOUND','Unknown mutation');
   }
 }
+const PUBLIC_FILTERS={
+  category:'product.categoryId; label category.name (ar), category.nameEn (en); order category.order',
+  brand:'product.brand, exact value',
+  price:'lowest latest SAR price from bp_record_price',
+  discount:'bp_record_price.originalAmount above amount',
+  rating:'reviewSummary.averageRating >= 4 with a reviewSummary Amazon source',
+  verdict:'published verdict type WORTH_IT or WORTH_IT_WITH',
+  rule:'A product missing a value is excluded from that filter; never fill values to match one.',
+} as const;
 export async function executeTool(name:string,input:unknown,actor:ActorContext,db:PrismaClient=prisma):Promise<any>{
   if(!actor?.id)throw new DomainError('UNAUTHORIZED','Actor required');
   if(!(name in schemas))throw new DomainError('NOT_FOUND','Unknown tool');
   const schema=schemas[name as ToolName];const parsed=schema.safeParse(input);
   if(!parsed.success)throw new DomainError('INVALID_INPUT',parsed.error.issues.map(x=>`${x.path.join('.')}: ${x.message}`).join('; '));
   const a:any=parsed.data;
-  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY};
-  if(name==='bp_list_products')return db.product.findMany({where:a.status?{publishStatus:a.status}:{},include:productInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
+  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS};
+  if(name==='bp_list_products'&&a.categoryId&&a.uncategorized)throw new DomainError('INVALID_INPUT','Use categoryId or uncategorized, not both');
+  if(name==='bp_list_products')return db.product.findMany({where:{...(a.status?{publishStatus:a.status}:{}),...(a.categoryId?{categoryId:a.categoryId}:{}),...(a.uncategorized?{categoryId:null}:{})},include:productInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_product'){const p=await db.product.findUnique({where:{id:a.id},include:{...productInclude,prices:{include:{store:true},orderBy:{scrapedAt:'desc'},take:100}}});if(!p)throw new DomainError('NOT_FOUND','Product not found');return p}
   if(name==='bp_list_content')return db.contentPage.findMany({where:a.status?{publishStatus:a.status}:{},include:contentInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_content'){const c=await db.contentPage.findUnique({where:{id:a.id},include:contentInclude});if(!c)throw new DomainError('NOT_FOUND','Content not found');return c}
   if(name==='bp_list_stores')return db.store.findMany({take:a.limit,skip:a.offset,orderBy:{name:'asc'}});
-  if(name==='bp_list_categories')return db.category.findMany({take:a.limit,skip:a.offset,orderBy:{order:'asc'}});
+  if(name==='bp_list_categories')return db.category.findMany({include:{_count:{select:{products:true}}},take:a.limit,skip:a.offset,orderBy:[{order:'asc'},{name:'asc'}]});
   if(name==='bp_list_coupons')return db.coupon.findMany({where:a.storeId?{storeId:a.storeId}:{},include:{store:true},take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_click_stats'){
     const since=new Date(Date.now()-a.days*86400000);const where={createdAt:{gte:since},...(a.productId?{productId:a.productId}:{})};

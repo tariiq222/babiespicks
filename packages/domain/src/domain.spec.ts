@@ -70,6 +70,21 @@ integration('real PostgreSQL content contract',()=>{
     expect((await api.resolvePurchaseTarget(db,{productId:id,storeId:store.id},now))?.price).toBe(100);
     expect(await api.resolvePurchaseTarget(db,{productId:id,storeId:'missing'},now)).toBeNull();
   });
+  it('manages every public filter source through MCP tools',async()=>{
+    const store=await run('bp_upsert_store',{name:'Amazon',slug:'amazon',url:'https://www.amazon.sa',affiliateNetwork:'Amazon Associates',idempotencyKey:`store-${id}`});
+    await expect(run('bp_record_price',{productId:id,storeId:store.id,amount:100,originalAmount:100,currency:'SAR',sourceUrl:'https://www.amazon.sa/dp/X',checkedAt:now.toISOString(),inStock:true,idempotencyKey:`bad-price-${id}`})).rejects.toMatchObject({code:'INVALID_INPUT'});
+    const priced=await run('bp_record_price',{productId:id,storeId:store.id,amount:80,originalAmount:100,currency:'SAR',sourceUrl:'https://www.amazon.sa/dp/X',checkedAt:now.toISOString(),inStock:true,idempotencyKey:`price-${id}`});
+    expect(Number(priced.originalPrice)).toBe(100);
+    const category=await run('bp_upsert_category',{name:'النوم',nameEn:'Sleep',order:3,slug:`sleep-${id}`,idempotencyKey:`category-${id}`});
+    expect(category).toMatchObject({nameEn:'Sleep',order:3});
+    expect((await run('bp_list_products',{uncategorized:true})).map((p:any)=>p.id)).toContain(id);
+    const current=await db.product.findUniqueOrThrow({where:{id}});
+    await run('bp_update_product',{id,categoryId:category.id,expectedVersion:current.version,allowPublishedEdit:true,idempotencyKey:`assign-${id}`});
+    expect((await run('bp_list_products',{categoryId:category.id})).map((p:any)=>p.id)).toEqual([id]);
+    expect((await run('bp_list_products',{uncategorized:true})).map((p:any)=>p.id)).not.toContain(id);
+    expect((await run('bp_list_categories',{})).find((c:any)=>c.id===category.id)._count.products).toBe(1);
+    expect((await run('bp_get_capabilities',{})).publicFilters).toHaveProperty('category');
+  });
   it('makes a sourced verdict added to a published product visible immediately',async()=>{
     const current=await db.product.findUniqueOrThrow({where:{id}});
     await run('bp_update_product',{id,expectedVersion:current.version,allowPublishedEdit:true,idempotencyKey:'add-verdict',sources:[{url:'https://www.amazon.sa/dp/X',checkedAt:now.toISOString(),field:'editorial'}],verdict:{type:'WORTH_IT',overallScore:8,safetyScore:8,qualityScore:8,reviewsScore:8,priceScore:8,longTermScore:8,reasoningAr:'تقييم تحريري',reasoningEn:'Editorial assessment'}});

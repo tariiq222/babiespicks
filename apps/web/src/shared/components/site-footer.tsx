@@ -13,10 +13,7 @@ export function SiteFooter() {
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2 mb-4">
             <LogoMark size={36} />
-            <div className="leading-tight">
-              <span className="text-[15px] text-charcoal font-medium">BabiesPicks</span>
-              <span className="block text-[10px] text-stone tracking-widest font-inter">BABIESPICKS</span>
-            </div>
+            <span className="text-[15px] text-charcoal font-medium">BabiesPicks</span>
           </div>
           <p className="text-stone leading-[1.8] max-w-[260px]">
             {t('tagline')}

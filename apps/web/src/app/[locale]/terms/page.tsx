@@ -19,7 +19,7 @@ export default async function TermsPage() {
   const t = await getTranslations('terms');
 
   return (
-    <main>
+    <main id="main">
       <article className="max-w-3xl mx-auto px-5 md:px-8 lg:px-12 py-12 md:py-20 prose-sm">
         <h1 className="text-[28px] md:text-[36px] text-charcoal leading-[1.3] mb-8">{t('title')}</h1>
         <p className="text-[11px] text-stone mb-8">{t('lastUpdated')}</p>

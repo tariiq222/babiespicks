@@ -37,7 +37,7 @@ export default async function StoreCouponsPage({ params }: Props) {
   const storeLogoUrl = storeData?.logoUrl || null;
 
   return (
-    <main>
+    <main id="main">
       <section
         style={{ background: 'var(--color-hero-start)', borderBottom: '0.5px solid var(--color-cat-hero-border)' }}
         className="px-5 md:px-8 lg:px-12 py-10 md:py-16"

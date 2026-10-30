@@ -39,6 +39,7 @@ services:
       args:
         RUNTIME_STAGE: web
         NEXT_PUBLIC_SITE_URL: https://babiespicks.com
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: G-89JKJ8W16L
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://babiespicks:${POSTGRES_PASSWORD}@db:5432/babiespicks

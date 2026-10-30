@@ -22,7 +22,7 @@ export default async function DisclosurePage({ params }: Props) {
   const tcommon = await getTranslations('common');
 
   return (
-    <main className="max-w-4xl mx-auto px-5 md:px-8 lg:px-12 pt-12 md:pt-20 pb-16">
+    <main id="main" className="max-w-4xl mx-auto px-5 md:px-8 lg:px-12 pt-12 md:pt-20 pb-16">
       {/* Hero */}
       <div className="mb-10">
         <nav aria-label={t('breadcrumbAria')} className="text-[12px] mb-5 flex items-center gap-1 text-stone">

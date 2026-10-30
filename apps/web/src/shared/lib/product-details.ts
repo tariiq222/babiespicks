@@ -1,4 +1,4 @@
-import type {Product} from './api';
+import {getLocalizedDesc,getLocalizedName,type Product} from './api';
 type Source=NonNullable<Product['sources']>[number];
 export function isProductImageUrl(value:unknown):value is string {
  if(typeof value!=='string')return false;
@@ -30,4 +30,15 @@ export function organizeProductDescription(value:string|null):string {
  .replace(/(?:رابط الشراء|Purchase link|Buy)\s*:\s*https?:\/\/\S+/gi,'')
  .replace(/https?:\/\/[^\s<>\])]+/gi,url=>isStoreUrl(url)?'':url)
  .replace(/\s*(?:\*\*)?(لماذا اخترنا(?:ها|ه)|انتبهي|انتبه|Why we picked it|Please note)\s*:(?:\*\*)?\s*/gi,'\n\n### $1\n\n').trim();
+}
+
+export function getProductMetaDescription(product:Product,locale:string):string {
+ const ar=locale==='ar';const name=getLocalizedName(product,locale);
+ const intro=organizeProductDescription(getLocalizedDesc(product,locale)).split(/\n\s*\n/).find(block=>block.trim()&&!block.trim().startsWith('#'))??'';
+ const text=intro.replace(/[*_`>]/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/\s+/g,' ').trim();
+ if(!text)return ar?`سعر ${name} وتقييمه في بيبيز بيكس.`:`${name}: price and ratings on BabiesPicks.`;
+ return text.length>155?`${text.slice(0,154).trimEnd()}…`:text;
+}
+export function getVerdictLabel(type:NonNullable<Product['verdict']>['type'],locale:string):string {
+ return ({WORTH_IT:['يستاهل','Worth it'],WORTH_IT_WITH:['يستاهل بشرط','Worth it with conditions'],WAIT:['انتظري','Wait'],NOT_WORTH_IT:['ما يستاهل','Not worth it']} as const)[type]?.[locale==='ar'?0:1]??'';
 }

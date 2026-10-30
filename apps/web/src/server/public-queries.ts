@@ -5,7 +5,7 @@ import type { Product, ContentPage } from '../shared/lib/api';
 
 const productInclude = {
   translations: true,
-  category: { select: { name: true, slug: true } },
+  category: { select: { name: true, nameEn: true, slug: true, order: true } },
   verdict: true,
   reviewSummary: true,
   specs: true,
@@ -27,7 +27,7 @@ function displaySources(value: unknown): NonNullable<Product['sources']> {
 
 function productView(row: ProductRow): Product {
   return {
-    id: row.id, name: row.name, slug: row.slug, brand: row.brand, imageUrl: row.imageUrl, isActive: row.isActive,
+    id: row.id, name: row.name, slug: row.slug, brand: row.brand, imageUrl: row.imageUrl, isActive: row.isActive, updatedAt: row.updatedAt?.toISOString(),
     imageUrls: row.imageUrls ?? [], sources: displaySources(row.sources),
     translations: row.translations.map(({ locale, name, slug, description }) => ({ locale, name, slug, description })),
     category: row.category,
@@ -37,7 +37,7 @@ function productView(row: ProductRow): Product {
     prices: selectLatestPrices(row.prices).filter((p) => {
       if (p.currency !== 'SAR' || !p.url) return false;
       try { wrapAffiliateUrl(p.url, p.store.slug, process.env, p.store); return true; } catch { return false; }
-    }).map((p) => ({ price: Number(p.price), originalPrice: p.originalPrice === null ? null : Number(p.originalPrice), currency: p.currency, storeId: p.storeId, store: p.store ? { id: p.store.id, name: p.store.name, slug: p.store.slug } : null })),
+    }).map((p) => ({ price: Number(p.price), originalPrice: p.originalPrice === null ? null : Number(p.originalPrice), currency: p.currency, storeId: p.storeId, checkedAt: new Date(p.scrapedAt).toISOString(), store: p.store ? { id: p.store.id, name: p.store.name, slug: p.store.slug } : null })),
   };
 }
 export interface ContentDetail extends ContentPage { content: string; metaTitle: string; excerpt: string; }

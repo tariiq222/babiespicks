@@ -28,6 +28,10 @@ Production secrets are independent from other projects. OpenShip stores POSTGRES
 
 MCP URL: `https://mcp.babiespicks.com/mcp`. OAuth uses exact resource/audience and PKCE; publishing also requires the owner's explicit checkbox in the authorization form. No static token is enabled. The owner password is in the private operational secret store, not this document. Read-only production acceptance completed OAuth/PKCE, initialized MCP, listed20 tools, read capabilities and revalidated web caches; it did not create or publish content.
 
+## Measurement
+
+GA4 is `G-89JKJ8W16L`, passed as a web build argument because `NEXT_PUBLIC_*` values are inlined at build time; a runtime-only variable has no effect. `affiliate_click` and `coupon_copy` are sent from the browser. The `affiliate_clicks` table remains the server-side record of resolved store redirects. Search Console ownership uses the `google-site-verification` DNS TXT record on `babiespicks.com`; keep it during DNS changes.
+
 ## Rollout and recovery
 
 First source deployment: a7d1268c0c5ad73c4a62235ef94adff8a824cd34. Database starts empty by design after local mock cleanup. Old origin178.105.84.5 was not modified; its data remain unverified and were not treated as empty.

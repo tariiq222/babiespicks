@@ -8,6 +8,7 @@ export interface Product {
   imageUrls?: string[];
   sources?: {url:string;field:string;checkedAt:string}[];
   isActive: boolean;
+  updatedAt?: string;
   translations: { locale: string; name: string; description: string | null; slug: string }[];
   verdict: {
     type: 'WORTH_IT' | 'WORTH_IT_WITH' | 'WAIT' | 'NOT_WORTH_IT';
@@ -22,8 +23,8 @@ export interface Product {
     conditionsAr: string[] | null;
     conditionsEn: string[] | null;
   } | null;
-  prices: { price: number; originalPrice: number | null; currency: string; storeId: string; store: { id: string; name: string; slug: string } | null }[];
-  category: { name: string; slug: string } | null;
+  prices: { price: number; originalPrice: number | null; currency: string; storeId: string; checkedAt?: string; store: { id: string; name: string; slug: string } | null }[];
+  category: { name: string; nameEn?: string | null; slug: string; order?: number } | null;
   specs: { key: string; value: string; locale: string }[];
   reviewSummary: {
     averageRating: number;
