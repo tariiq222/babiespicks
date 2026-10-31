@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { trackEvent } from '@/shared/lib/analytics';
+import { parseCouponDescription } from '@/shared/lib/coupons';
 interface Coupon { id: string; code: string; discountPercent: number | null; discountAmount: number | null; description: string | null; validUntil: string | null; store: { id: string; name: string; slug: string } }
 function CopyCode({ code, ar, store }: { code: string; ar: boolean; store: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'error'>('idle');
-  return <div><button type="button" className="rounded-lg px-3 py-2 bg-sage-deep text-cream text-sm" onClick={async () => { try { await navigator.clipboard.writeText(code); setState('copied'); trackEvent('coupon_copy', { store_name: store }); } catch { setState('error'); } }}>{state === 'copied' ? (ar ? 'تم النسخ' : 'Copied') : (ar ? 'نسخ الكود' : 'Copy code')}</button>{state === 'error' && <p role="status" className="text-xs mt-2">{ar ? 'تعذر النسخ. يمكنك تحديد الكود ونسخه يدويًا.' : 'Copy failed. Select and copy the code manually.'}</p>}</div>;
+  return <div><button type="button" className="min-h-10 shrink-0 rounded-lg bg-sage-deep px-4 text-sm font-medium text-cream" onClick={async () => { try { await navigator.clipboard.writeText(code); setState('copied'); trackEvent('coupon_copy', { store_name: store }); } catch { setState('error'); } }}>{state === 'copied' ? (ar ? 'تم النسخ' : 'Copied') : (ar ? 'نسخ الكود' : 'Copy code')}</button>{state === 'error' && <p role="status" className="text-xs mt-2">{ar ? 'تعذر النسخ. يمكنك تحديد الكود ونسخه يدويًا.' : 'Copy failed. Select and copy the code manually.'}</p>}</div>;
 }
 export function CouponsClient({ storeSlug }: { storeSlug?: string }) {
   const locale = useLocale(); const ar = locale === 'ar'; const t = useTranslations('coupons');
@@ -31,15 +32,25 @@ export function CouponsClient({ storeSlug }: { storeSlug?: string }) {
     {state === 'ready' && <>
       {!storeSlug && stores.length > 1 && <div className="flex flex-wrap gap-2 mb-6">{[{ slug: 'all', name: ar ? 'الكل' : 'All' }, ...stores].map(store => <button key={store.slug} aria-pressed={store.slug === activeStore} onClick={() => setActiveStore(store.slug)} className={`px-4 py-2 rounded-full ${store.slug === activeStore ? 'bg-sage-deep text-cream' : 'bg-linen'}`}>{store.name}</button>)}</div>}
       {visible.length === 0 && <div role="status" className="text-center py-12"><h2 className="text-xl mb-3">{t('emptyTitle')}</h2><p className="text-stone">{t('emptyDesc')}</p><Link href="/" className="inline-block mt-5 rounded-lg bg-sage-deep px-5 py-3 text-sm text-cream">{ar ? 'تصفحي العروض والأسعار' : 'Browse offers and prices'}</Link></div>}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">{visible.map(coupon => <article key={coupon.id} className="hairline rounded-xl p-5 space-y-4">
-        <h2 className="text-lg">{coupon.store.name}</h2>
-        {coupon.discountPercent !== null && <p className="text-xl text-terracotta">{coupon.discountPercent}%</p>}
-        {coupon.discountAmount !== null && <p>{coupon.discountAmount} {ar ? 'ر.س' : 'SAR'}</p>}
-        {coupon.description && <p className="text-sm text-stone">{coupon.description}</p>}
-        <div className="flex flex-wrap justify-between items-center gap-3"><code dir="ltr" className="select-all bg-linen px-3 py-2 rounded">{coupon.code}</code><CopyCode code={coupon.code} ar={ar} store={coupon.store.name} /></div>
-        {coupon.validUntil && <p className="text-xs text-stone">{t('expires')} {new Date(coupon.validUntil).toLocaleDateString(ar ? 'ar-SA' : 'en-GB')}</p>}
-        <p className="text-xs text-stone">{ar ? 'تطبق شروط المتجر على استخدام الكود.' : 'Store conditions apply to this code.'}</p>
-      </article>)}</div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{visible.map(coupon => {
+        const details = parseCouponDescription(coupon.description);
+        const date = (value: string) => new Intl.DateTimeFormat(ar ? 'ar-SA-u-ca-gregory' : 'en-GB', { dateStyle: 'medium', timeZone: 'Asia/Riyadh' }).format(new Date(value));
+        return <article key={coupon.id} className="hairline flex min-w-0 flex-col rounded-2xl bg-white p-5">
+          <div className="flex items-start justify-between gap-3"><h2 className="min-w-0 text-sm font-medium text-stone">{coupon.store.name}</h2>{coupon.validUntil && <p className="shrink-0 text-xs text-stone">{t('expires')} {date(coupon.validUntil)}</p>}</div>
+          {coupon.discountPercent !== null && <p className="mt-2 text-3xl font-semibold text-terracotta"><bdi dir="ltr">{coupon.discountPercent}%</bdi></p>}
+          {coupon.discountAmount !== null && <p className="mt-2 text-3xl font-semibold text-terracotta">{coupon.discountAmount} {ar ? 'ر.س' : 'SAR'}</p>}
+          {details.summary && <p className="mt-2 break-words text-sm leading-6" dir="auto">{details.summary}</p>}
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-dashed border-sage bg-linen p-2 ps-3"><code dir="ltr" className="min-w-0 select-all truncate text-sm font-semibold tracking-wide">{coupon.code}</code><CopyCode code={coupon.code} ar={ar} store={coupon.store.name} /></div>
+          <details className="group mt-3"><summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 rounded text-xs text-stone [&::-webkit-details-marker]:hidden">{ar ? 'الشروط والمصدر' : 'Terms and source'}<i aria-hidden="true" className="ti ti-chevron-down text-sm transition-transform group-open:rotate-180" /></summary>
+            <div className="space-y-2 pt-1 text-xs leading-5 text-stone">
+              {details.terms.length > 0 && <ul className="list-disc space-y-1 ps-4">{details.terms.map((term, index) => <li key={index} dir="auto">{term}</li>)}</ul>}
+              {details.period && <p>{ar ? 'الفترة: ' : 'Period: '}{details.period}</p>}
+              <p>{ar ? 'تطبق شروط المتجر على استخدام الكود.' : 'Store conditions apply to this code.'}</p>
+              {details.sourceUrl && <p><a href={details.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sage-deep underline underline-offset-2">{ar ? 'صفحة العرض في المتجر' : 'Offer page at the store'}<i aria-hidden="true" className="ti ti-external-link text-sm" /></a>{details.checkedAt && <span>{ar ? ' · تم التحقق ' : ' · Checked '}{date(details.checkedAt)}</span>}</p>}
+            </div>
+          </details>
+        </article>;
+      })}</div>
     </>}
   </div>;
 }

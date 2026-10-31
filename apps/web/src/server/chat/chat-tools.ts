@@ -1,5 +1,6 @@
 import type {Product} from '../../shared/lib/api';
 import {getLocalizedDesc,getLocalizedName} from '../../shared/lib/api';
+import {parseCouponDescription} from '../../shared/lib/coupons';
 import {getBestPrice,getDiscount,getShopperRating} from '../../shared/lib/catalog-filters';
 import {getVerdictLabel,organizeProductDescription} from '../../shared/lib/product-details';
 import type {ActiveCoupon} from '../public-queries';
@@ -70,7 +71,7 @@ export function toProductCard(product:Product,locale:string):ChatProductCard|nul
  const price=getBestPrice(product);if(!price)return null;
  return {id:product.id,slug:product.slug,name:getLocalizedName(product,locale),imageUrl:product.imageUrl,price:price.price,originalPrice:price.originalPrice,discount:getDiscount(price),storeName:price.store?.name??null,verdictLabel:product.verdict?getVerdictLabel(product.verdict.type,locale):null,verdictScore:product.verdict?.overallScore??null,shopperRating:getShopperRating(product)?.averageRating??null};
 }
-export const toCouponCard=(coupon:ActiveCoupon):ChatCouponCard=>({id:coupon.id,code:coupon.code,storeName:coupon.store.name,storeSlug:coupon.store.slug,description:coupon.description,discountPercent:coupon.discountPercent,discountAmount:coupon.discountAmount,validUntil:coupon.validUntil,verified:coupon.verified});
+export const toCouponCard=(coupon:ActiveCoupon):ChatCouponCard=>({id:coupon.id,code:coupon.code,storeName:coupon.store.name,storeSlug:coupon.store.slug,description:parseCouponDescription(coupon.description).summary||null,discountPercent:coupon.discountPercent,discountAmount:coupon.discountAmount,validUntil:coupon.validUntil,verified:coupon.verified});
 
 /** One conversation turn's view of the catalog: only ids it actually returned can reach the reply. */
 export function createToolSession(catalog:ChatCatalog,locale:'ar'|'en'){
@@ -92,7 +93,7 @@ export function createToolSession(catalog:ChatCatalog,locale:'ar'|'en'){
    if(name==='get_deals'){
     const discounted=remember([...await load()].filter(product=>getDiscount(getBestPrice(product))>0).sort((a,b)=>getDiscount(getBestPrice(b))-getDiscount(getBestPrice(a))).slice(0,8));
     const coupons=await catalog.coupons();for(const coupon of coupons)seenCoupons.set(coupon.id,coupon);
-    return {products:discounted.map(product=>summary(product,locale)),coupons:coupons.map(coupon=>({id:coupon.id,store:coupon.store.name,description:coupon.description,verified:coupon.verified,validUntil:coupon.validUntil}))};
+    return {products:discounted.map(product=>summary(product,locale)),coupons:coupons.map(coupon=>({id:coupon.id,store:coupon.store.name,description:parseCouponDescription(coupon.description).summary,verified:coupon.verified,validUntil:coupon.validUntil}))};
    }
    if(name==='get_site_info')return SITE_INFO[locale];
    return {error:'Unknown tool'};
