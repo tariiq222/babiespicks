@@ -33,6 +33,13 @@ describe('catalog search',()=>{
   const ids=searchCatalog(FIXTURE_PRODUCTS,'ar',{ageMonths:3}).map(product=>product.id);
   expect(ids).not.toContain('stroller');expect(ids).toContain('playmat');expect(ids).toContain('bottle');
  });
+ it('prefers the main item over an accessory mentioned after with',()=>{
+  const ids=searchCatalog(FIXTURE_PRODUCTS,'ar',{query:'لعبة'}).map(product=>product.id);
+  expect(ids).toEqual(['playmat','piano']);
+ });
+ it('keeps partial matches when nothing matches directly',()=>{
+  expect(searchCatalog(FIXTURE_PRODUCTS,'ar',{query:'قوس'}).map(product=>product.id)).toEqual(['bouncer']);
+ });
  it('applies budget and discount filters',()=>{
   expect(searchCatalog(FIXTURE_PRODUCTS,'ar',{maxPrice:100}).map(product=>product.id)).toEqual(['bottle']);
   expect(searchCatalog(FIXTURE_PRODUCTS,'ar',{discountedOnly:true}).map(product=>product.id).sort()).toEqual(['bottle','stroller']);

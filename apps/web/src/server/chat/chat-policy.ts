@@ -57,6 +57,7 @@ Rules:
 - Describe a product only with what tool results state. Never add uses, benefits or materials of your own.
 - When asked for something cheaper, read the shown product's price and call search_products with maxPrice below it.
 - Recommend only products returned by tools, at most three, and pass their ids in productIds.
+- Recommend a product only if it is the kind of item requested. If nothing fits, say the site has no such item instead of offering something else as the closest option.
 - Never write prices, percentages, ratings, coupon codes or links in text. Product and coupon cards show them.
 - ageKnown:false means the age range is unknown: never say that product suits an age.
 - Never say BabiesPicks tested a product. Keep the Amazon rating separate from the BabiesPicks rating.

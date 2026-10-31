@@ -24,7 +24,13 @@ const SITE_INFO={
 
 const normalize=(value:string)=>value.toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/[ً-ْ]/g,'');
 const stopWords=new Set(['ابي','ابغي','لطفل','طفل','طفلي','بيبي','عن','في','من','for','the','a','baby']);
-function searchable(product:Product,locale:string){return normalize([getLocalizedName(product,locale),product.brand,product.category?.name,product.category?.nameEn,getLocalizedDesc(product,locale)?.slice(0,600)].filter(Boolean).join(' '));}
+const WORD_FAMILIES=[['لعب','لعبه','العاب','toy','toys']];
+const wordForms=(word:string)=>WORD_FAMILIES.find(family=>family.includes(word))??[word];
+/** A name's main item comes before "with": a chair "with a toy" is not a toy. */
+function searchable(product:Product,locale:string){
+ const [main='',...extras]=getLocalizedName(product,locale).split(/\s(?:مع|with)\s/i);
+ return {main:normalize(main),rest:normalize([...extras,product.brand,product.category?.name,product.category?.nameEn,getLocalizedDesc(product,locale)?.slice(0,600)].filter(Boolean).join(' '))};
+}
 function ageFit(product:Product,months:number){
  const {ageMinMonths:min,ageMaxMonths:max}=product;
  if(min==null&&max==null)return 'unknown';
@@ -48,11 +54,15 @@ export function searchCatalog(products:Product[],locale:string,args:{query?:stri
   if(args.maxPrice!==undefined&&price.price>args.maxPrice)return [];
   if(args.discountedOnly&&!getDiscount(price))return [];
   const age=args.ageMonths===undefined?'unknown':ageFit(product,args.ageMonths);if(age==='excluded')return [];
-  const text=searchable(product,locale);const hits=words.filter(word=>text.includes(word)).length;
-  if(words.length&&!hits)return [];
-  return [{product,rank:hits*10+(age==='fits'?5:0)+score(product)}];
+  const text=searchable(product,locale);
+  const has=(value:string,word:string)=>wordForms(word).some(form=>value.includes(form));
+  const direct=words.filter(word=>has(text.main,word)).length;const partial=words.filter(word=>has(text.rest,word)).length;
+  if(words.length&&!direct&&!partial)return [];
+  return [{product,direct:direct>0,rank:direct*30+partial*5+(age==='fits'?5:0)+score(product)}];
  });
- return ranked.sort((a,b)=>b.rank-a.rank).slice(0,limit).map(item=>item.product);
+ const sorted=ranked.sort((a,b)=>b.rank-a.rank);
+ const direct=sorted.filter(item=>item.direct);
+ return (direct.length?direct:sorted).slice(0,limit).map(item=>item.product);
 }
 
 export function toProductCard(product:Product,locale:string):ChatProductCard|null{
