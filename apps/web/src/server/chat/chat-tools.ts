@@ -58,11 +58,12 @@ export function searchCatalog(products:Product[],locale:string,args:{query?:stri
   const has=(value:string,word:string)=>wordForms(word).some(form=>value.includes(form));
   const direct=words.filter(word=>has(text.main,word)).length;const partial=words.filter(word=>has(text.rest,word)).length;
   if(words.length&&!direct&&!partial)return [];
-  return [{product,direct:direct>0,rank:direct*30+partial*5+(age==='fits'?5:0)+score(product)}];
+  const category=normalize(`${product.category?.name??''} ${product.category?.nameEn??''}`);
+  return [{product,inCategory:words.some(word=>has(category,word)),direct:direct>0,rank:direct*30+partial*5+(age==='fits'?5:0)+score(product)}];
  });
  const sorted=ranked.sort((a,b)=>b.rank-a.rank);
- const direct=sorted.filter(item=>item.direct);
- return (direct.length?direct:sorted).slice(0,limit).map(item=>item.product);
+ const inCategory=sorted.filter(item=>item.inCategory);const direct=sorted.filter(item=>item.direct);
+ return (inCategory.length?inCategory:direct.length?direct:sorted).slice(0,limit).map(item=>item.product);
 }
 
 export function toProductCard(product:Product,locale:string):ChatProductCard|null{

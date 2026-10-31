@@ -37,6 +37,10 @@ describe('catalog search',()=>{
   const ids=searchCatalog(FIXTURE_PRODUCTS,'ar',{query:'لعبة'}).map(product=>product.id);
   expect(ids).toEqual(['playmat','piano']);
  });
+ it('prefers a matching category over a word in another product name',()=>{
+  const crib={...FIXTURE_PRODUCTS[0],id:'crib',translations:[{locale:'ar',name:'سرير اللعب والسفر',description:null,slug:'crib'}],category:{name:'التنقل',slug:'travel'}};
+  expect(searchCatalog([crib,...FIXTURE_PRODUCTS],'ar',{query:'لعبة'}).map(product=>product.id)).toEqual(['playmat','piano']);
+ });
  it('keeps partial matches when nothing matches directly',()=>{
   expect(searchCatalog(FIXTURE_PRODUCTS,'ar',{query:'قوس'}).map(product=>product.id)).toEqual(['bouncer']);
  });
