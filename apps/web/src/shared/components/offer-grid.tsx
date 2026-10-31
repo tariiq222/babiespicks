@@ -1,6 +1,7 @@
 import { Link } from '../../i18n/navigation';
 import { ProductCard } from './product-card';
 import { ProductImage } from './product-image';
+import { Tag } from './tags';
 import type { Product, ContentPage } from '../lib/api';
 
 export function OfferGrid({ offers, products, locale, filtered = false, columns = 4 }: { offers: ContentPage[]; products: Product[]; locale: string; filtered?: boolean; columns?: 3 | 4 }) {
@@ -17,11 +18,12 @@ export function OfferGrid({ offers, products, locale, filtered = false, columns 
       </>}
     </div>}
     {offers.length > 0 && <section aria-label={ar ? 'العروض المنشورة' : 'Published offers'} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {offers.map(offer => <Link key={offer.id} href={`/offers/${offer.slug}`} className="hairline rounded-2xl p-5 bg-linen hover:bg-linen-hover">
+      {offers.map(offer => <Link key={offer.id} href={`/offers/${offer.slug}`} className="hairline flex flex-col rounded-2xl bg-white p-5 transition-colors hover:border-sage">
         {offer.imageUrl && <ProductImage src={offer.imageUrl} width={600} height={160} alt="" />}
+        <p className="mt-2 flex"><Tag tone="deal" icon="ti-discount">{ar ? 'عرض' : 'Offer'}</Tag></p>
         <h2 lang={offer.locale} dir={offer.locale === 'ar' ? 'rtl' : 'ltr'} className="text-lg mt-2">{offer.title}</h2>
         {offer.description && <p lang={offer.locale} className="text-sm text-stone mt-3 line-clamp-3">{offer.description}</p>}
-        <span className="inline-block text-sm text-sage-deep mt-4">{ar ? 'تفاصيل العرض' : 'View offer'}</span>
+        <span className="mt-auto inline-block pt-4 text-sm font-medium text-sage-deep">{ar ? 'تفاصيل العرض' : 'View offer'}</span>
       </Link>)}
     </section>}
     {products.length > 0 && <section aria-label={ar ? 'أسعار المنتجات المتاحة' : 'Available product prices'}>

@@ -14,3 +14,16 @@ export function parseCouponDescription(value:string|null):CouponDetails {
  const [summary='',...terms]=splitSentences(cleaned);
  return {summary,terms,period:text.match(/(?:الفترة|Period)\s*:\s*([^.\n]+)/i)?.[1]?.trim()??null,sourceUrl:text.match(/https:\/\/[^\s)]+/)?.[0]?.replace(/[.,،]$/,'')??null,checkedAt:checked&&Number.isFinite(Date.parse(checked))?checked:null};
 }
+
+const DAY_MS=86400000;
+/** Whole days left, counting a part of a day as one; null when there is no end date. */
+export function couponDaysLeft(validUntil:string|null,now=Date.now()):number|null {
+ if(!validUntil)return null;
+ return Math.ceil((Date.parse(validUntil)-now)/DAY_MS);
+}
+/** Only states a minimum when the note says so explicitly. */
+export function couponMinimumSpend(summary:string):number|null {
+ const match=summary.match(/(?:الشراء بـ?|بقيمة|on orders? (?:of|over)|minimum(?: spend)?(?: of)?)\s*(?:SAR\s*)?(\d[\d,]*)\s*(?:ريال|SAR)?/i);
+ return match?Number(match[1].replace(/,/g,'')):null;
+}
+export const couponIsOncePerCustomer=(terms:string[])=>terms.some(term=>/مرة واحدة لكل|once per customer/i.test(term));

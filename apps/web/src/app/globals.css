@@ -43,6 +43,22 @@
   --color-verdict-bad-text: #6B2D2D;
   --color-verdict-bad-border: #B07474;
 
+  /* Tags: each tone keeps one meaning across the site */
+  --color-tag-deal-bg: #FBE7E1;
+  --color-tag-deal-text: #8F3423;
+  --color-tag-time-bg: #FCEFD6;
+  --color-tag-time-text: #74490C;
+  --color-tag-urgent-bg: #F9DEDA;
+  --color-tag-urgent-text: #8C2A1E;
+  --color-tag-info-bg: #E1EEF6;
+  --color-tag-info-text: #1D4E6E;
+  --color-tag-verified-bg: #DFEFE3;
+  --color-tag-verified-text: #245A36;
+  --color-tag-rating-bg: #FBF0CF;
+  --color-tag-rating-text: #6E500A;
+  --color-tag-muted-bg: #ECEAE5;
+  --color-tag-muted-text: #565B57;
+
   /* Hover states */
   --color-sage-hover: #5b7d6f;
   --color-sage-active: #4d6c60;

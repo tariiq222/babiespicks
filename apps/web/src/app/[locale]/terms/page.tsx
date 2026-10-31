@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { InfoCard, PageHero } from '@/shared/components/page-hero';
 import { getAlternates } from '@/shared/lib/metadata';
 
 interface Props {
@@ -17,64 +18,54 @@ export async function generateMetadata({ params }: Props): Promise<import('next'
 
 export default async function TermsPage() {
   const t = await getTranslations('terms');
+  const tcommon = await getTranslations('common');
 
   return (
     <main id="main">
-      <article className="max-w-3xl mx-auto px-5 md:px-8 lg:px-12 py-12 md:py-20 prose-sm">
-        <h1 className="text-[28px] md:text-[36px] text-charcoal leading-[1.3] mb-8">{t('title')}</h1>
-        <p className="text-[11px] text-stone mb-8">{t('lastUpdated')}</p>
-
-        <div className="space-y-8 text-[14px] text-stone leading-[1.9]">
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('serviceTitle')}</h2>
+      <PageHero title={t('title')} subtitle={t('lastUpdated')} icon="ti-file-text" tone="info" crumbsLabel={t('title')} crumbs={[{ label: tcommon('home'), href: '/' }, { label: t('title') }]} />
+      <div className="mx-auto max-w-3xl space-y-4 px-5 py-8 md:px-8">
+          <InfoCard title={t('serviceTitle')} icon="ti-info-circle" tone="info">
             <p>{t('serviceText')}</p>
-          </section>
+          </InfoCard>
 
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('contentTitle')}</h2>
-            <ul className="list-disc pr-5 space-y-2">
+          <InfoCard title={t('contentTitle')} icon="ti-file-text" tone="info">
+            <ul>
               <li>{t('content1')}</li>
               <li>{t('content2')}</li>
               <li>{t('content3')}</li>
               <li>{t('content4')}</li>
             </ul>
-          </section>
+          </InfoCard>
 
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('affiliateTitle')}</h2>
+          <InfoCard title={t('affiliateTitle')} icon="ti-discount" tone="deal">
             <p>{t('affiliateText')}</p>
-            <ul className="list-disc pr-5 space-y-2 mt-2">
+            <ul className="mt-2">
               <li>{t('affiliate1')}</li>
               <li>{t('affiliate2')}</li>
               <li>{t('affiliate3')}</li>
             </ul>
-          </section>
+          </InfoCard>
 
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('ipTitle')}</h2>
+          <InfoCard title={t('ipTitle')} icon="ti-copyright" tone="muted">
             <p>{t('ipText')}</p>
-          </section>
+          </InfoCard>
 
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('usageTitle')}</h2>
-            <ul className="list-disc pr-5 space-y-2">
+          <InfoCard title={t('usageTitle')} icon="ti-list-check" tone="verified">
+            <ul>
               <li>{t('usage1')}</li>
               <li>{t('usage2')}</li>
               <li>{t('usage3')}</li>
             </ul>
-          </section>
+          </InfoCard>
 
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('lawTitle')}</h2>
+          <InfoCard title={t('lawTitle')} icon="ti-scale" tone="muted">
             <p>{t('lawText')}</p>
-          </section>
+          </InfoCard>
 
-          <section>
-            <h2 className="text-[18px] text-charcoal mb-3">{t('contactTitle')}</h2>
-            <p>{t('contactText')} <a href="mailto:hello@babiespicks.com" className="text-sage hover:underline">hello@babiespicks.com</a></p>
-          </section>
-        </div>
-      </article>
+          <InfoCard title={t('contactTitle')} icon="ti-mail" tone="info">
+            <p>{t('contactText')} <a href="mailto:hello@babiespicks.com">hello@babiespicks.com</a></p>
+          </InfoCard>
+      </div>
     </main>
   );
 }

@@ -91,5 +91,5 @@ export function VerdictCard({
   );
 }
 
-export { VERDICT_LABEL, VERDICT_CLASS };
+export { VERDICT_LABEL, VERDICT_CLASS, VERDICT_ICON };
 export type { VerdictVariant };

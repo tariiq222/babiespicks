@@ -5,6 +5,7 @@ import {usePathname} from 'next/navigation';
 import {Link} from '../../i18n/navigation';
 import {ProductImage} from './product-image';
 import {SarPrice} from './sar-price';
+import {Tag} from './tags';
 
 interface Card {id:string;slug:string;name:string;imageUrl:string|null;price:number;originalPrice:number|null;discount:number;storeName:string|null;verdictLabel:string|null;verdictScore:number|null;shopperRating:number|null}
 interface Coupon {id:string;code:string;storeName:string;storeSlug:string;description:string|null;verified:boolean}
@@ -59,7 +60,7 @@ export function ChatWidget(){
    {turns.map((turn,index)=>turn.role==='user'?<div key={index} className="flex justify-end"><p className="max-w-[80%] break-words rounded-2xl rounded-ee-md bg-sage-deep px-3.5 py-2.5 text-sm leading-6 text-cream" dir="auto">{turn.content}</p></div>:<div key={index} className="space-y-2">
     <div className="flex items-end gap-2"><Avatar/><p className="max-w-[80%] whitespace-pre-line break-words rounded-2xl rounded-es-md bg-white px-3.5 py-2.5 text-sm leading-6" dir="auto">{turn.content}</p></div>
     {(turn.products?.length||turn.coupons?.length)?<div className="space-y-2 ps-10">
-     {turn.products?.map(card=><Link key={card.id} href={`/products/${card.slug}`} className="flex gap-3 rounded-2xl bg-white p-2.5 transition-colors hover:bg-cream"><div className="w-14 shrink-0"><ProductImage src={card.imageUrl??undefined} alt={card.name} radius={8} compact sizes="56px"/></div><div className="min-w-0 flex-1"><p className="line-clamp-2 text-[13px] font-medium leading-5" dir="auto">{card.name}</p><p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm"><SarPrice amount={card.price} className="font-semibold"/>{card.discount>0&&<span className="text-xs text-terracotta"><bdi dir="ltr">−{card.discount}%</bdi></span>}</p>{card.verdictScore!==null&&<p className="mt-0.5 text-xs text-stone"><bdi dir="ltr">{card.verdictScore.toFixed(1)} / 10</bdi> {card.verdictLabel}</p>}</div></Link>)}
+     {turn.products?.map(card=><Link key={card.id} href={`/products/${card.slug}`} className="flex gap-3 rounded-2xl bg-white p-2.5 transition-colors hover:bg-cream"><div className="w-14 shrink-0"><ProductImage src={card.imageUrl??undefined} alt={card.name} radius={8} compact sizes="56px"/></div><div className="min-w-0 flex-1"><p className="line-clamp-2 text-[13px] font-medium leading-5" dir="auto">{card.name}</p><p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm"><SarPrice amount={card.price} className="font-semibold"/>{card.discount>0&&<Tag tone="deal"><bdi dir="ltr">−{card.discount}%</bdi></Tag>}</p>{card.verdictScore!==null&&<p className="mt-0.5 text-xs text-stone"><bdi dir="ltr">{card.verdictScore.toFixed(1)} / 10</bdi> {card.verdictLabel}</p>}</div></Link>)}
      {turn.coupons?.map(coupon=><Link key={coupon.id} href={`/coupons/${coupon.storeSlug}`} className="block rounded-2xl border border-dashed border-sage bg-white p-3 text-sm"><span className="font-medium">{copy.coupon} {coupon.storeName}: </span><bdi dir="ltr" className="font-semibold">{coupon.code}</bdi>{coupon.description&&<span className="mt-1 block text-xs leading-5 text-stone">{coupon.description}</span>}{!coupon.verified&&<span className="mt-1 block text-xs text-stone">{copy.verify}</span>}</Link>)}
     </div>:null}
    </div>)}

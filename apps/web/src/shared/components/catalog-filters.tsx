@@ -1,4 +1,5 @@
 import { Link } from '../../i18n/navigation';
+import { Tag } from './tags';
 import type { CatalogFilters as Filters, getFilterOptions } from '../lib/catalog-filters';
 
 type Options = ReturnType<typeof getFilterOptions>;
@@ -15,9 +16,9 @@ export function CatalogFiltersPanel({ filters, options, q, locale, activeCount }
     {options.brands.length > 1 && <fieldset className={field}><legend className={legend}>{ar ? 'الماركة' : 'Brand'}</legend><select name="brand" defaultValue={filters.brand} aria-label={ar ? 'الماركة' : 'Brand'} className="w-full rounded-lg bg-white px-3 py-2.5 text-sm hairline"><option value="">{ar ? 'كل الماركات' : 'All brands'}</option>{options.brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}</select></fieldset>}
     {options.bands.length > 1 && <fieldset className={field}><legend className={legend}>{ar ? 'السعر (ر.س)' : 'Price (SAR)'}</legend><label className={choice}><input type="radio" name="price" value="" defaultChecked={!filters.price} className="accent-sage-deep" />{ar ? 'أي سعر' : 'Any price'}</label>{options.bands.map(band => <label key={band.id} className={choice}><input type="radio" name="price" value={band.id} defaultChecked={filters.price === band.id} className="accent-sage-deep" />{ar ? band.ar : band.en}</label>)}</fieldset>}
     {(options.hasDiscounts || options.hasRatings || options.hasVerdicts) && <fieldset className={field}><legend className={legend}>{ar ? 'خيارات' : 'Options'}</legend>
-      {options.hasDiscounts && <label className={choice}><input type="checkbox" name="discount" value="1" defaultChecked={filters.discount} className="accent-sage-deep" />{ar ? 'عليه خصم' : 'On discount'}</label>}
-      {options.hasRatings && <label className={choice}><input type="checkbox" name="rated" value="1" defaultChecked={filters.rated} className="accent-sage-deep" />{ar ? 'تقييم أمازون 4 أو أعلى' : 'Amazon rating 4 or higher'}</label>}
-      {options.hasVerdicts && <label className={choice}><input type="checkbox" name="worth" value="1" defaultChecked={filters.worth} className="accent-sage-deep" />{ar ? 'يستاهل حسب تقييمنا' : 'Worth it in our assessment'}</label>}
+      {options.hasDiscounts && <label className={choice}><input type="checkbox" name="discount" value="1" defaultChecked={filters.discount} className="accent-sage-deep" /><Tag tone="deal" icon="ti-discount">{ar ? 'عليه خصم' : 'On discount'}</Tag></label>}
+      {options.hasRatings && <label className={choice}><input type="checkbox" name="rated" value="1" defaultChecked={filters.rated} className="accent-sage-deep" /><Tag tone="rating" icon="ti-star">{ar ? 'تقييم أمازون 4 أو أعلى' : 'Amazon rating 4 or higher'}</Tag></label>}
+      {options.hasVerdicts && <label className={choice}><input type="checkbox" name="worth" value="1" defaultChecked={filters.worth} className="accent-sage-deep" /><Tag tone="verified" icon="ti-check">{ar ? 'يستاهل حسب تقييمنا' : 'Worth it in our assessment'}</Tag></label>}
     </fieldset>}
     <div className="flex items-center gap-3 pt-4"><button className="min-h-11 flex-1 rounded-lg bg-sage-deep px-4 text-sm text-cream">{ar ? 'عرض النتائج' : 'Show results'}</button>{activeCount > 0 && <Link href={{ pathname: '/', query: q ? { q } : {} }} className="text-sm text-sage-deep underline">{ar ? 'مسح' : 'Clear'}</Link>}</div>
   </form>;
