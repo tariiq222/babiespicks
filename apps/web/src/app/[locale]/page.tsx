@@ -11,8 +11,16 @@ import {getSavedShoppingPreferences} from '@/server/shopping-preferences';
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const ar = locale === 'ar';
-  // Task 8 identity: offers for your little one from Amazon around the world.
-  return { title: ar ? 'عروض لطفلك من أمازون حول العالم' : 'Offers for your little one from Amazon around the world', description: ar ? 'عروض منتجات الأطفال من أسواق أمازون حول العالم، بسعرها بعملته الأصلية، وسواء مع برايم أو بدونه. تحققي من التوصيل لكل منتج لدى المتجر.' : 'Baby product offers from Amazon marketplaces around the world, in their original currency, with or without Prime. Check delivery for each item at the store.', alternates: getAlternates('', locale) };
+  const title = ar ? 'عروض منتجات الأطفال وكوبونات الخصم' : 'Baby product offers and discount codes';
+  const description = ar
+    ? 'اكتشفي عروض منتجات الأطفال من أمازون حول العالم وكوبونات المتاجر. تحقّقي من السعر وإمكانية التوصيل إلى عنوانك لدى المتجر قبل الشراء.'
+    : 'Discover baby product offers from Amazon around the world and store coupons. Confirm the price and delivery to your address at the store before buying.';
+
+  return {
+    title,
+    description,
+    alternates: getAlternates('', locale),
+  };
 }
 export default async function HomePage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { locale } = await params;
@@ -44,7 +52,7 @@ export default async function HomePage({ params, searchParams }: { params: Promi
   const destinationNote = context.shipTo ? (ar ? 'وجهتك المختارة: ' : 'Your selected destination: ') + (context.shipTo === 'SA' ? (ar ? 'السعودية' : 'Saudi Arabia') : (ar ? 'أمريكا' : 'the United States')) + (ar ? '. لا نملك دليل توصيل لكل منتج، فتحقّقي من التوصيل والسعر النهائي لدى المتجر.' : '. We hold no per-item delivery evidence, so confirm delivery and the final price at the store.') : null;
   return <main id="main" className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 py-6 md:py-10">
     <div className="max-w-3xl mb-6"><h1 className="text-2xl md:text-4xl text-sage-deep leading-relaxed font-semibold text-balance">{heading}</h1>
-      <p className="text-stone mt-2 leading-7 text-sm md:text-base">{ar ? 'عروض من أسواق أمازون حول العالم، بسعرها بعملته الأصلية، سواء مع برايم أو بدونه.' : 'Offers from Amazon marketplaces around the world, in their original currency, with or without Prime.'}</p>
+      <p className="text-stone mt-2 leading-7 text-sm md:text-base">{ar ? 'اكتشفي عروض منتجات الأطفال من أسواق أمازون حول العالم، بالعملة الأصلية لكل عرض، مع برايم أو بدونه.' : 'Offers from Amazon marketplaces around the world, in their original currency, with or without Prime.'}</p>
       <p className="text-stone mt-2 leading-7 text-sm md:text-base">{ar ? 'قارني السعر وتقييم المتسوقين وتقييمنا التحريري قبل الشراء، ثم أكملي الطلب من المتجر.' : 'Compare the price, shopper rating and our editorial assessment, then complete your order at the store.'}</p>
       {destinationNote && <p className="text-stone mt-2 leading-7 text-sm md:text-base" role="status">{destinationNote}</p>}
       {q && <p className="text-sm text-stone mt-3" role="status">{ar ? 'نتائج البحث عن: ' : 'Search results for: '}<bdi>{q}</bdi></p>}

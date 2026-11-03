@@ -20,9 +20,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: {
     template: '%s | BabiesPicks',
-    default: 'BabiesPicks - عروض منتجات الأطفال',
+    default: 'عروض منتجات الأطفال وكوبونات الخصم | BabiesPicks',
   },
-  description: 'عروض منتجات الأطفال وأسعارها والكوبونات المنشورة.',
+  description: 'اكتشفي عروض منتجات الأطفال من أمازون حول العالم وكوبونات المتاجر. تحقّقي من السعر وإمكانية التوصيل إلى عنوانك لدى المتجر قبل الشراء.',
   metadataBase: new URL('https://babiespicks.com'),
   openGraph: {
     type: 'website',
