@@ -207,10 +207,10 @@ export async function runIntegrationAcceptance(options: IntegrationOptions): Pro
       expect(selection.fxSnapshotId === null, 'no FX snapshot is claimed');
       const usObservationId = observationId(`${RUN}|obs|us`);
       const target = await queries.resolveOfferTarget({ offerId: usOffer.id, observationId: usObservationId, shipTo: 'US' }, now);
-      expect(Boolean(target), 'the purchase target still resolves for the exact stored US observation');
+      expect(target === null, 'disabled source cannot produce a purchase target even for its exact stored US observation');
       const wrong = await queries.resolveOfferTarget({ offerId: usOffer.id, observationId: usObservationId, shipTo: 'SA' }, now);
       expect(wrong === null, 'the same US offer must not resolve for SA');
-      return 'US context surfaces no SA offer; T1-disabled USD source yields no quote; /go target resolves only for US';
+      return 'US context surfaces no SA offer; T1-disabled USD source yields no quote; /go target remains blocked for the unverified source';
     });
 
     await check(checks, 'members-price-hidden', 'docker', async () => {
@@ -301,7 +301,7 @@ export async function runIntegrationAcceptance(options: IntegrationOptions): Pro
       const before = await queries.getProductOffers(product.id, context('US', 'USD'), now);
       expect(before.total === 1, 'published product is readable before withdrawal');
       const beforeTarget = await queries.resolveOfferTarget({ offerId: usOffer.id, observationId: observationId(`${RUN}|obs|us`), shipTo: 'US' }, now);
-      expect(Boolean(beforeTarget), 'target resolves while the product is published');
+      expect(beforeTarget === null, 'source policy already blocks the unverified target before withdrawal');
       await db.product.update({ where: { id: product.id }, data: { publishStatus: 'ARCHIVED' } });
       const after = await queries.getProductOffers(product.id, context('US', 'USD'), now);
       expect(after.total === 0, 'archived product must not be readable');

@@ -1,4 +1,8 @@
 import {afterEach,describe,it,expect,vi} from 'vitest';
+vi.mock('./source-policy',async()=>{
+ const actual=await vi.importActual<typeof import('./source-policy')>('./source-policy');
+ return {...actual,requireEnabledSourcePolicy:(sourceId:string,marketplaceCode:string)=>({...actual.resolveSourcePolicy(sourceId,marketplaceCode),enabled:true,status:'VERIFIED' as const})};
+});
 import {resolveOfferTarget,resolvePurchaseTarget,wrapAffiliateUrl} from './prices';
 import {executeTool} from './index';
 import {validateVerdict} from './verdict-policy';
@@ -70,7 +74,7 @@ describe('market-scoped purchase resolution',()=>{
   configure();
   const store={slug:'amazon',url:`https://${host}`,marketplaceCode,isActive:true};
   const offer={id:'offer',isActive:true,sellerKey:'seller',listing:{id:'listing',sourceUrl:`https://${host}/dp/X?tag=stale`,marketplaceCode,store,product:{publishStatus:'PUBLISHED',isActive:true}}};
-  const db={offerPriceObservation:{findFirst:async()=>({amount:'100',currency,shipTo:null,audience:'PUBLIC',offer})}} as unknown as Parameters<typeof resolveOfferTarget>[0];
+  const db={offerPriceObservation:{findFirst:async({where}:any)=>where.shipTo==='SA'||where.shipTo==='US'?null:({id:'observation',scopeKey:'price:market:in-marketplace',amount:'100',currency,sourceId:marketplaceCode==='SA'?'amazon-creators-api-sa':'amazon-creators-api-us',shipTo:null,audience:'PUBLIC',offer})}} as unknown as Parameters<typeof resolveOfferTarget>[0];
   const target=await resolveOfferTarget(db,{offerId:'offer',observationId:'observation',shipTo:marketplaceCode as 'SA'|'US'},now);
   expect(target?.url).toBe(`https://${host}/dp/X?tag=${tag}`);
  });
@@ -79,7 +83,7 @@ describe('market-scoped purchase resolution',()=>{
   vi.stubEnv('AMAZON_ASSOCIATES_TAG_US','');
   const store={slug:'amazon',url:'https://amazon.com',marketplaceCode:'US',isActive:true};
   const offer={id:'offer',isActive:true,sellerKey:'seller',listing:{id:'listing',sourceUrl:'https://amazon.com/dp/X?tag=stale',marketplaceCode:'US',store,product:{publishStatus:'PUBLISHED',isActive:true}}};
-  const db={offerPriceObservation:{findFirst:async()=>({amount:'100',currency:'USD',shipTo:null,audience:'PUBLIC',offer})}} as unknown as Parameters<typeof resolveOfferTarget>[0];
+  const db={offerPriceObservation:{findFirst:async({where}:any)=>where.shipTo==='SA'||where.shipTo==='US'?null:({id:'observation',scopeKey:'price:market:in-marketplace',amount:'100',currency:'USD',sourceId:'amazon-creators-api-us',shipTo:null,audience:'PUBLIC',offer})}} as unknown as Parameters<typeof resolveOfferTarget>[0];
   expect(await resolveOfferTarget(db,{offerId:'offer',observationId:'observation',shipTo:'US'},now)).toBeNull();
  });
  it('keeps legacy Saudi purchase links on the Saudi tag when US is configured',async()=>{

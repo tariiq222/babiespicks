@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getAllProducts, getProduct, getProductsByCategory } from '@/server/queries';
+import { getCatalogPage, getProduct, getProductOffers } from '@/server/queries';
 import { getLocalizedName } from '@/shared/lib/api';
 import { getAlternates } from '@/shared/lib/metadata';
 import { getProductImages, getProductMetaDescription } from '@/shared/lib/product-details';
@@ -17,7 +17,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const {locale,slug}=await params;
   const product=await getProduct(slug,locale);if(!product)notFound();
   const context = resolveShoppingContext({ locale: locale === 'en' ? 'en' : 'ar', query: await searchParams, cookie: await getSavedShoppingPreferences() });
-  const candidates=product.category?await getProductsByCategory(product.category.slug,locale):await getAllProducts(locale);
-  const related=candidates.filter(item=>item.id!==product.id&&item.prices.length>0).slice(0,4);
-  return <ProductDetailsView product={product} locale={locale} related={related} shipTo={context.shipTo} currency={context.displayCurrency}/>;
+  const [offerPage,candidates]=await Promise.all([
+    getProductOffers(product.id,context),
+    getCatalogPage(context,{category:product.category?.slug,locale},null,{limit:5}),
+  ]);
+  if(!offerPage.total)notFound();
+  const relatedItems=candidates.items.filter(item=>item.product.id!==product.id).slice(0,4);
+  return <ProductDetailsView product={offerPage.product??product} offerPage={offerPage} locale={locale} relatedItems={relatedItems} shipTo={context.shipTo} currency={context.displayCurrency}/>;
 }

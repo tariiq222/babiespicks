@@ -3,7 +3,7 @@ vi.mock('server-only', () => ({}));
 import { createPublicQueries } from '../public-queries';
 
 function database() {
-  return { product: { count: vi.fn().mockResolvedValue(0), findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, contentPage: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, publicOffer: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, store: { findUnique: vi.fn().mockResolvedValue(null) }, purchaseOffer: { findMany: vi.fn().mockResolvedValue([]) } };
+  return { $queryRaw: vi.fn().mockResolvedValue([]), product: { count: vi.fn().mockResolvedValue(0), findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, contentPage: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, publicOffer: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, store: { findUnique: vi.fn().mockResolvedValue(null) }, purchaseOffer: { findMany: vi.fn().mockResolvedValue([]) } };
 }
 
 describe('public publication boundary', () => {
@@ -116,6 +116,8 @@ const NO_POLICIES: SelectOffersInput['policies'] = [];
 const CONTEXT = parseShoppingContext({ locale: 'ar', shipTo: 'SA', displayCurrency: 'SAR', budget: null, audience: 'PUBLIC' });
 const NOW = new Date('2026-11-02T12:00:00Z');
 
+function legacyFixturePrice() { return { price: 50, originalPrice: null, currency: 'SAR', storeId: 's', url: 'https://www.amazon.sa/dp/X', inStock: true, scrapedAt: NOW, store: { id: 's', name: 'Amazon', slug: 'amazon', isActive: true, url: 'https://www.amazon.sa/?tag=test-sa-21' } }; }
+
 function offerRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'offer-us-1', listingId: 'lst-1', sellerKey: 'seller-a', fulfillerKey: 'ful-a', isActive: true, audience: 'PUBLIC',
@@ -151,22 +153,24 @@ describe('international product offers (Task 7)', () => {
     db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([offerRow({
       priceObservations: [{ id: 'obs-1', offerId: 'offer-us-1', scopeKey: 'price:US:in-marketplace', shipTo: null, amount: '20', currency: 'USD', originalAmount: null, audience: 'PUBLIC', availability: 'AVAILABLE', taxBasis: 'EXCLUDED', sourceId: 'amazon-creators-api-us', checkedAt: new Date('2026-11-02T11:50:00Z'), expiresAt: new Date('2026-11-02T13:00:00Z') }],
     })]) };
+    db.product.findFirst.mockResolvedValue({ id: 'p', name: 'P', slug: 'p', translations: [], specs: [], prices: [], category: null, verdict: null, reviewSummary: null } as never);
     const queries = createPublicQueries(db as never);
     const result = await queries.getProductOffers('p', CONTEXT, NOW);
-    // Without a trusted source the US price reaches pendingDelivery, never a quote.
+    // Disabled source metadata may remain pending, but its money is never public.
     expect(result.offers!.quotes).toHaveLength(0);
     expect(result.offers!.pendingDelivery).toHaveLength(1);
     const quote = result.offers!.pendingDelivery[0]!;
     // Engine fields pass through verbatim, including the T6 extras.
-    expect(quote.price).toEqual({ amount: '20', currency: 'USD' });
+    expect(quote.price).toBeNull();
     expect(quote.originalPrice).toBeNull(); // original missing in this row
     expect(quote.convertedPrice).toBeNull();
     expect(quote.convertedOriginalPrice).toBeNull();
     expect(quote.discountPercent).toBeNull();
-    // No internal source identity, no draft marker, no store URL or name in the projection.
+    // Store display metadata is safe; internal source identity and URLs stay private.
     expect(JSON.stringify(quote)).not.toContain('sourceId');
     expect(JSON.stringify(quote)).not.toContain('DRAFT');
-    expect(JSON.stringify(quote)).not.toContain('amazon-us');
+    expect(quote.store).toMatchObject({ slug: 'amazon-us' });
+    expect(quote.purchasePath).toBeNull();
     expect(JSON.stringify(quote)).not.toContain('http');
   });
 
@@ -189,7 +193,7 @@ describe('international product offers (Task 7)', () => {
     expect(result.legacyPrice).toEqual({ price: 149.5, originalPrice: null, currency: 'SAR', storeId: 's', checkedAt: new Date('2026-11-02T10:00:00Z').toISOString(), store: { id: 's', name: 'Amazon', slug: 'amazon' } });
     expect(result.offers!.quotes).toHaveLength(0);
     expect(result.offers!.bestByGroup).toEqual({});
-    expect(result.total).toBe(0); // the mocked count
+    expect(result.total).toBe(1); // actual published detail exists
     expect(result.contextKey).toBeTypeOf('string');
   });
 
@@ -219,14 +223,9 @@ describe('international product offers (Task 7)', () => {
     ]);
     db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([mixed]) };
     const international = await queries.getCatalogPage(CONTEXT, {}, null, { productId: 'p', now: NOW });
-    expect(international.items).toHaveLength(1);
-    expect(international.items[0]!.product.legacyOnly).toBe(false);
-    expect(international.items[0]!.legacyPrice).toBeNull();
-    // The legacy SAR row is read (no throw) but stays untrusted: no quote, no conversion.
-    expect(international.items[0]!.offers!.quotes).toHaveLength(0);
-    expect(international.items[0]!.offers!.pendingDelivery).toHaveLength(1);
-    expect(international.items[0]!.offers!.pendingDelivery[0]!.price).toEqual({ amount: '20', currency: 'USD' });
-    expect(international.items[0]!.offers!.pendingDelivery[0]!.comparisonGroup).toBeNull();
+    // Disabled-source international observations do not create available-price home cards.
+    expect(international.items).toEqual([]);
+    expect(international.total).toBe(0);
   });
 
   it('paginates with a deterministic bounded page and a stable cursor key', async () => {
@@ -234,25 +233,25 @@ describe('international product offers (Task 7)', () => {
     db.product.findMany.mockResolvedValue([]); db.product.count.mockResolvedValue(0);
     const queries = createPublicQueries({ ...db, ...policyDb(NO_POLICIES) } as never);
     await queries.getCatalogPage(CONTEXT, {}, null, { limit: 999 });
-    expect(db.product.findMany.mock.calls[0][0].take).toBe(48);
+    expect(db.product.findMany.mock.calls[0][0].take).toBe(96);
     await queries.getCatalogPage(CONTEXT, {}, null, { limit: 0 });
-    expect(db.product.findMany.mock.calls[1][0].take).toBe(1);
+    expect(db.product.findMany.mock.calls[1][0].take).toBe(96);
     const cursor = encodeCatalogCursor('prod_1', NOW.toISOString());
     expect(decodeCatalogCursor(cursor)).toEqual({ id: 'prod_1' });
     expect(decodeCatalogCursor('garbage')).toBeNull();
     await queries.getCatalogPage(CONTEXT, {}, cursor, {});
-    expect(db.product.findMany.mock.calls[2][0].cursor).toEqual({ id: 'prod_1' });
-    expect(db.product.findMany.mock.calls[2][0].skip).toBe(1);
+    // Legacy/changed-state cursor restarts the bounded scan; page slicing is global.
+    expect(db.product.findMany.mock.calls[2][0].cursor).toBeUndefined();
   });
 
   it('computes filterOptions from every eligible row, not the filtered subset', async () => {
     const db = database();
     db.product.findMany.mockResolvedValue([
-      { id: 'p1', name: 'A', slug: 'a', translations: [], specs: [], category: { name: 'نوم', nameEn: 'Sleep', slug: 'sleep', order: 1 }, verdict: null, reviewSummary: null, brand: 'BrandA', imageUrls: [], prices: [] },
-      { id: 'p2', name: 'B', slug: 'b', translations: [], specs: [], category: { name: 'عناية', nameEn: 'Care', slug: 'care', order: 2 }, verdict: null, reviewSummary: null, brand: 'BrandB', imageUrls: [], prices: [] },
+      { id: 'p1', name: 'A', slug: 'a', translations: [], specs: [], category: { name: 'نوم', nameEn: 'Sleep', slug: 'sleep', order: 1 }, verdict: null, reviewSummary: null, brand: 'BrandA', imageUrls: [], prices: [legacyFixturePrice()] },
+      { id: 'p2', name: 'B', slug: 'b', translations: [], specs: [], category: { name: 'عناية', nameEn: 'Care', slug: 'care', order: 2 }, verdict: null, reviewSummary: null, brand: 'BrandB', imageUrls: [], prices: [legacyFixturePrice()] },
     ] as never);
     db.product.count.mockResolvedValue(2);
-    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([offerRow({ listing: { id: 'lst-1', productId: 'p1', marketplaceCode: 'US', product: { publishStatus: 'PUBLISHED', isActive: true }, store: { id: 's-us', name: 'أمازون أمريكا', slug: 'amazon-us', isActive: true, marketplaceCode: 'US' } } })]) };
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([]) };
     const queries = createPublicQueries({ ...db, ...policyDb(NO_POLICIES) } as never);
     const page = await queries.getCatalogPage(CONTEXT, { category: 'sleep' }, null, { now: NOW });
     expect(page.filterOptions.categories.map(c => c.slug)).toEqual(['sleep', 'care']);

@@ -5,6 +5,8 @@ import { prisma, type PrismaClient, type Prisma } from '@babiespicks/db';
 import { DomainError } from './errors';
 import { schemas, type ActorContext, type ToolName } from './contracts';
 import { OFFER_MUTATION_NAMES, applyOfferMutation, getOffer, type OfferMutationName } from './offer-mutations';
+import { isMarketplaceUrl } from './marketplaces';
+import { readLockedStore } from './store-identity';
 import { couponScopeIssues } from './coupon-scope';
 import { wrapAffiliateUrl } from './prices';
 import {validateVerdict, VERDICT_POLICY} from './verdict-policy';
@@ -161,8 +163,19 @@ async function mutate(tx:Prisma.TransactionClient,name:ToolName,a:any,actor:Acto
     }
     case 'bp_upsert_store':{
       requirePublish(actor);const {id,idempotencyKey,...data}=a;
-      const existing=id?await tx.store.findUnique({where:{id}}):await tx.store.findUnique({where:{slug:a.slug}});
-      if(id&&!existing)throw new DomainError('NOT_FOUND','Store not found');
+      const selected=id?await tx.store.findUnique({where:{id}}):await tx.store.findUnique({where:{slug:a.slug}});
+      if(id&&!selected)throw new DomainError('NOT_FOUND','Store not found');
+      const existing=selected?await readLockedStore(tx,selected.id):null;
+      if(selected&&!existing)throw new DomainError('NOT_FOUND','Store not found');
+      const merged={...existing,...data};
+      const marketplaceCode=merged.marketplaceCode??null;
+      if(marketplaceCode!==null&&!isMarketplaceUrl(merged.url,marketplaceCode))throw new DomainError('INVALID_INPUT','Store URL must match its exact marketplace');
+      if(existing&&(existing.marketplaceCode??null)!==marketplaceCode){
+        // A legacy declaration can establish identity only when every linked listing agrees.
+        const conflicting=await tx.marketplaceListing.count({where:{storeId:existing.id,...((existing.marketplaceCode??null)===null&&marketplaceCode!==null?{marketplaceCode:{not:marketplaceCode}}:{})}});
+        if(conflicting)throw new DomainError('INVALID_INPUT','Store marketplace cannot rehome linked listings');
+        if(existing.trackingId&&a.trackingId===undefined)throw new DomainError('INVALID_INPUT','Changing marketplace requires explicitly clearing or replacing trackingId');
+      }
       return existing?tx.store.update({where:{id:existing.id},data}):tx.store.create({data});
     }
     case 'bp_upsert_category':{
@@ -230,7 +243,7 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
   const schema=schemas[name as ToolName];const parsed=schema.safeParse(input);
   if(!parsed.success)throw new DomainError('INVALID_INPUT',parsed.error.issues.map(x=>`${x.path.join('.')}: ${x.message}`).join('; '));
   const a:any=parsed.data;
-  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS,internationalOffers:{contractVersion:2,enabled:false,tools:[...OFFER_MUTATION_NAMES,'bp_get_offer'],deliveryCountries:['SA','US'],displayCurrencies:['SAR','USD'],sourcePolicies:getAllSourcePolicies(),agentInstructionVersion:'2026-11-02.2'}};
+  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS,internationalOffers:{contractVersion:2,enabled:false,tools:[...OFFER_MUTATION_NAMES,'bp_get_offer'],deliveryCountries:['SA','US'],displayCurrencies:['SAR','USD'],sourcePolicies:getAllSourcePolicies(),agentInstructionVersion:'2026-11-03.1'}};
   if(name==='bp_list_products'&&a.categoryId&&a.uncategorized)throw new DomainError('INVALID_INPUT','Use categoryId or uncategorized, not both');
   if(name==='bp_list_products')return db.product.findMany({where:{...(a.status?{publishStatus:a.status}:{}),...(a.categoryId?{categoryId:a.categoryId}:{}),...(a.uncategorized?{categoryId:null}:{})},include:productInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_product'){const p=await db.product.findUnique({where:{id:a.id},include:{...productInclude,prices:{include:{store:true},orderBy:{scrapedAt:'desc'},take:100}}});if(!p)throw new DomainError('NOT_FOUND','Product not found');return p}
@@ -248,13 +261,25 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
     const [totalClicks,byStore,byProduct]=await Promise.all([db.affiliateClick.count({where}),db.affiliateClick.groupBy({by:['storeId'],where,_count:{id:true}}),db.affiliateClick.groupBy({by:['productId'],where,_count:{id:true},orderBy:{_count:{id:'desc'}},take:50})]);
     return {totalClicks,byStore,byProduct,since:since.toISOString(),conversionTrackingAvailable:false};
   }
-  const key=hash({actor:actor.id,name,key:a.idempotencyKey});const inputHash=hash(a);
-  const existing=await db.operationReceipt.findUnique({where:{key}});
-  if(existing){if(existing.inputHash!==inputHash)throw new DomainError('IDEMPOTENCY_CONFLICT','Operation key reused with different input');
-    // A successful old receipt must never bypass a later revocation of publishing rights.
+  const key=hash({actor:actor.id,name,key:a.idempotencyKey});
+  // New store hashes distinguish omission from explicit true. The old parser
+  // normalized omission to true, so accept its exact hash only for its saved snapshot.
+  const inputHash=name==='bp_upsert_store'?hash({storeInput:a}):hash(a);
+  const oldStoreInputHash=name==='bp_upsert_store'?hash({...a,isActive:a.isActive??true}):null;
+  const replay=(receipt:{inputHash:string;result:Prisma.JsonValue})=>{
+    const result=receipt.result;
+    const oldStoreMatch=name==='bp_upsert_store'&&receipt.inputHash===oldStoreInputHash
+      &&result!==null&&typeof result==='object'&&!Array.isArray(result)
+      &&typeof result.id==='string'&&(!a.id||result.id===a.id)
+      &&result.name===a.name&&result.slug===a.slug&&result.url===a.url
+      &&result.isActive===(a.isActive??true);
+    if(receipt.inputHash!==inputHash&&!oldStoreMatch)throw new DomainError('IDEMPOTENCY_CONFLICT','Operation key reused with different input');
+    // A successful old receipt never bypasses a later publishing-grant revocation.
     if(['bp_set_status','bp_upsert_store','bp_upsert_category','bp_upsert_coupon'].includes(name))requirePublish(actor);
-    return existing.result;
-  }
+    return receipt.result;
+  };
+  const existing=await db.operationReceipt.findUnique({where:{key}});
+  if(existing)return replay(existing);
   const isOfferMutation=(OFFER_MUTATION_NAMES as readonly string[]).includes(name);
   try{return await db.$transaction(async tx=>{
     const result=isOfferMutation?await applyOfferMutation(tx,name as OfferMutationName,a,actor):await mutate(tx,name as ToolName,a,actor);
@@ -264,13 +289,13 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
       if(error.code==='VERSION_CONFLICT'){
         // A matching in-flight retry may have lost the CAS after the original committed.
         const receipt=await db.operationReceipt.findUnique({where:{key}});
-        if(receipt){if(receipt.inputHash!==inputHash)throw new DomainError('IDEMPOTENCY_CONFLICT','Operation key reused with different input');return receipt.result}
+        if(receipt)return replay(receipt);
       }
       throw error;
     }
     if(error?.code==='P2002'){
       const receipt=await db.operationReceipt.findUnique({where:{key}});
-      if(receipt){if(receipt.inputHash!==inputHash)throw new DomainError('IDEMPOTENCY_CONFLICT','Operation key reused with different input');return receipt.result}
+      if(receipt)return replay(receipt);
       throw new DomainError('INVALID_INPUT','A record with this identity already exists');
     }
     if(error?.code==='P2025')throw new DomainError('NOT_FOUND','Record not found');

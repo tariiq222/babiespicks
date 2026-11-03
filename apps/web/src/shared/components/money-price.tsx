@@ -63,12 +63,12 @@ export function MoneyPrice({ price, convertedPrice, locale, className = '', conv
           ≈ {estimate}
         </bdi>
       )}
-      {estimate && (taxNote || showDeliveryNote) && (
+      {estimate && (
         <span className="text-[11px] leading-4 text-stone">
           {taxNote && <span>{taxNote}</span>}
           {taxNote && showDeliveryNote && deliveryPending ? ' · ' : ''}
           {showDeliveryNote && deliveryPending && <span>{copy.checkDelivery}</span>}
-          {` · ${copy.estimate}`}
+          {(taxNote || (showDeliveryNote && deliveryPending)) ? ' · ' : ''}{copy.estimate}
         </span>
       )}
     </span>

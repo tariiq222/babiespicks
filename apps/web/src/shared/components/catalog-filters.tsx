@@ -1,8 +1,9 @@
 import { Link } from '../../i18n/navigation';
 import { Tag } from './tags';
-import type { CatalogFilters as Filters, getFilterOptions } from '../lib/catalog-filters';
+import type { CatalogFilters as Filters } from '../lib/catalog-filters';
+import type {CatalogPage} from '../lib/api';
 
-type Options = ReturnType<typeof getFilterOptions>;
+type Options = CatalogPage['filterOptions'];
 const field = 'border-b border-beige py-4 first:pt-0 last:border-0';
 const legend = 'mb-2 text-sm font-semibold';
 const choice = 'flex min-h-9 items-center gap-2 text-sm';
@@ -12,20 +13,18 @@ const choice = 'flex min-h-9 items-center gap-2 text-sm';
  * hidden fields so applying a filter never clears the shopping context, and
  * the budget row uses its own currency label — never a bare number.
  */
-export function CatalogFiltersPanel({ filters, options, q, locale, activeCount, shipTo = null, currency = null, maxAmount = '', budgetCurrency = null }: { filters: Filters; options: Options; q: string; locale: string; activeCount: number; shipTo?: 'SA' | 'US' | null; currency?: 'SAR' | 'USD' | null; maxAmount?: string; budgetCurrency?: 'SAR' | 'USD' | null }) {
+export function CatalogFiltersPanel({ filters, options, q, locale, activeCount, shipTo = null, currency = null, maxAmount = '', budgetCurrency = null, priceCurrency = 'SAR' }: { filters: Filters; options: Options; q: string; locale: string; activeCount: number; shipTo?: 'SA' | 'US' | null; currency?: 'SAR' | 'USD' | null; maxAmount?: string; budgetCurrency?: 'SAR' | 'USD' | null;priceCurrency?:string|null }) {
   const ar = locale === 'ar';
-  // These bands still filter the public legacy SAR catalog, independent of display preference.
-  const budgetLabel = ar ? 'ر.س' : 'SAR';
-  const body = <form key={JSON.stringify(filters)} action={`/${locale}`} className="pt-3 lg:pt-0">
+  const budgetLabel = priceCurrency === 'SAR' && ar ? 'ر.س' : priceCurrency;
+  const body = <form key={JSON.stringify([filters,maxAmount,budgetCurrency,priceCurrency,shipTo,currency])} action={`/${locale}`} className="pt-3 lg:pt-0">
     {q && <input type="hidden" name="q" value={q} />}
     {filters.sort && <input type="hidden" name="sort" value={filters.sort} />}
     <input type="hidden" name="shipTo" value={shipTo ?? ''} />
     <input type="hidden" name="currency" value={currency ?? ''} />
-    {maxAmount && budgetCurrency && <input type="hidden" name="maxAmount" value={maxAmount} />}
-    {maxAmount && budgetCurrency && <input type="hidden" name="budgetCurrency" value={budgetCurrency} />}
+    <fieldset className={field}><legend className={legend}>{ar?'الميزانية':'Budget'}</legend><label className="block text-sm">{ar?'أقصى سعر':'Maximum price'}<input type="number" name="maxAmount" min="0.000001" step="any" defaultValue={maxAmount} className="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-sm hairline"/></label><label className="mt-3 block text-sm">{ar?'عملة الميزانية':'Budget currency'}<select name="budgetCurrency" defaultValue={budgetCurrency??''} className="mt-2 w-full rounded-lg bg-white px-3 py-2.5 text-sm hairline"><option value="">{ar?'اختاري العملة':'Choose a currency'}</option><option value="SAR">SAR</option><option value="USD">USD</option></select></label><p className="mt-2 text-xs leading-5 text-stone">{ar?'الميزانية تحتاج مبلغًا وعملة. لا نخلط أسعارًا بعملات مختلفة.':'A budget needs an amount and currency. Prices in different units are not mixed.'}</p></fieldset>
     {options.categories.length > 0 && <fieldset className={field}><legend className={legend}>{ar ? 'التصنيف' : 'Category'}</legend><select name="category" defaultValue={filters.category} aria-label={ar ? 'التصنيف' : 'Category'} className="w-full rounded-lg bg-white px-3 py-2.5 text-sm hairline"><option value="">{ar ? 'كل التصنيفات' : 'All categories'}</option>{options.categories.map(item => <option key={item.slug} value={item.slug}>{item.label}</option>)}</select></fieldset>}
     {options.brands.length > 1 && <fieldset className={field}><legend className={legend}>{ar ? 'الماركة' : 'Brand'}</legend><select name="brand" defaultValue={filters.brand} aria-label={ar ? 'الماركة' : 'Brand'} className="w-full rounded-lg bg-white px-3 py-2.5 text-sm hairline"><option value="">{ar ? 'كل الماركات' : 'All brands'}</option>{options.brands.map(brand => <option key={brand} value={brand}>{brand}</option>)}</select></fieldset>}
-    {options.bands.length > 1 && <fieldset className={field}><legend className={legend}>{ar ? (budgetLabel ? `السعر (${budgetLabel})` : 'السعر') : (budgetLabel ? `Price (${budgetLabel})` : 'Price')}</legend><label className={choice}><input type="radio" name="price" value="" defaultChecked={!filters.price} className="accent-sage-deep" />{ar ? 'أي سعر' : 'Any price'}</label>{options.bands.map(band => <label key={band.id} className={choice}><input type="radio" name="price" value={band.id} defaultChecked={filters.price === band.id} className="accent-sage-deep" />{ar ? band.ar : band.en}</label>)}</fieldset>}
+    {priceCurrency && options.bands.length > 1 && <fieldset className={field}><legend className={legend}>{ar ? `السعر (${budgetLabel})` : `Price (${budgetLabel})`}</legend><label className={choice}><input type="radio" name="price" value="" defaultChecked={!filters.price} className="accent-sage-deep" />{ar ? 'أي سعر' : 'Any price'}</label>{options.bands.map(band => <label key={band.id} className={choice}><input type="radio" name="price" value={band.id} defaultChecked={filters.price === band.id} className="accent-sage-deep" />{ar ? band.ar : band.en}</label>)}</fieldset>}
     {(options.hasDiscounts || options.hasRatings || options.hasVerdicts) && <fieldset className={field}><legend className={legend}>{ar ? 'خيارات' : 'Options'}</legend>
       {options.hasDiscounts && <label className={choice}><input type="checkbox" name="discount" value="1" defaultChecked={filters.discount} className="accent-sage-deep" /><Tag tone="deal" icon="ti-discount">{ar ? 'عليه خصم' : 'On discount'}</Tag></label>}
       {options.hasRatings && <label className={choice}><input type="checkbox" name="rated" value="1" defaultChecked={filters.rated} className="accent-sage-deep" /><Tag tone="rating" icon="ti-star">{ar ? 'تقييم أمازون 4 أو أعلى' : 'Amazon rating 4 or higher'}</Tag></label>}

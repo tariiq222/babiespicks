@@ -67,6 +67,7 @@ export function ShoppingPreferences({ compact = false }: { compact?: boolean }) 
     params.set('currency', currency);
     params.delete('maxAmount');
     params.delete('budgetCurrency');
+    params.delete('cursor');
     const query = params.toString();
     window.location.href = `${pathname}${query ? `?${query}` : ''}`;
   };

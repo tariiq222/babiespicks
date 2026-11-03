@@ -1,11 +1,9 @@
 import 'server-only';
-import type { Prisma, PrismaClient } from '@babiespicks/db';
+import { Prisma, type PrismaClient } from '@babiespicks/db';
 import { couponVisibility, resolveCouponScope, selectLatestPrices, wrapAffiliateUrl, selectOffers, getFxSnapshot, getAllSourcePolicies, resolveOfferTarget, type CouponScope, type CouponVisibility, type ShoppingContext, type SelectedOfferSelection } from '@babiespicks/domain';
-import { PRICE_BANDS, getFilterOptions } from '../shared/lib/catalog-filters';
-// The backfill module owns the canonical legacy source id (Task 3): one definition,
-// no second literal that could drift from it.
-import { LEGACY_SOURCE_ID } from '../../../../scripts/operations/backfill-international';
-import type { Product, ContentPage, CatalogPage, CatalogPageFilters, ProductOffersPage } from '../shared/lib/api';
+import { PRICE_BANDS } from '../shared/lib/catalog-filters';
+import { CATALOG_SCAN_SIZE, createCatalogCollector } from './catalog-reader';
+import type { Product, ContentPage, CatalogPage, CatalogPageFilters, ProductOffersPage, OfferSelectionView } from '../shared/lib/api';
 
 /** Task 7 pagination contract: fixed page size, bounded maximum, deterministic cursor. */
 export const CATALOG_PAGE_SIZE = 24;
@@ -33,7 +31,7 @@ function displaySources(value: unknown): NonNullable<Product['sources']> {
   });
 }
 
-function productView(row: ProductRow): Product {
+function productView(row: ProductRow, now: Date = new Date()): Product {
   return {
     id: row.id, name: row.name, slug: row.slug, brand: row.brand, imageUrl: row.imageUrl, isActive: row.isActive, updatedAt: row.updatedAt?.toISOString(),
     imageUrls: row.imageUrls ?? [], ageMinMonths: row.ageMinMonths, ageMaxMonths: row.ageMaxMonths, sources: displaySources(row.sources),
@@ -42,7 +40,7 @@ function productView(row: ProductRow): Product {
     specs: row.specs.map(({ key, value, locale }) => ({ key, value, locale })),
     verdict: row.verdict?.isPublished ? { ...row.verdict, conditionsAr: strings(row.verdict.conditionsAr), conditionsEn: strings(row.verdict.conditionsEn) } : null,
     reviewSummary: row.reviewSummary ? { ...row.reviewSummary, prosAr: strings(row.reviewSummary.prosAr), prosEn: strings(row.reviewSummary.prosEn), consAr: strings(row.reviewSummary.consAr), consEn: strings(row.reviewSummary.consEn) } : null,
-    prices: selectLatestPrices(row.prices).filter((p) => {
+    prices: selectLatestPrices(row.prices, now).filter((p) => {
       if (p.currency !== 'SAR' || !p.url) return false;
       try { wrapAffiliateUrl(p.url, p.store.slug, process.env, p.store); return true; } catch { return false; }
     }).map((p) => ({ price: Number(p.price), originalPrice: p.originalPrice === null ? null : Number(p.originalPrice), currency: p.currency, storeId: p.storeId, checkedAt: new Date(p.scrapedAt).toISOString(), store: p.store ? { id: p.store.id, name: p.store.name, slug: p.store.slug } : null })),
@@ -160,7 +158,7 @@ function observationsFromOffers(offers: OfferRow[], productId: string) {
     availability: row.availability as 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN',
     taxBasis: row.taxBasis as 'INCLUDED' | 'EXCLUDED' | 'UNKNOWN',
     sourceId: row.sourceId, checkedAt: row.checkedAt.toISOString(), expiresAt: row.expiresAt.toISOString(),
-    isActive: offer.isActive,
+    isActive: offer.isActive && offer.listing.store.isActive,
   })) : []);
 }
 
@@ -183,15 +181,57 @@ type LegacyPriceRow = {
 };
 function legacyPriceFromRow(row: { prices: Array<{ price: unknown; originalPrice: unknown; currency: string; storeId: string; url: string | null; inStock: boolean | null; scrapedAt: Date; store: { id: string; name: string; slug: string; isActive: boolean; url: string } | null }> }, now: Date) {
   const prices: LegacyPriceRow[] = row.prices.map(p => ({ price: Number(p.price), originalPrice: p.originalPrice === null ? null : Number(p.originalPrice), currency: p.currency, storeId: p.storeId, url: p.url, inStock: p.inStock ?? undefined, scrapedAt: p.scrapedAt, store: p.store }));
-  const price = selectLatestPrices<LegacyPriceRow>(prices, now).find(p => p.currency === 'SAR' && p.url && p.store);
+  const price = selectLatestPrices<LegacyPriceRow>(prices, now).find(p => {
+    if (p.currency !== 'SAR' || !p.url || !p.store) return false;
+    try { wrapAffiliateUrl(p.url, p.store.slug, process.env, p.store); return true; } catch { return false; }
+  });
   if (!price || !price.url || !price.store) return null;
-  try { wrapAffiliateUrl(price.url, price.store.slug, process.env, price.store); } catch { return null; }
   return {
     price: price.price, originalPrice: price.originalPrice,
     currency: 'SAR' as const, storeId: price.storeId,
     checkedAt: new Date(price.scrapedAt).toISOString(),
     store: { id: price.store.id, name: price.store.name, slug: price.store.slug },
   };
+}
+
+/** Read only each store's latest row, before freshness/stock checks. History stays in SQL. */
+async function latestLegacyIds(db: PrismaClient, productIds: string[]): Promise<string[]> {
+  if (!productIds.length) return [];
+  const rows = await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT DISTINCT ON (p."productId", p."storeId") p.id
+    FROM product_prices p JOIN products product ON product.id = p."productId"
+    WHERE p."productId" IN (${Prisma.join(productIds)}) AND product."publishStatus" = 'PUBLISHED' AND product."isActive" = true
+    ORDER BY p."productId", p."storeId", p."scrapedAt" DESC, p.id ASC
+  `);
+  return rows.map(row => row.id);
+}
+function currentProductInclude(priceIds: string[]) {
+  return { ...productInclude, prices: { ...productInclude.prices, where: { id: { in: priceIds } } } } satisfies Prisma.ProductInclude;
+}
+
+/** The engine accepts unknown legacy observations; public money requires source approval. */
+async function publicSelection(db: PrismaClient, selection: SelectedOfferSelection, offers: OfferRow[], policies: ReturnType<typeof readSourcePolicies>, context: ShoppingContext, now: Date): Promise<OfferSelectionView> {
+  const project = async (quote: SelectedOfferSelection['quotes'][number]) => {
+    const offer = offers.find(o => o.id === quote.offerId);
+    const row = offer?.priceObservations.find(p => p.id === quote.observationId);
+    const policy = policies.find(p => p.sourceId === row?.sourceId && p.marketplaceCode === quote.marketplaceCode);
+    const store = offer?.listing.store;
+    const metadata = { store: store?.isActive ? { id: store.id, name: store.name, slug: store.slug } : null, purchasePath: null as string | null };
+    if (!store?.isActive || !policy?.enabled || policy.status !== 'VERIFIED') {
+      return { ...quote, ...metadata, price: null, originalPrice: null, convertedPrice: null, convertedOriginalPrice: null, discountPercent: null, comparisonGroup: null, fxSnapshotId: null };
+    }
+    const target = await resolveOfferTarget(db, { offerId: quote.offerId, observationId: quote.observationId, shipTo: context.shipTo }, now);
+    if (target) {
+      const query = new URLSearchParams({ observationId: quote.observationId, locale: context.locale });
+      if (context.shipTo) query.set('shipTo', context.shipTo);
+      metadata.purchasePath = `/go/offer/${encodeURIComponent(quote.offerId)}?${query}`;
+    }
+    return { ...quote, ...metadata };
+  };
+  const [quotes, pendingDelivery] = await Promise.all([Promise.all(selection.quotes.map(project)), Promise.all(selection.pendingDelivery.map(project))]);
+  const bestByGroup = Object.fromEntries(Object.entries(selection.bestByGroup).filter(([group, id]) => quotes.some(q => q.offerId === id && q.comparisonGroup === group && q.price)));
+  return { ...selection, quotes, pendingDelivery, bestByGroup, fxSnapshotId: [...quotes, ...pendingDelivery].some(q => q.fxSnapshotId) ? selection.fxSnapshotId : null,
+    reason: Object.keys(bestByGroup).length ? 'OK' : quotes.length || pendingDelivery.length ? 'NO_COMPARABLE_PRICE' : 'NO_ELIGIBLE_OFFER' };
 }
 
 // ── Deterministic cursor (Task 7: fixed size, bounded, stable key) ──────────
@@ -209,6 +249,11 @@ export function encodeCatalogCursor(id: string, atIso: string): string {
 export function decodeCatalogCursor(cursor: string): { id: string } | null {
   try {
     const text = Buffer.from(cursor, 'base64url').toString('utf8');
+    if (text.startsWith('{')) {
+      const value = JSON.parse(text) as { position?: { id?: string } };
+      const id = value.position?.id;
+      return id && /^[a-zA-Z0-9_-]{1,128}$/.test(id) ? { id } : null;
+    }
     const index = text.lastIndexOf('\u241F');
     if (index <= 0) return null;
     const id = text.slice(0, index), bucket = text.slice(index + 1);
@@ -216,16 +261,13 @@ export function decodeCatalogCursor(cursor: string): { id: string } | null {
     return { id };
   } catch { return null; }
 }
-function parseCatalogCursor(cursor: string | null | undefined): { id: string } | null {
-  return cursor ? decodeCatalogCursor(cursor) : null;
-}
 
 /** All public entry points constrain publication in the database, before projection. */
 export function createPublicQueries(db: PrismaClient) {
   const queries = {
     async getProducts(locale = 'ar', limit = 20): Promise<{ data: Product[]; nextCursor: string | null }> {
       const rows = await db.product.findMany({ where: { publishStatus: 'PUBLISHED', isActive: true }, include: productInclude, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: Math.min(Math.max(limit, 1), 1000) });
-      return { data: rows.map(productView), nextCursor: null };
+      return { data: rows.map(row => productView(row)), nextCursor: null };
     },
     async getActiveCoupons(limit = 5, context: CouponReadContext = {}): Promise<ActiveCoupon[]> {
       const now = context.now ?? new Date();
@@ -234,7 +276,7 @@ export function createPublicQueries(db: PrismaClient) {
     },
     async getAllProducts(locale = 'ar'): Promise<Product[]> {
       const rows = await db.product.findMany({ where: { publishStatus: 'PUBLISHED', isActive: true }, include: productInclude, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
-      return rows.map(productView);
+      return rows.map(row => productView(row));
     },
     async getProduct(slug: string, locale = 'ar'): Promise<Product | null> {
       const row = await db.product.findFirst({ where: { publishStatus: 'PUBLISHED', isActive: true, OR: [{ slug }, { translations: { some: { slug, locale } } }] }, include: productInclude });
@@ -242,7 +284,7 @@ export function createPublicQueries(db: PrismaClient) {
     },
     async getProductsByCategory(categorySlug: string, locale = 'ar'): Promise<Product[]> {
       const rows = await db.product.findMany({ where: { publishStatus: 'PUBLISHED', isActive: true, category: { slug: categorySlug } }, include: productInclude, orderBy: { createdAt: 'desc' } });
-      return rows.map(productView);
+      return rows.map(row => productView(row));
     },
     async searchProducts(query: string, locale = 'ar'): Promise<{ data: Product[]; query: string; total: number }> {
       query = query.trim().slice(0, 200);
@@ -252,7 +294,7 @@ export function createPublicQueries(db: PrismaClient) {
         db.product.findMany({ where, include: productInclude, take: 20, orderBy: { createdAt: 'desc' } }),
         db.product.count({ where }),
       ]);
-      return { data: rows.map(productView), query, total };
+      return { data: rows.map(row => productView(row)), query, total };
     },
     async getContentPages(locale = 'ar'): Promise<ContentPage[]> {
       const rows = await db.contentPage.findMany({ where: { publishStatus: 'PUBLISHED' }, include: contentInclude, orderBy: { publishedAt: 'desc' } });
@@ -296,31 +338,45 @@ export function createPublicQueries(db: PrismaClient) {
      * eligibility and identity are the engine's decision, and the JSON projection leaves
      * the server exactly as the engine produced it.
      */
-    offerRows(now: Date, extraWhere: Record<string, unknown> = {}) {
-      return db.purchaseOffer.findMany({
-        where: {
-          listing: { product: { publishStatus: 'PUBLISHED' as const, isActive: true }, ...extraWhere },
-          priceObservations: { some: { expiresAt: { gt: now } } },
-        },
-        select: {
-          id: true, listingId: true, sellerKey: true, fulfillerKey: true, isActive: true, audience: true,
-          listing: {
-            select: {
-              id: true, productId: true, marketplaceCode: true,
-              product: { select: { publishStatus: true, isActive: true } },
-              store: { select: { id: true, name: true, slug: true, isActive: true, marketplaceCode: true } },
-            },
+    async offerRows(_now: Date, extraWhere: Prisma.MarketplaceListingWhereInput = {}): Promise<OfferRow[]> {
+      const result: OfferRow[] = [];
+      let cursor: string | undefined;
+      for (;;) {
+        const rows = await db.purchaseOffer.findMany({
+          where: { listing: { ...extraWhere, product: { publishStatus: 'PUBLISHED', isActive: true } } },
+          select: { id: true }, orderBy: { id: 'asc' }, take: CATALOG_SCAN_SIZE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        });
+        if (!rows.length) break;
+        const ids = rows.map(row => row.id);
+        // Reduce exact engine slots before expiry, availability, audience, source or
+        // destination checks. A bad newest row must never revive an older good row.
+        const [priceIds, deliveryIds] = await Promise.all([
+          db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT DISTINCT ON ("offerId", "scopeKey", "shipTo", audience) id FROM offer_price_observations
+            WHERE "offerId" IN (${Prisma.join(ids)})
+            ORDER BY "offerId", "scopeKey", "shipTo", audience, "checkedAt" DESC, id ASC
+          `),
+          db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT DISTINCT ON ("offerId", country) id FROM offer_delivery_evidence
+            WHERE "offerId" IN (${Prisma.join(ids)})
+            ORDER BY "offerId", country, "checkedAt" DESC, id ASC
+          `),
+        ]);
+        const hydrated = await db.purchaseOffer.findMany({
+          where: { id: { in: ids }, listing: { ...extraWhere, product: { publishStatus: 'PUBLISHED', isActive: true } } },
+          select: {
+            id: true, listingId: true, sellerKey: true, fulfillerKey: true, isActive: true,
+            listing: { select: { id: true, productId: true, marketplaceCode: true, product: { select: { publishStatus: true, isActive: true } }, store: { select: { id: true, name: true, slug: true, isActive: true, marketplaceCode: true } } } },
+            priceObservations: { where: { id: { in: priceIds.map(p => p.id) } }, select: { id: true, offerId: true, scopeKey: true, shipTo: true, amount: true, currency: true, originalAmount: true, audience: true, availability: true, taxBasis: true, sourceId: true, checkedAt: true, expiresAt: true } },
+            deliveryEvidence: { where: { id: { in: deliveryIds.map(p => p.id) } }, select: { id: true, offerId: true, country: true, precision: true, state: true, sourceId: true, checkedAt: true, expiresAt: true } },
           },
-          priceObservations: {
-            select: { id: true, offerId: true, scopeKey: true, shipTo: true, amount: true, currency: true, originalAmount: true, audience: true, availability: true, taxBasis: true, sourceId: true, checkedAt: true, expiresAt: true },
-            orderBy: [{ checkedAt: 'desc' as const }, { id: 'desc' as const }],
-          },
-          deliveryEvidence: {
-            select: { id: true, offerId: true, country: true, precision: true, state: true, sourceId: true, checkedAt: true, expiresAt: true },
-            orderBy: [{ checkedAt: 'desc' as const }, { id: 'desc' as const }],
-          },
-        },
-      });
+        });
+        result.push(...hydrated);
+        if (rows.length < CATALOG_SCAN_SIZE) break;
+        cursor = rows[rows.length - 1]!.id;
+      }
+      return result;
     },
     async getOfferSelection(productId: string, context: ShoppingContext, now: Date = new Date()): Promise<SelectedOfferSelection> {
       const [policies, fx] = await Promise.all([readSourcePolicies(), getFxSnapshot(db, ['SAR', 'USD'], now)]);
@@ -339,95 +395,57 @@ export function createPublicQueries(db: PrismaClient) {
      * all — the pre-activation fallback — and carries no comparison or delivery claim.
      */
     async getProductOffers(productId: string, context: ShoppingContext, now: Date = new Date()): Promise<ProductOffersPage> {
-      const [total, offers, legacy] = await Promise.all([
-        db.product.count({ where: { id: productId, publishStatus: 'PUBLISHED', isActive: true } }),
-        queries.offerRows(now, { productId }),
-        queries.legacyPriceFor(productId, now),
-      ]);
-      const selection = selectOffers({
-        productId,
-        observations: observationsFromOffers(offers, productId),
-        delivery: deliveryFromOffers(offers),
-        context, fx: await getFxSnapshot(db, ['SAR', 'USD'], now), policies: readSourcePolicies(), now,
-      });
+      const [priceIds, offers, fx] = await Promise.all([latestLegacyIds(db, [productId]), queries.offerRows(now, { productId }), getFxSnapshot(db, ['SAR', 'USD'], now)]);
+      const row = await db.product.findFirst({ where: { id: productId, publishStatus: 'PUBLISHED', isActive: true }, include: currentProductInclude(priceIds) });
+      const policies = readSourcePolicies();
+      const selection = selectOffers({ productId, observations: row ? observationsFromOffers(offers, productId) : [], delivery: row ? deliveryFromOffers(offers) : [], context, fx, policies, now });
       const hasInternationalRows = offers.some(offer => offer.priceObservations.length > 0 || offer.deliveryEvidence.length > 0);
-      return {
-        product: null, offers: selection, legacyPrice: hasInternationalRows ? null : legacy, total,
-        nextCursor: null, filterOptions: emptyFilterOptions(),
-        contextKey: selection.contextKey,
-      };
+      const product = row ? Object.assign(productView(row, now), { legacyOnly: !hasInternationalRows }) : null;
+      if (product && hasInternationalRows) product.prices = [];
+      return { product, offers: await publicSelection(db, selection, offers, policies, context, now), legacyPrice: !hasInternationalRows && row ? legacyPriceFromRow(row, now) : null,
+        total: row ? 1 : 0, nextCursor: null, filterOptions: emptyFilterOptions(), contextKey: selection.contextKey };
     },
-    /** The legacy SAR fallback price for one product, without any comparison claim. */
+    /** The legacy SAR fallback uses latest-per-store rows even when latest is invalid. */
     async legacyPriceFor(productId: string, now: Date = new Date()) {
-      const row = await db.product.findFirst({ where: { id: productId, publishStatus: 'PUBLISHED', isActive: true }, include: productInclude });
+      const priceIds = await latestLegacyIds(db, [productId]);
+      const row = await db.product.findFirst({ where: { id: productId, publishStatus: 'PUBLISHED', isActive: true }, include: currentProductInclude(priceIds) });
       return row ? legacyPriceFromRow(row, now) : null;
     },
     /**
-     * International catalog page. One deterministic SQL page (cursor key, bounded size),
-     * the T6 engine per product, and the legacy SAR fallback only when the product has no
-     * live international observation at all. filterOptions always come from every eligible
-     * row of the page, never from the trimmed view or the current filters.
+     * Exact engine-derived eligibility requires visiting all searched candidates. Read
+     * fixed batches and current observation slots only; retain facets, count and at
+     * most limit+1 items, rather than loading the full catalog/history into memory.
      */
     async getCatalogPage(context: ShoppingContext, filters: CatalogPageFilters = {}, cursor: string | null = null, options: { limit?: number; productId?: string; now?: Date } = {}): Promise<CatalogPage> {
       const now = options.now ?? new Date();
-      const limit = Math.min(Math.max(options.limit ?? CATALOG_PAGE_SIZE, 1), CATALOG_MAX_LIMIT);
-      const parsed = parseCatalogCursor(cursor);
-      const where: Record<string, unknown> = { publishStatus: 'PUBLISHED', isActive: true };
-      if (options.productId) where.id = options.productId;
-      else if (filters.category) where.category = { slug: filters.category };
-      const [total, rows] = await Promise.all([
-        db.product.count({ where }),
-        db.product.findMany({
-          where, include: productInclude,
-          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-          ...(parsed ? { skip: 1, cursor: { id: parsed.id } } : {}),
-          take: limit,
-        }),
-      ]);
-      const ids = rows.map(row => row.id);
-      const [policies, fx] = await Promise.all([readSourcePolicies(), getFxSnapshot(db, ['SAR', 'USD'], now)]);
-      const selections = new Map<string, SelectedOfferSelection>();
-      const legacyIds = new Set<string>();
-      if (ids.length) {
-        const offers = await queries.offerRows(now, { productId: { in: ids } });
-        const byProduct = new Map<string, typeof offers>();
-        for (const offer of offers) {
-          const list = byProduct.get(offer.listing.productId);
-          if (list) list.push(offer); else byProduct.set(offer.listing.productId, [offer]);
+      const limit = Math.min(Math.max(Math.trunc(options.limit ?? CATALOG_PAGE_SIZE) || 1, 1), CATALOG_MAX_LIMIT);
+      const collector = createCatalogCollector(context, filters, cursor, limit, now, options.productId);
+      const policies = readSourcePolicies();
+      const fx = await getFxSnapshot(db, ['SAR', 'USD'], now);
+      const where: Prisma.ProductWhereInput = { publishStatus: 'PUBLISHED', isActive: true, ...(options.productId ? { id: options.productId } : {}) };
+      const q = filters.q?.trim().slice(0, 200);
+      if (q) where.OR = [{ name: { contains: q, mode: 'insensitive' } }, { brand: { contains: q, mode: 'insensitive' } }, { translations: { some: { locale: { in: [filters.locale ?? context.locale, 'ar'] }, name: { contains: q, mode: 'insensitive' } } } }];
+      let scanCursor: string | undefined;
+      for (;;) {
+        const candidates = await db.product.findMany({ where, select: { id: true }, orderBy: { id: 'asc' }, take: CATALOG_SCAN_SIZE, ...(scanCursor ? { cursor: { id: scanCursor }, skip: 1 } : {}) });
+        if (!candidates.length) break;
+        const ids = candidates.map(p => p.id);
+        const [priceIds, offers] = await Promise.all([latestLegacyIds(db, ids), queries.offerRows(now, { productId: { in: ids } })]);
+        const rows = await db.product.findMany({ where: { ...where, id: { in: ids } }, include: currentProductInclude(priceIds), take: CATALOG_SCAN_SIZE });
+        const byProduct = new Map<string, OfferRow[]>();
+        for (const offer of offers) { const group = byProduct.get(offer.listing.productId) ?? []; group.push(offer); byProduct.set(offer.listing.productId, group); }
+        for (const row of rows) {
+          const productOffers = byProduct.get(row.id) ?? [];
+          const legacyOnly = !productOffers.some(offer => offer.priceObservations.length > 0 || offer.deliveryEvidence.length > 0);
+          const product = Object.assign(productView(row, now), { legacyOnly });
+          if (!legacyOnly) product.prices = [];
+          const selection = legacyOnly ? null : selectOffers({ productId: row.id, observations: observationsFromOffers(productOffers, row.id), delivery: deliveryFromOffers(productOffers), context, fx, policies, now });
+          collector.add({ product, offers: selection ? await publicSelection(db, selection, productOffers, policies, context, now) : null, legacyPrice: legacyOnly ? legacyPriceFromRow(row, now) : null }, row.createdAt?.toISOString() ?? '');
         }
-        for (const id of ids) {
-          const productOffers = byProduct.get(id) ?? [];
-          const hasInternationalRows = productOffers.some(offer => offer.priceObservations.length > 0 || offer.deliveryEvidence.length > 0);
-          if (hasInternationalRows) {
-            selections.set(id, selectOffers({
-              productId: id,
-              observations: observationsFromOffers(productOffers, id),
-              delivery: deliveryFromOffers(productOffers),
-              context, fx, policies, now,
-            }));
-          } else {
-            legacyIds.add(id);
-          }
-        }
+        if (candidates.length < CATALOG_SCAN_SIZE) break;
+        scanCursor = candidates[candidates.length - 1]!.id;
       }
-      const items: CatalogPage['items'] = [];
-      const eligibleViews: Array<Product & { legacyOnly: boolean }> = [];
-      for (const row of rows) {
-        const legacy = legacyIds.has(row.id);
-        if (!legacy && !selections.has(row.id)) continue;
-        const view = Object.assign(productView(row), { legacyOnly: legacy });
-        eligibleViews.push(view);
-        items.push({
-          product: view,
-          offers: selections.get(row.id) ?? null,
-          legacyPrice: legacy ? legacyPriceFromRow(row, now) : null,
-        });
-      }
-      // filterOptions are computed on every eligible row of the page, not the trimmed
-      // or filtered subset, so opening a filter never narrows the other filter choices.
-      const filterOptions = getFilterOptions(eligibleViews, filters.locale ?? context.locale);
-      const nextCursor = rows.length === limit ? encodeCatalogCursor(rows[rows.length - 1]!.id, now.toISOString()) : null;
-      return { items, nextCursor, total, filterOptions };
+      return collector.finish();
     },
     /** One offer purchase target, resolved against the exact observation and destination. */
     async resolveOfferTarget(input: { offerId: string; observationId: string; shipTo: 'SA' | 'US' | null }, now: Date = new Date()) {

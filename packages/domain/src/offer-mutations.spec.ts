@@ -160,6 +160,7 @@ function store(seed: Seed = {}) {
     fxSnapshot: model('fxSnapshot'),
     operationReceipt: model('operationReceipt'),
     contentRevision: model('contentRevision'),
+    async $queryRaw(..._args:unknown[]){return [];},
     async $transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
       const snapshot = JSON.stringify(Object.fromEntries(Object.entries(state).filter(([key]) => key !== 'writes')));
       try {

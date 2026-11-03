@@ -4,14 +4,20 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { isReadTool } from './registry.js';
 const config=loadConfig({MCP_PUBLIC_URL:'https://mcp.babiespicks.test',MCP_BEARER_TOKEN:'test'.repeat(12)});
-async function rpc(method:string,params?:unknown){
-  const app=buildApp({config,toolDefinitions:TOOL_DEFINITIONS,executeTool,isDomainError:e=>e instanceof DomainError,ready:async()=>{}});
+async function rpc(method:string,params?:unknown,database?:Parameters<typeof executeTool>[3]){
+  const app=buildApp({config,toolDefinitions:TOOL_DEFINITIONS,executeTool:(name,args,actor)=>executeTool(name,args,actor,database),isDomainError:e=>e instanceof DomainError,ready:async()=>{}});
   const res=await app.request('/mcp',{method:'POST',headers:{authorization:`Bearer ${config.MCP_BEARER_TOKEN}`,'content-type':'application/json',accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
   const text=await res.text();
   return {status:res.status,body:res.headers.get('content-type')?.includes('text/event-stream')?JSON.parse(text.split('\n').find(l=>l.startsWith('data:'))!.slice(5)):JSON.parse(text)};
 }
 const INTERNATIONAL_TOOLS=['bp_upsert_listing','bp_upsert_offer','bp_get_offer','bp_record_offer_price','bp_record_delivery_evidence','bp_record_fx_snapshot'];
 describe('real domain schemas through SDK without database writes',()=>{
+  it('accepts marketplace store metadata through MCP without granting an editor publishing rights',async()=>{
+    const database={operationReceipt:{findUnique:async()=>null},$transaction:async(work:(tx:unknown)=>Promise<unknown>)=>work({})};
+    const response=await rpc('tools/call',{name:'bp_upsert_store',arguments:{name:'Amazon US',nameAr:'أمازون أمريكا',nameEn:'Amazon US',slug:'amazon-us-review',url:'https://www.amazon.com',marketplaceCode:'US',trackingId:'test-us-20',idempotencyKey:'market-store-schema-only'}},database as never);
+    expect(response.body.result?.isError).toBe(true);
+    expect(response.body.result?.structuredContent?.error?.code).toBe('PUBLISH_FORBIDDEN');
+  });
   it('advertises every real domain schema and passes trusted editing capability',async()=>{
     const list=await rpc('tools/list');
     expect(list.status).toBe(200);

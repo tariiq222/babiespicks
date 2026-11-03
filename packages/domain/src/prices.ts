@@ -2,6 +2,8 @@ import type { PrismaClient } from '@babiespicks/db';
 import { DomainError } from './errors';
 import { isCurrencyApprovedForMarketplace, isMarketplaceUrl, resolveMarketplaceFromDomain, type MarketplaceCode } from './marketplaces';
 import type { Money } from './international-contracts';
+import { deriveScopeKey } from './offer-mutations';
+import { requireEnabledSourcePolicy } from './source-policy';
 export interface PriceLike {
   storeId:string; price:unknown; scrapedAt:Date|string; inStock?:boolean;
   store?:{isActive?:boolean}|null;
@@ -17,7 +19,7 @@ export function selectLatestPrices<T extends PriceLike>(prices:T[], now=new Date
   return [...latest.values()].filter(p=>p.inStock!==false&&p.store?.isActive!==false&&Number(p.price)>0&&now.getTime()-new Date(p.scrapedAt).getTime()<=maxAgeHours*3600000).sort((a,b)=>Number(a.price)-Number(b.price));
 }
 function hostIs(host:string,root:string){return host===root||host.endsWith(`.${root}`)}
-export function wrapAffiliateUrl(raw:string,storeSlug:string,env:Record<string,string|undefined>=process.env,store?:{url?:string;affiliateNetwork?:string|null;marketplaceCode?:string|null}):string{
+export function wrapAffiliateUrl(raw:string,storeSlug:string,env:Record<string,string|undefined>=process.env,store?:{url?:string;affiliateNetwork?:string|null;marketplaceCode?:string|null;trackingId?:string|null}):string{
   let u:URL;try{u=new URL(raw)}catch{throw new DomainError('INVALID_INPUT','Invalid destination')}
   if(u.protocol!=='https:'||u.username||u.password||u.port)throw new DomainError('INVALID_INPUT','HTTPS destination required');
   const host=u.hostname.toLowerCase();
@@ -43,7 +45,8 @@ export function wrapAffiliateUrl(raw:string,storeSlug:string,env:Record<string,s
     }
     // The old environment variable is a Saudi compatibility setting, never a US override.
     // The selected store URL is already matched to this destination above.
-    const tag=env[`AMAZON_ASSOCIATES_TAG_${marketplace}`]?.trim()
+    const tag=store?.trackingId?.trim()
+      ||env[`AMAZON_ASSOCIATES_TAG_${marketplace}`]?.trim()
       ||(marketplace==='SA'?env.AMAZON_ASSOCIATES_TAG?.trim():undefined)
       ||(store?.url?new URL(store.url).searchParams.get('tag')?.trim():undefined);
     if(!tag)throw new DomainError('INVALID_INPUT',`Missing affiliate tag for ${marketplace} marketplace`);
@@ -107,7 +110,23 @@ export async function resolveOfferTarget(db:PrismaClient,input:{offerId:string;o
     include:{offer:{include:{listing:{include:{store:true,product:{select:{publishStatus:true,isActive:true}}}}}}},
   });
   if(!observation)return null;
+  // Select newest in the exact scope before availability or expiry. A newer failed
+  // observation closes the old target; it never substitutes another price or seller.
+  const latest=await db.offerPriceObservation.findFirst({
+    where:{offerId:input.offerId,scopeKey:observation.scopeKey,shipTo:observation.shipTo,audience:observation.audience},
+    orderBy:[{checkedAt:'desc'},{id:'asc'}],select:{id:true},
+  });
+  if(latest?.id!==input.observationId)return null;
   const offer=observation.offer,listing=offer.listing,store=listing.store;
+  if(observation.shipTo===null&&input.shipTo){
+    // An explicit destination scope takes precedence even when its latest row is
+    // unavailable or expired. A bookmarked general link cannot bypass that result.
+    const preferred=await db.offerPriceObservation.findFirst({
+      where:{offerId:input.offerId,scopeKey:deriveScopeKey({kind:'price',marketplaceCode:listing.marketplaceCode,shipTo:input.shipTo}),shipTo:input.shipTo,audience:observation.audience},
+      orderBy:[{checkedAt:'desc'},{id:'asc'}],select:{id:true},
+    });
+    if(preferred)return null;
+  }
   // Same publication boundary as the public catalog: a withdrawn product's offer is no
   // longer a public purchase target (a draft never was).
   if(listing.product.publishStatus!=='PUBLISHED'||listing.product.isActive===false)return null;
@@ -118,6 +137,8 @@ export async function resolveOfferTarget(db:PrismaClient,input:{offerId:string;o
   if(observation.shipTo!==null&&observation.shipTo!==input.shipTo)return null;
   if(!offer.isActive||!store.isActive||!observation.amount||!observation.currency)return null;
   if(observation.audience!=='PUBLIC')return null;
+  // Canonical redirect policy applies even to manually constructed bookmarked URLs.
+  try{requireEnabledSourcePolicy(observation.sourceId,listing.marketplaceCode);}catch{return null;}
   const money:Money={amount:String(observation.amount),currency:observation.currency};
   if(!isCurrencyApprovedForMarketplace(money.currency,listing.marketplaceCode))return null;
   if(!isMarketplaceUrl(listing.sourceUrl,listing.marketplaceCode))return null;

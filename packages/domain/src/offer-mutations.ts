@@ -16,6 +16,7 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@babiespicks/db';
 import { DomainError } from './errors';
+import { readLockedStore } from './store-identity';
 import { isCurrencyApprovedForMarketplace, isMarketplaceUrl, type MarketplaceCode } from './marketplaces';
 import { requireEnabledSourcePolicy, type SourcePolicy } from './source-policy';
 
@@ -213,7 +214,7 @@ async function upsertListing(read: OfferReadDb, tx: MutationDb, a: any, actor: O
   const { idempotencyKey: _omit, ...args } = a;
   const product = await read.product.findUnique({ where: { id: args.productId } });
   if (!product) throw new DomainError('NOT_FOUND', 'Product not found');
-  const store = await read.store.findUnique({ where: { id: args.storeId } });
+  const store = await readLockedStore(tx, args.storeId);
   if (!store) throw new DomainError('NOT_FOUND', 'Store not found');
   if (!isMarketplaceUrl(args.sourceUrl, args.marketplaceCode)) throw new DomainError('INVALID_INPUT', 'URL must match the exact marketplace');
   // A store that declares another marketplace cannot host this listing: no silent re-store.

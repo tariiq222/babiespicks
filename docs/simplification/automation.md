@@ -11,3 +11,5 @@
 إذا اعتمد المالك النشر اليومي، تحفظ المهمة حدود التفويض ولا تعممها على أي محتوى. النشر المؤجل مرتبط بعنصر وإصدار وموافقة ووقت؛ اختلاف الإصدار وقت التنفيذ يتوقف للمراجعة. الجلب المحجوب والسعر المجهول يبقيان مجهولين. quota المنتهية لا يعاد طلبها؛ الخدمة المتعثرة تسمح بمحاولة عابرة واحدة محدودة. الإشعارات عند تغيير مهم أو فشل يحتاج تدخلًا، لا لكل تشغيل ثابت.
 
 X وتيليجرام والنشرات البريدية ليس لها ناشر نشط داخل النسخة المبسطة. سجلاتها القديمة محفوظة للمراجعة، ولا تنفيذ لها عند النقل. يحتاج استخدامها لاحقًا موصلًا خارجيًا مصرحًا ومختبرًا. لا إرسال تجريبي لعملاء أو حسابات عامة.
+
+Current catalog-wiring instruction draft: `2026-11-03.1`; previous deployed reference: `2026-11-02.2` at `52ba693`. This adds market-scoped store administration without source activation, publishing-grant changes or external prompt synchronization. Read live schemas/capabilities before using new fields; see [agent-sync.md](../operations/agent-sync.md).

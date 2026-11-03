@@ -78,7 +78,8 @@ describe.skipIf(!testUrl)('real OAuth → MCP → PostgreSQL content lifecycle',
       if(testWeb) expect((await fetch(`${testWeb}/ar/products/${product.slug}`,{redirect:'manual'})).status).toBe(404);
       expect((await success('bp_create_product',input)).id).toBe(product.id);
       expect((await call('bp_create_product',{...input,name:'Different input'})).structuredContent.error.code).toBe('IDEMPOTENCY_CONFLICT');
-      const store=await success('bp_upsert_store',{name:'Isolated MCP test store',slug:`${run}-store`,url:'https://www.amazon.sa/?tag=test-sa-21',idempotencyKey:`${run}-store`},publisher);
+      const store=await success('bp_upsert_store',{name:'Isolated MCP test store',nameAr:'متجر سعودي معزول',nameEn:'Isolated SA store',slug:`${run}-store`,url:'https://www.amazon.sa',marketplaceCode:'SA',trackingId:'test-sa-21',idempotencyKey:`${run}-store`},publisher);
+      expect(store).toMatchObject({marketplaceCode:'SA',trackingId:'test-sa-21',nameAr:'متجر سعودي معزول',nameEn:'Isolated SA store'});
       await success('bp_record_price',{productId:product.id,storeId:store.id,amount:123,currency:'SAR',sourceUrl:'https://www.amazon.sa/dp/TESTMCP',checkedAt:new Date().toISOString(),idempotencyKey:`${run}-price`});
       const initialVersion=product.version;
       product=await success('bp_update_product',{id:product.id,name:'منتج تجريبي مُراجع',expectedVersion:initialVersion,idempotencyKey:`${run}-edit`});
@@ -107,8 +108,8 @@ describe.skipIf(!testUrl)('real OAuth → MCP → PostgreSQL content lifecycle',
       expect(listingResult.idempotency).toMatchObject({key:`${run}-listing`});
       expect(listing).toMatchObject({marketplaceCode:'SA',asin:'B0TEST0001',variantKey:'default',created:true});
       // A store explicitly registered to SA cannot host a US listing.
-      const usStore=await success('bp_upsert_store',{name:'Isolated MCP test store US',slug:`${run}-store-us`,url:'https://www.amazon.com',idempotencyKey:`${run}-store-us`},publisher);
-      await db.store.update({where:{id:store.id},data:{marketplaceCode:'SA'}});
+      const usStore=await success('bp_upsert_store',{name:'Isolated MCP test store US',slug:`${run}-store-us`,url:'https://www.amazon.com',marketplaceCode:'US',trackingId:'test-us-20',idempotencyKey:`${run}-store-us`},publisher);
+      expect(usStore).toMatchObject({marketplaceCode:'US',trackingId:'test-us-20'});
       await failure('bp_upsert_listing',{productId:product.id,storeId:store.id,marketplaceCode:'US',asin:'B0TEST0002',variantKey:'default',sourceUrl:'https://www.amazon.com/dp/B0TEST0002',idempotencyKey:`${run}-listing-wrong-store`},'INVALID_INPUT',publisher);
       // An offer's marketplace is not a caller field at all: it is read from its listing.
       // The strict schema refuses it before the domain is reached (read via the loose call helper).

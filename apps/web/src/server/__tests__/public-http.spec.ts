@@ -42,7 +42,7 @@ describe('newsletter subscription', () => {
 describe('offer purchase route', () => {
   const target = { url: 'https://www.amazon.com/dp/B0TEST0001?tag=babiespicks-20', offerId: 'offer-1', listingId: 'lst-1', marketplaceCode: 'US', observedSellerKey: 'seller-a', price: { amount: '20', currency: 'USD' } };
   const offerRequest = (query: string) => new Request(`https://babiespicks.com/go/offer/offer-1?${query}`);
-  const handler = (resolve: ReturnType<typeof vi.fn>) => createOfferPurchaseHandler({ affiliateClick: { create: vi.fn().mockRejectedValue(new Error('tracking unavailable')) } } as never, resolve as never);
+  const handler = (resolve: ReturnType<typeof vi.fn>) => createOfferPurchaseHandler({purchaseOffer:{findFirst:vi.fn().mockResolvedValue({listing:{product:{slug:'bottle'}}})},marketplaceListing:{findUnique:vi.fn().mockResolvedValue({productId:'product-1',storeId:'store-1'})}, affiliateClick: { create: vi.fn().mockRejectedValue(new Error('tracking unavailable')) } } as never, resolve as never);
 
   it('redirects only with an explicit destination and the exact observation, and counts the click as best effort', async () => {
     const resolve = vi.fn().mockResolvedValue(target);
@@ -83,10 +83,10 @@ describe('offer purchase route', () => {
     expect(body.shipTo).toBe('US');
     expect(String(body.optionsPath)).toContain('/products');
   });
-  it('tracks the offer marketplace, never a guessed country, and a click is not a commission', async () => {
-    const db = { affiliateClick: { create: vi.fn().mockResolvedValue({}) } };
+  it('tracks the selected destination and real product/store identities without claiming commission', async () => {
+    const db = { marketplaceListing:{findUnique:vi.fn().mockResolvedValue({productId:'product-1',storeId:'store-1'})},affiliateClick: { create: vi.fn().mockResolvedValue({}) } };
     const resolve = vi.fn().mockResolvedValue(target);
     await createOfferPurchaseHandler(db as never, resolve as never)(offerRequest('observationId=obs-9&shipTo=US'), { offerId: 'offer-1' });
-    expect(db.affiliateClick.create).toHaveBeenCalledWith({ data: expect.objectContaining({ country: 'US', productId: 'offer-1' }) });
+    expect(db.affiliateClick.create).toHaveBeenCalledWith({ data: expect.objectContaining({ country: 'US', productId: 'product-1',storeId:'store-1' }) });
   });
 });

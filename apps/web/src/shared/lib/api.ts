@@ -28,6 +28,9 @@ export interface OfferQuoteView {
   audience: 'PUBLIC' | 'MEMBERS';
   delivery: { state: 'OBSERVED_AVAILABLE' | 'OBSERVED_UNAVAILABLE' | 'UNKNOWN'; country: string | null; precision: string; checkedAt: string | null };
   comparisonGroup: string | null;
+  store?: { id: string; name: string; slug: string } | null;
+  /** Present only after resolving the exact observation on the server. */
+  purchasePath?: string | null;
 }
 
 /** Task 6 engine output projected to JSON: quotes, pendingDelivery and bookkeeping. */
@@ -62,6 +65,13 @@ export interface CatalogPageItem {
 
 export interface CatalogPageFilters {
   category?: string;
+  q?: string;
+  brand?: string;
+  price?: string;
+  discount?: boolean;
+  rated?: boolean;
+  worth?: boolean;
+  sort?: string;
   /** Labelling locale for filter options; never a market or currency filter. */
   locale?: string;
 }
@@ -70,9 +80,11 @@ export interface CatalogPage {
   items: CatalogPageItem[];
   /** Deterministic cursor key; null on the last page. */
   nextCursor: string | null;
-  /** Total published eligible products matching the base where-clause. */
+  /** Exact total after all filters and context eligibility, before pagination. */
   total: number;
-  /** Computed over every eligible row of the page, never the trimmed subset. */
+  /** Price-band unit; null when no single explicit unit is available. */
+  priceCurrency?: string | null;
+  /** Computed over all searched context-eligible rows, before attribute filters/page. */
   filterOptions: {
     categories: { slug: string; label: string; order: number }[];
     brands: string[];

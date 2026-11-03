@@ -111,7 +111,7 @@ describe('MCP compatibility and preparatory schemas', () => {
     const result = await executeTool('bp_get_capabilities', {}, { id: 'editor', canPublish: false });
     expect(result.publishing.allowed).toBe(false);
     expect(result.priceFreshnessHours).toBe(48);
-    expect(result.internationalOffers).toMatchObject({ contractVersion: 2, enabled: false, deliveryCountries: ['SA', 'US'], displayCurrencies: ['SAR', 'USD'], agentInstructionVersion: '2026-11-02.2' });
+    expect(result.internationalOffers).toMatchObject({ contractVersion: 2, enabled: false, deliveryCountries: ['SA', 'US'], displayCurrencies: ['SAR', 'USD'], agentInstructionVersion: '2026-11-03.1' });
     expect(result.internationalOffers.sourcePolicies).toEqual(getAllSourcePolicies());
   });
   it('can import the client subpath while all server modules are unavailable', async () => {

@@ -2,13 +2,14 @@ import { Link } from '../../i18n/navigation';
 import { ProductCard } from './product-card';
 import { ProductImage } from './product-image';
 import { Tag } from './tags';
-import type { Product, ContentPage } from '../lib/api';
+import type { Product, ContentPage, CatalogPageItem } from '../lib/api';
 import {contextParams} from '../lib/offer-view';
 
-export function OfferGrid({ offers, products, locale, filtered = false, columns = 4, shipTo = null, currency = null }: { offers: ContentPage[]; products: Product[]; locale: string; filtered?: boolean; columns?: 3 | 4; shipTo?: 'SA' | 'US' | null; currency?:'SAR'|'USD'|null }) {
+export function OfferGrid({ offers, products = [], catalogItems, locale, filtered = false, columns = 4, shipTo = null, currency = null }: { offers: ContentPage[]; products?: Product[]; catalogItems?:CatalogPageItem[]; locale: string; filtered?: boolean; columns?: 3 | 4; shipTo?: 'SA' | 'US' | null; currency?:'SAR'|'USD'|null }) {
   const ar = locale === 'ar';
+  const items = catalogItems ?? products.map(product=>({product}));
   return <div className="space-y-10">
-    {offers.length === 0 && products.length === 0 && <div role="status" className="bg-linen hairline rounded-2xl px-6 py-12 text-center">
+    {offers.length === 0 && items.length === 0 && <div role="status" className="bg-linen hairline rounded-2xl px-6 py-12 text-center">
       {filtered ? <>
         <h2 className="text-xl mb-3">{ar ? 'لم نجد نتائج مطابقة' : 'No matching results'}</h2>
         <p className="text-stone">{ar ? 'جربي اسمًا أقصر أو اسم الماركة.' : 'Try a shorter name or the brand.'}</p>
@@ -27,9 +28,9 @@ export function OfferGrid({ offers, products, locale, filtered = false, columns 
         <span className="mt-auto inline-block pt-4 text-sm font-medium text-sage-deep">{ar ? 'تفاصيل العرض' : 'View offer'}</span>
       </Link>)}
     </section>}
-    {products.length > 0 && <section aria-label={ar ? 'أسعار المنتجات المتاحة' : 'Available product prices'}>
+    {items.length > 0 && <section aria-label={ar ? 'أسعار المنتجات المتاحة' : 'Available product prices'}>
       <h2 className="sr-only">{ar ? 'أسعار المنتجات المتاحة' : 'Available product prices'}</h2>
-      <div className={`grid grid-cols-2 gap-3 lg:gap-4 ${columns === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>{products.map((product, index) => <ProductCard key={product.id} product={product} locale={locale} priority={index < 4} shipTo={shipTo} currency={currency} />)}</div>
+      <div className={`grid grid-cols-2 gap-3 lg:gap-4 ${columns === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>{items.map((item, index) => <ProductCard key={item.product.id} product={item.product} catalogItem={catalogItems?item as CatalogPageItem:undefined} locale={locale} priority={index < 4} shipTo={shipTo} currency={currency} />)}</div>
     </section>}
   </div>;
 }
