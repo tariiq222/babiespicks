@@ -1,17 +1,41 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TOOL_DEFINITIONS, DomainError, executeTool, OFFER_MUTATION_NAMES } from '@babiespicks/domain';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { isReadTool } from './registry.js';
 const config=loadConfig({MCP_PUBLIC_URL:'https://mcp.babiespicks.test',MCP_BEARER_TOKEN:'test'.repeat(12)});
-async function rpc(method:string,params?:unknown,database?:Parameters<typeof executeTool>[3]){
-  const app=buildApp({config,toolDefinitions:TOOL_DEFINITIONS,executeTool:(name,args,actor)=>executeTool(name,args,actor,database),isDomainError:e=>e instanceof DomainError,ready:async()=>{}});
+async function rpc(method:string,params?:unknown,database?:Parameters<typeof executeTool>[3],revalidate?:()=>Promise<'ok'>){
+  const app=buildApp({config,toolDefinitions:TOOL_DEFINITIONS,executeTool:(name,args,actor)=>executeTool(name,args,actor,database),isDomainError:e=>e instanceof DomainError,revalidate,ready:async()=>{}});
   const res=await app.request('/mcp',{method:'POST',headers:{authorization:`Bearer ${config.MCP_BEARER_TOKEN}`,'content-type':'application/json',accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
   const text=await res.text();
   return {status:res.status,body:res.headers.get('content-type')?.includes('text/event-stream')?JSON.parse(text.split('\n').find(l=>l.startsWith('data:'))!.slice(5)):JSON.parse(text)};
 }
 const INTERNATIONAL_TOOLS=['bp_upsert_listing','bp_upsert_offer','bp_get_offer','bp_record_offer_price','bp_record_delivery_evidence','bp_record_fx_snapshot'];
 describe('real domain schemas through SDK without database writes',()=>{
+  it('advertises a strict monthly progress read and serves an editor without writes or revalidation',async()=>{
+    const list=await rpc('tools/list');
+    const tool=list.body.result.tools.find((tool:{name:string})=>tool.name==='bp_get_publication_progress');
+    expect(tool).toBeDefined();
+    expect(tool.annotations).toMatchObject({readOnlyHint:true,destructiveHint:false});
+    expect(tool.inputSchema.additionalProperties).toBe(false);
+    expect(Object.keys(tool.inputSchema.properties)).toEqual(['month','excludeReviewIds']);
+    expect(isReadTool(tool.name)).toBe(true);
+    const revalidate=vi.fn(async()=>'ok' as const);
+    // Any non-count database access (bodies, writes, receipts) throws.
+    const database={product:{count:async()=>0,findMany:async()=>[]}} as never;
+    const response=await rpc('tools/call',{name:tool.name,arguments:{month:'2026-11'}},database,revalidate);
+    expect(response.body.result.isError).not.toBe(true);
+    expect(response.body.result.structuredContent).toMatchObject({month:'2026-11',target:50,firstPublished:0,remaining:50,editorialReviewedFromMonth:0,editorialReviewRemaining:0,multiSourceReviewedFromMonth:0,reviewCandidates:[]});
+    expect(response.body.result.structuredContent).not.toHaveProperty('revalidation');
+    expect(revalidate).not.toHaveBeenCalled();
+    for(const args of [{month:'2026-13'},{actor:{canPublish:true}},{idempotencyKey:'k'}]){
+      const rejected=await rpc('tools/call',{name:tool.name,arguments:args},database,revalidate);
+      expect(rejected.body.result.isError).toBe(true);
+    }
+    const capability=await rpc('tools/call',{name:'bp_get_capabilities',arguments:{}});
+    expect(capability.body.result.structuredContent.publishing).toMatchObject({allowed:false,monthlyTarget:50});
+    expect(capability.body.result.structuredContent.internationalOffers).toMatchObject({enabled:false,agentInstructionVersion:'2026-11-03.2'});
+  });
   it('accepts marketplace store metadata through MCP without granting an editor publishing rights',async()=>{
     const database={operationReceipt:{findUnique:async()=>null},$transaction:async(work:(tx:unknown)=>Promise<unknown>)=>work({})};
     const response=await rpc('tools/call',{name:'bp_upsert_store',arguments:{name:'Amazon US',nameAr:'أمازون أمريكا',nameEn:'Amazon US',slug:'amazon-us-review',url:'https://www.amazon.com',marketplaceCode:'US',trackingId:'test-us-20',idempotencyKey:'market-store-schema-only'}},database as never);

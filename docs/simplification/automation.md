@@ -13,3 +13,5 @@
 X وتيليجرام والنشرات البريدية ليس لها ناشر نشط داخل النسخة المبسطة. سجلاتها القديمة محفوظة للمراجعة، ولا تنفيذ لها عند النقل. يحتاج استخدامها لاحقًا موصلًا خارجيًا مصرحًا ومختبرًا. لا إرسال تجريبي لعملاء أو حسابات عامة.
 
 Current catalog-wiring instruction draft: `2026-11-03.1`; previous deployed reference: `2026-11-02.2` at `52ba693`. This adds market-scoped store administration without source activation, publishing-grant changes or external prompt synchronization. Read live schemas/capabilities before using new fields; see [agent-sync.md](../operations/agent-sync.md).
+
+Rakazo operating version: `2026-11-03.2`. MCP-first monthly publication target50; multi-site editorial assessment is required by the owner. `bp_get_publication_progress` provides light count/reference-coverage/candidate data without product bodies. Existing publisher/updater roles and publishing grants are preserved; no Amazon API dependency or extra scheduled writer is introduced. See the canonical content-agent instructions and Rakazo team operating record.

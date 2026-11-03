@@ -346,3 +346,7 @@ Task 9 يعتمد على 2 و3 و4 و5، ويمكن تنفيذه منفصلًا 
 حالة التسليم المراجعة: **الأساس نُفذ ونُشر، وربط السطح العام والفلاتر وإعداد المتاجر منفذ ومختبر محليًا في الدفعة اللاحقة؛ التفعيل الدولي التشغيلي لم يكتمل.** المصفوفة في أول حدود العمل هي المرجع الحالي. تطبيق تعليمات المشروع الخارجي والمهمة واعتماد المصادر وFX يبقى غير مثبت، ولا يصير مكتملًا بنشر الكود.
 
 قياس الاستهلاك لهذا التخطيط غير مكتمل: baseline التقط بعد بدء القراءة، وأداة الإرفاق المحلية أظهرت في المهمة السابقة `KeyError: participants` ولم تُصلح ضمن نطاق المشروع. لا تستنتج إجمالي tokens أو توفيرًا من هذا الملف.
+
+### Rakazo operating update — 2026-11-03
+
+The owner identified the existing Rakazo publisher and price updater as the operating team, with MCP as control plane and50unique first publications per calendar month plus multi-site editorial research. Saved bot/routine instruction text was read back at version2026-11-03.2 without new writers/models/credentials. This supersedes the prior unknown ChatGPT-project assumption forTask11. Runtime activation and first-batch evidence are recorded separately in [agent-sync](../../operations/agent-sync.md) and [Rakazo operating policy](../../operations/rakazo-team.md); configuration acceptance is not proof of a completed research batch.

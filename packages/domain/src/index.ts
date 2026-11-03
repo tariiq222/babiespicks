@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { prisma, type PrismaClient, type Prisma } from '@babiespicks/db';
 import { DomainError } from './errors';
+import { getPublicationProgress, MONTHLY_PUBLICATION_TARGET } from './publication-progress';
 import { schemas, type ActorContext, type ToolName } from './contracts';
 import { OFFER_MUTATION_NAMES, applyOfferMutation, getOffer, type OfferMutationName } from './offer-mutations';
 import { isMarketplaceUrl } from './marketplaces';
@@ -243,7 +244,8 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
   const schema=schemas[name as ToolName];const parsed=schema.safeParse(input);
   if(!parsed.success)throw new DomainError('INVALID_INPUT',parsed.error.issues.map(x=>`${x.path.join('.')}: ${x.message}`).join('; '));
   const a:any=parsed.data;
-  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS,internationalOffers:{contractVersion:2,enabled:false,tools:[...OFFER_MUTATION_NAMES,'bp_get_offer'],deliveryCountries:['SA','US'],displayCurrencies:['SAR','USD'],sourcePolicies:getAllSourcePolicies(),agentInstructionVersion:'2026-11-03.1'}};
+  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish,monthlyTarget:MONTHLY_PUBLICATION_TARGET},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS,internationalOffers:{contractVersion:2,enabled:false,tools:[...OFFER_MUTATION_NAMES,'bp_get_offer'],deliveryCountries:['SA','US'],displayCurrencies:['SAR','USD'],sourcePolicies:getAllSourcePolicies(),agentInstructionVersion:'2026-11-03.2'}};
+  if(name==='bp_get_publication_progress')return getPublicationProgress(db,a.month,a.excludeReviewIds);
   if(name==='bp_list_products'&&a.categoryId&&a.uncategorized)throw new DomainError('INVALID_INPUT','Use categoryId or uncategorized, not both');
   if(name==='bp_list_products')return db.product.findMany({where:{...(a.status?{publishStatus:a.status}:{}),...(a.categoryId?{categoryId:a.categoryId}:{}),...(a.uncategorized?{categoryId:null}:{})},include:productInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_product'){const p=await db.product.findUnique({where:{id:a.id},include:{...productInclude,prices:{include:{store:true},orderBy:{scrapedAt:'desc'},take:100}}});if(!p)throw new DomainError('NOT_FOUND','Product not found');return p}
