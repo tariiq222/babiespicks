@@ -226,6 +226,57 @@ enum PublicationStatus {
   ARCHIVED
 }
 
+// ==================== INTERNATIONAL OFFERS ENUMS ====================
+// Source-derived observations require an enabled policy; all current sources are disabled.
+// Listing and offer metadata use the catalog authorization, version and revision contracts.
+
+enum MarketplaceCode {
+  SA
+  US
+}
+
+enum OfferCondition {
+  NEW
+  USED_LIKE_NEW
+  USED_GOOD
+  USED_ACCEPTABLE
+  UNKNOWN
+}
+
+enum OfferAudience {
+  PUBLIC
+  MEMBERS
+}
+
+enum OfferPriceAvailability {
+  AVAILABLE
+  UNAVAILABLE
+  UNKNOWN
+}
+
+enum OfferTaxBasis {
+  INCLUDED
+  EXCLUDED
+  UNKNOWN
+}
+
+enum DeliveryCountryCode {
+  SA
+  US
+}
+
+enum OfferDeliveryPrecision {
+  COUNTRY
+  POSTAL_SAMPLE
+  UNKNOWN
+}
+
+enum OfferDeliveryState {
+  OBSERVED_AVAILABLE
+  OBSERVED_UNAVAILABLE
+  UNKNOWN
+}
+
 // ==================== MODELS ====================
 
 model Store {
@@ -237,12 +288,21 @@ model Store {
   affiliateNetwork String?
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
+  // Optional, never backfilled by inference. A null marketplaceCode means the legacy
+  // store has no verified marketplace identity; its name is not a marketplace name.
+  marketplaceCode  MarketplaceCode?
+  nameAr           String?
+  nameEn           String?
+  // Partner/tracking id reference for this marketplace only. Never copied across markets.
+  trackingId       String?
 
   products        Product[]
   prices          ProductPrice[]
   coupons         Coupon[]
   affiliateClicks AffiliateClick[]
+  listings        MarketplaceListing[]
 
+  @@index([marketplaceCode])
   @@map("stores")
 }
 
@@ -303,6 +363,7 @@ model Product {
   productScores               ProductScore[]
   analyticsEvents             AnalyticsEvent[]
   optimizationRecommendations OptimizationRecommendation[]
+  listings                    MarketplaceListing[]
 
   @@index([categoryId])
   @@index([storeId])
@@ -532,7 +593,7 @@ model Coupon {
   storeId         String
   store           Store        @relation(fields: [storeId], references: [id])
   discountPercent Float?
-  discountAmount  Decimal?     @db.Decimal(10, 2)
+  discountAmount  Decimal?     @db.Decimal(20, 6)
   description     String?
   status          CouponStatus @default(ACTIVE)
   validFrom       DateTime?
@@ -543,8 +604,34 @@ model Coupon {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
+  // ── Structured coupon conditions (additive; see 202611020001_international_offers) ──
+  // Every column is added through the same migration that lands the offer tables, because
+  // nothing has been deployed yet. They are nullable or defaulted so the existing rows stay
+  // readable, and couponCurrency is deliberately left NULL on legacy rows: an old fixed
+  // amount is never relabelled as SAR by the migration.
+  /// Currency of discountAmount. A fixed amount without it stays unlabelled until reviewed.
+  couponCurrency       String?
+  /// Minimum spend as stated, in its own currency; never converted into another one.
+  minimumSpendAmount   Decimal? @db.Decimal(20, 6)
+  minimumSpendCurrency String?
+  /// Cap on a percentage discount. Its currency is couponCurrency (or minimumSpendCurrency
+  /// when only the limit states one); there is no second currency column. A ceiling with no
+  /// currency is rejected by the contract, and a NULL value is never filled in for a row.
+  maximumDiscountAmount Decimal? @db.Decimal(20, 6)
+  /// Delivery countries the coupon covers. [] means unspecified, never "everywhere".
+  eligibleCountries    String[] @default([])
+  /// PUBLIC or MEMBERS. NULL means the audience was never recorded.
+  audience             String?  @default("PUBLIC")
+  /// Approved source id for this claim; no fallback source is substituted.
+  sourceId             String?
+  /// When the source was checked; a stale check does not publish the code.
+  checkedAt            DateTime?
+  /// The coupon's own end instant with an explicit offset. validUntil stays the legacy column.
+  couponValidUntil     DateTime?
+
   @@index([storeId])
   @@index([status])
+  @@index([status, couponValidUntil])
   @@map("coupons")
 }
 
@@ -1227,4 +1314,143 @@ model LegacyMapping {
   createdAt DateTime @default(now())
   @@unique([legacyType, legacyId])
   @@map("legacy_mappings")
+}
+
+// ==================== INTERNATIONAL OFFERS ====================
+
+/// One canonical identity per product × store × marketplace × ASIN × variant.
+/// identityKey is NOT NULL so the unique index cannot be bypassed by NULL values.
+model MarketplaceListing {
+  id              String          @id @default(cuid())
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storeId         String
+  store           Store           @relation(fields: [storeId], references: [id])
+  marketplaceCode MarketplaceCode
+  asin            String
+  /// Normalized variant key ('' for the default variant; never NULL).
+  variantKey      String          @default("")
+  sourceUrl       String
+  identityKey     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  offers PurchaseOffer[]
+
+  @@unique([identityKey])
+  @@index([productId])
+  @@index([storeId, marketplaceCode])
+  @@map("marketplace_listings")
+}
+
+/// A seller/fulfiller/condition/audience combination for one listing version.
+/// Fulfiller and Prime eligibility are separate from seller identity and are not inferred.
+model PurchaseOffer {
+  id              String          @id @default(cuid())
+  listingId       String
+  listing         MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  sellerKey       String
+  /// null when the fulfiller is not verified. Never filled from the marketplace domain.
+  fulfillerKey    String?
+  condition       OfferCondition  @default(UNKNOWN)
+  audience        OfferAudience   @default(PUBLIC)
+  version         Int             @default(1)
+  isActive        Boolean         @default(true)
+  identityKey     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  priceObservations  OfferPriceObservation[]
+  deliveryEvidence   OfferDeliveryEvidence[]
+  legacyPriceMapping LegacyPriceMapping[]
+
+  @@unique([identityKey])
+  @@index([listingId])
+  @@index([listingId, version])
+  @@map("purchase_offers")
+}
+
+/// Legacy-price bridge for Task 3 backfill bookkeeping. It carries no price, currency or
+/// delivery claim: one row marks "this legacy price row was mapped to this international
+/// offer", which keeps the backfill idempotent and lets the report prove no product was
+/// merged. The legacy price row itself stays untouched in product_prices.
+model LegacyPriceMapping {
+  id                    String        @id @default(cuid())
+  productPriceId        String        @unique
+  offerId               String
+  offer                 PurchaseOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  priceObservationId    String?
+  createdAt             DateTime      @default(now())
+
+  @@index([offerId])
+  @@map("legacy_price_mappings")
+}
+
+/// A price observation for one offer and one scope. scopeKey separates public/member and
+/// marketplace-default from ship-to scopes; an unknown price is UNKNOWN with a null amount.
+/// Amounts keep Decimal(20,6) so no precision is lost the legacy Decimal(10,2) cannot hold.
+model OfferPriceObservation {
+  id                String                 @id @default(cuid())
+  offerId           String
+  offer             PurchaseOffer          @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  scopeKey          String
+  shipTo            DeliveryCountryCode?
+  amount            Decimal?               @db.Decimal(20, 6)
+  currency          String?
+  originalAmount    Decimal?               @db.Decimal(20, 6)
+  audience          OfferAudience          @default(PUBLIC)
+  availability      OfferPriceAvailability @default(UNKNOWN)
+  taxBasis          OfferTaxBasis          @default(UNKNOWN)
+  sourceId          String
+  sourceUrl         String
+  checkedAt         DateTime
+  expiresAt         DateTime
+  identityKey       String
+  createdAt         DateTime               @default(now())
+
+  @@unique([identityKey])
+  @@index([offerId, scopeKey, checkedAt])
+  @@index([expiresAt])
+  @@map("offer_price_observations")
+}
+
+/// Destination delivery evidence. No current source produces rows (T1: delivery fields are
+/// unavailable and deliveryMaxAgeSeconds is null); expiresAt is mandatory so nothing is stored
+/// older than the evidence itself.
+model OfferDeliveryEvidence {
+  id          String                  @id @default(cuid())
+  offerId     String
+  offer       PurchaseOffer           @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  country     DeliveryCountryCode
+  precision   OfferDeliveryPrecision  @default(UNKNOWN)
+  state       OfferDeliveryState      @default(UNKNOWN)
+  sourceId    String
+  sourceUrl   String
+  checkedAt   DateTime
+  expiresAt   DateTime
+  identityKey String
+  createdAt   DateTime                @default(now())
+
+  @@unique([identityKey])
+  @@index([offerId, country, checkedAt])
+  @@index([expiresAt])
+  @@map("offer_delivery_evidence")
+}
+
+/// One FX snapshot: an exact base and decimal-string rates. Conversion is disabled until a
+/// source is approved; a snapshot alone does not authorize estimation.
+model FxSnapshot {
+  id             String   @id @default(cuid())
+  base           String
+  rates          Json
+  sourceId       String
+  asOf           DateTime
+  expiresAt      DateTime
+  identityKey    String
+  createdAt      DateTime @default(now())
+
+  @@unique([identityKey])
+  @@index([base, asOf])
+  @@index([expiresAt])
+  @@map("fx_snapshots")
 }

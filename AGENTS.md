@@ -8,6 +8,8 @@ Historical NestJS/agents/Dify/search sources were removed at the owner’s clean
 
 ## Current public scope
 
+On 2 November 2026, the owner chose a global site identity, with Saudi Arabia and the United States as the initial delivery destinations. Offers may come from any Amazon marketplace with appropriate delivery evidence, with or without Prime. Treat browsing location, delivery destination, language, display currency and marketplace as separate concepts. Do not infer item-level delivery, Prime eligibility or free shipping from the marketplace alone; verify against the item, seller and destination.
+
 The owner narrowed public scope to offers, available prices, coupons and MCP management on 21 October 2026. Retired tools/comparison/ranking/category/editorial/search URLs redirect to locale home; FAQ/contact redirect to about. Preserve these redirects. Product pages show sourced Amazon ratings separately from BabiesPicks editorial assessments at the owner's request on 22 October 2026; no mailing promises. Home page category and attribute filters use query parameters, not category URLs, at the owner's request on 30 October 2026; `/categories` stays redirected. Everything those filters read must stay writable through MCP, including optional product age bounds used by the chat. Domain schemas and historical tables remain for data integrity; they do not imply a public feature.
 
 ## Commands
@@ -30,3 +32,11 @@ Tests with `TEST_DATABASE_URL` require an isolated database ending `_test`. Brow
 ## Delivery
 
 Inspect Git, preserve unrelated changes, isolate work as needed. No commit/push/merge/deployment or destructive cleanup without user authorization. Existing production state/credentials must be verified independently. Additive schema updates retain legacy tables; use runbooks and backup/restore evidence before cutover. Report local, Docker, staging and production evidence separately; no unsupported speed/quota-savings claims.
+
+## Content and price agents
+
+The external content agent and any price updater are first-class project components, distinct from the public read-only shopping chat. Their canonical operating instructions are `docs/operations/content-agent-instructions.md`. Include their instruction versions, MCP tool guidance, scheduled-task prompts and acceptance evidence in changes affecting catalog scope, money, delivery, membership or publication. A repository edit does not update a running external project or scheduled prompt; verify synchronization separately without starting an extra writer.
+
+Read live `tools/list` schemas and `bp_get_capabilities` before work; compare `internationalOffers.agentInstructionVersion` (`2026-11-02.2`, previously `2026-11-02.1`) with the instructions in use, and treat `enabled:false` or an older version as deferral of unsupported currencies and delivery evidence. Global scope is product direction, not proof of deployed international support. `bp_record_price` keeps its legacy SAR-only contract; never relabel or manually convert a foreign price to bypass it, fabricate delivery evidence, or assume one affiliate tag works across marketplaces. Unsupported observations remain pending with their real source context. Existing publishing grants retain their exact scope; changing instructions does not grant new publishing or scheduling authority. Applying the text to the external project and scheduled task is a separate manual step with read-back evidence recorded in `docs/operations/agent-sync.md`; until that evidence exists the external surfaces are unverified, not synchronized.
+
+The proposal is `docs/architecture/target-design.md`; the execution plan is `docs/superpowers/plans/2026-11-02-international-marketplaces.md`. Neither document means the proposed behavior is implemented or approved for deployment.

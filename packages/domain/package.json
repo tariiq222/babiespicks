@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./international": "./src/international-contracts.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit",

@@ -1,5 +1,9 @@
 # OpenShip: GitHub main is the deployment source. No secrets in Git.
 # Its Compose parser supports build.args, not build.target.
+# Reserved existing-writer settings (names only; NOT wired/deployed here):
+# MARKET_DATA_MCP_URL, MARKET_DATA_MCP_TOKEN, MARKET_DATA_BATCH_SIZE,
+# MARKET_DATA_TIMEOUT_MS, MARKET_DATA_PRICE_SOURCE_ID, MARKET_DATA_FX_SOURCE_ID.
+# No new service/schedule or source activation; integration waits for Task 11.
 services:
   db:
     image: postgres:16-alpine
@@ -50,6 +54,8 @@ services:
       CHAT_MODEL: ${CHAT_MODEL:-zai-org/glm-5.3-flash}
       CHAT_DAILY_BUDGET_USD: ${CHAT_DAILY_BUDGET_USD:-2}
       AMAZON_ASSOCIATES_TAG: babiespicks-21
+      AMAZON_ASSOCIATES_TAG_SA: ${AMAZON_ASSOCIATES_TAG_SA:-}
+      AMAZON_ASSOCIATES_TAG_US: ${AMAZON_ASSOCIATES_TAG_US:-}
       MEDIA_ROOT: /data/media
     depends_on: [db, migrate]
     volumes:
@@ -78,6 +84,8 @@ services:
       MCP_ADMIN_PASSWORD: ${MCP_ADMIN_PASSWORD}
       ENABLE_MCP_PUBLISH: 'true'
       AMAZON_ASSOCIATES_TAG: babiespicks-21
+      AMAZON_ASSOCIATES_TAG_SA: ${AMAZON_ASSOCIATES_TAG_SA:-}
+      AMAZON_ASSOCIATES_TAG_US: ${AMAZON_ASSOCIATES_TAG_US:-}
       MEDIA_ROOT: /data/media
       WEB_REVALIDATE_URL: http://web:3000/api/revalidate
       WEB_REVALIDATE_ALLOW_INTERNAL_HTTP: 'true'

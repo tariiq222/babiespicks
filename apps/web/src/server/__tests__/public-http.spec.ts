@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPurchaseHandler } from '../purchase-handler';
+import { createPurchaseHandler, createOfferPurchaseHandler } from '../purchase-handler';
 import { createNewsletterHandler } from '../newsletter-handler';
 
 const request = (body: unknown, origin = 'https://babiespicks.com') => new Request('https://babiespicks.com/api/newsletter/subscribe', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -35,5 +35,58 @@ describe('newsletter subscription', () => {
     const subscribe = createNewsletterHandler(db as never);
     expect((await subscribe(request({ email: ' User@Example.com ', locale: 'en' }))).status).toBe(200);
     expect(db.newsletterSubscriber.upsert).toHaveBeenCalledWith({ where: { email: 'user@example.com' }, create: { email: 'user@example.com', name: null, locale: 'en' }, update: {} });
+  });
+});
+
+// ── Task 7: international offer purchase route ──────────────────────────────
+describe('offer purchase route', () => {
+  const target = { url: 'https://www.amazon.com/dp/B0TEST0001?tag=babiespicks-20', offerId: 'offer-1', listingId: 'lst-1', marketplaceCode: 'US', observedSellerKey: 'seller-a', price: { amount: '20', currency: 'USD' } };
+  const offerRequest = (query: string) => new Request(`https://babiespicks.com/go/offer/offer-1?${query}`);
+  const handler = (resolve: ReturnType<typeof vi.fn>) => createOfferPurchaseHandler({ affiliateClick: { create: vi.fn().mockRejectedValue(new Error('tracking unavailable')) } } as never, resolve as never);
+
+  it('redirects only with an explicit destination and the exact observation, and counts the click as best effort', async () => {
+    const resolve = vi.fn().mockResolvedValue(target);
+    const response = await handler(resolve)(offerRequest('observationId=obs-9&shipTo=US&locale=en'), { offerId: 'offer-1' });
+    expect(resolve).toHaveBeenCalledWith(expect.anything(), { offerId: 'offer-1', observationId: 'obs-9', shipTo: 'US' });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(target.url);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+  it('rejects a missing or non-SA/US destination without calling the resolver', async () => {
+    const resolve = vi.fn();
+    for (const query of ['observationId=obs-9', 'observationId=obs-9&shipTo=DE', 'observationId=obs-9&shipTo=sa']) {
+      const response = await handler(resolve)(offerRequest(query), { offerId: 'offer-1' });
+      expect(response.status).toBe(400);
+    }
+    expect(resolve).not.toHaveBeenCalled();
+  });
+  it('never accepts a free returnUrl: it is ignored and the redirect stays the resolved target', async () => {
+    const resolve = vi.fn().mockResolvedValue(target);
+    const response = await handler(resolve)(offerRequest('observationId=obs-9&shipTo=US&returnUrl=https://attacker.example'), { offerId: 'offer-1' });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(target.url);
+  });
+  it('rejects an arbitrary observation id with a path segment before resolving', async () => {
+    const resolve = vi.fn();
+    const bad = await handler(resolve)(offerRequest('observationId=' + encodeURIComponent('obs/../../x') + '&shipTo=US'), { offerId: 'offer-1' });
+    expect(bad.status).toBe(404);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+  it('answers an expired or superseded observation with an explanation, not another marketplace', async () => {
+    const resolve = vi.fn().mockResolvedValue(null);
+    const response = await handler(resolve)(offerRequest('observationId=obs-9&shipTo=US'), { offerId: 'offer-1' });
+    expect(response.status).toBe(410);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.status).toBe('offerUnavailable');
+    expect(body.reason).toBe('OBSERVATION_EXPIRED');
+    expect(body.offerId).toBe('offer-1');
+    expect(body.shipTo).toBe('US');
+    expect(String(body.optionsPath)).toContain('/products');
+  });
+  it('tracks the offer marketplace, never a guessed country, and a click is not a commission', async () => {
+    const db = { affiliateClick: { create: vi.fn().mockResolvedValue({}) } };
+    const resolve = vi.fn().mockResolvedValue(target);
+    await createOfferPurchaseHandler(db as never, resolve as never)(offerRequest('observationId=obs-9&shipTo=US'), { offerId: 'offer-1' });
+    expect(db.affiliateClick.create).toHaveBeenCalledWith({ data: expect.objectContaining({ country: 'US', productId: 'offer-1' }) });
   });
 });

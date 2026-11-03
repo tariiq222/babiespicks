@@ -3,15 +3,16 @@ import { ProductCard } from './product-card';
 import { ProductImage } from './product-image';
 import { Tag } from './tags';
 import type { Product, ContentPage } from '../lib/api';
+import {contextParams} from '../lib/offer-view';
 
-export function OfferGrid({ offers, products, locale, filtered = false, columns = 4 }: { offers: ContentPage[]; products: Product[]; locale: string; filtered?: boolean; columns?: 3 | 4 }) {
+export function OfferGrid({ offers, products, locale, filtered = false, columns = 4, shipTo = null, currency = null }: { offers: ContentPage[]; products: Product[]; locale: string; filtered?: boolean; columns?: 3 | 4; shipTo?: 'SA' | 'US' | null; currency?:'SAR'|'USD'|null }) {
   const ar = locale === 'ar';
   return <div className="space-y-10">
     {offers.length === 0 && products.length === 0 && <div role="status" className="bg-linen hairline rounded-2xl px-6 py-12 text-center">
       {filtered ? <>
         <h2 className="text-xl mb-3">{ar ? 'لم نجد نتائج مطابقة' : 'No matching results'}</h2>
         <p className="text-stone">{ar ? 'جربي اسمًا أقصر أو اسم الماركة.' : 'Try a shorter name or the brand.'}</p>
-        <Link href="/" className="inline-block mt-5 rounded-lg bg-sage-deep px-5 py-3 text-sm text-cream">{ar ? 'عرض كل المنتجات' : 'Show all products'}</Link>
+        <Link href={{pathname:'/',query:contextParams(shipTo,currency)}} className="inline-block mt-5 rounded-lg bg-sage-deep px-5 py-3 text-sm text-cream">{ar ? 'عرض كل المنتجات' : 'Show all products'}</Link>
       </> : <>
         <h2 className="text-xl mb-3">{ar ? 'لا توجد عروض منشورة حاليًا' : 'No published offers right now'}</h2>
         <p className="text-stone">{ar ? 'ستظهر العروض هنا بعد إضافتها ونشرها.' : 'Offers will appear here after they are published.'}</p>
@@ -28,7 +29,7 @@ export function OfferGrid({ offers, products, locale, filtered = false, columns 
     </section>}
     {products.length > 0 && <section aria-label={ar ? 'أسعار المنتجات المتاحة' : 'Available product prices'}>
       <h2 className="sr-only">{ar ? 'أسعار المنتجات المتاحة' : 'Available product prices'}</h2>
-      <div className={`grid grid-cols-2 gap-3 lg:gap-4 ${columns === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>{products.map((product, index) => <ProductCard key={product.id} product={product} locale={locale} priority={index < 4} />)}</div>
+      <div className={`grid grid-cols-2 gap-3 lg:gap-4 ${columns === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>{products.map((product, index) => <ProductCard key={product.id} product={product} locale={locale} priority={index < 4} shipTo={shipTo} currency={currency} />)}</div>
     </section>}
   </div>;
 }

@@ -62,7 +62,7 @@ integration('real PostgreSQL content contract',()=>{
     await expect(run('bp_update_product',{id,name:'oops',expectedVersion:3,idempotencyKey:'no-explicit'})).rejects.toMatchObject({code:'CONFIRMATION_REQUIRED'});
   });
   it('records a price without altering editorial version or verdict and keeps requested store',async()=>{
-    const store=await run('bp_upsert_store',{name:'Amazon',slug:'amazon',url:'https://www.amazon.sa',affiliateNetwork:'Amazon Associates',idempotencyKey:'store-amazon'});
+    const store=await run('bp_upsert_store',{name:'Amazon',slug:'amazon',url:'https://www.amazon.sa/?tag=test-sa-21',affiliateNetwork:'Amazon Associates',idempotencyKey:'store-amazon'});
     await run('bp_record_price',{productId:id,storeId:store.id,amount:100,currency:'SAR',sourceUrl:'https://www.amazon.sa/dp/X',checkedAt:now.toISOString(),inStock:true,idempotencyKey:'price-a'});
     const p=await db.product.findUniqueOrThrow({where:{id}});
     expect(p.version).toBe(3);
@@ -71,7 +71,7 @@ integration('real PostgreSQL content contract',()=>{
     expect(await api.resolvePurchaseTarget(db,{productId:id,storeId:'missing'},now)).toBeNull();
   });
   it('manages every public filter source through MCP tools',async()=>{
-    const store=await run('bp_upsert_store',{name:'Amazon',slug:'amazon',url:'https://www.amazon.sa',affiliateNetwork:'Amazon Associates',idempotencyKey:`store-${id}`});
+    const store=await run('bp_upsert_store',{name:'Amazon',slug:'amazon',url:'https://www.amazon.sa/?tag=test-sa-21',affiliateNetwork:'Amazon Associates',idempotencyKey:`store-${id}`});
     await expect(run('bp_record_price',{productId:id,storeId:store.id,amount:100,originalAmount:100,currency:'SAR',sourceUrl:'https://www.amazon.sa/dp/X',checkedAt:now.toISOString(),inStock:true,idempotencyKey:`bad-price-${id}`})).rejects.toMatchObject({code:'INVALID_INPUT'});
     const priced=await run('bp_record_price',{productId:id,storeId:store.id,amount:80,originalAmount:100,currency:'SAR',sourceUrl:'https://www.amazon.sa/dp/X',checkedAt:now.toISOString(),inStock:true,idempotencyKey:`price-${id}`});
     expect(Number(priced.originalPrice)).toBe(100);

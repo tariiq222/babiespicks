@@ -4,11 +4,22 @@ import { join } from 'node:path';
 import { prisma, type PrismaClient, type Prisma } from '@babiespicks/db';
 import { DomainError } from './errors';
 import { schemas, type ActorContext, type ToolName } from './contracts';
+import { OFFER_MUTATION_NAMES, applyOfferMutation, getOffer, type OfferMutationName } from './offer-mutations';
+import { couponScopeIssues } from './coupon-scope';
 import { wrapAffiliateUrl } from './prices';
 import {validateVerdict, VERDICT_POLICY} from './verdict-policy';
 export { DomainError } from './errors';
 export { TOOL_DEFINITIONS, type ActorContext } from './contracts';
-export { selectLatestPrices, wrapAffiliateUrl, resolvePurchaseTarget } from './prices';
+export {
+  applyOfferMutation, getOffer, OFFER_MUTATION_NAMES, CLOCK_SKEW_SECONDS,
+  identityKey as offerIdentityParts, listingIdentity, offerIdentityOf, deriveScopeKey,
+  computeExpiresAt, canonicalTimestamp, type SavedMutation, type OfferMutationName, type OfferMutationActor,
+} from './offer-mutations';
+export * from './international-contracts';
+import { getAllSourcePolicies } from './source-policy';
+export { selectLatestPrices, wrapAffiliateUrl, resolvePurchaseTarget, resolveOfferTarget, type ResolvedOffer } from './prices';
+export { getFxSnapshot, fxPolicyAllows, APPROVED_FX_SOURCE_POLICIES, type FxSourcePolicy, type FxSnapshotRow, type FxSnapshotRepository } from './fx';
+export { selectOffers, type OfferObservation, type DeliveryEvidence, type SelectOffersInput, type SelectedOfferQuote, type SelectedOfferSelection } from './offer-selection';
 const json=(value:unknown)=>JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 function stable(value:unknown):string {
   if(Array.isArray(value))return `[${value.map(stable).join(',')}]`;
@@ -16,6 +27,19 @@ function stable(value:unknown):string {
   return JSON.stringify(value);
 }
 const hash=(v:unknown)=>createHash('sha256').update(stable(v)).digest('hex');
+/** The coupon conditions this module reads and writes; a legacy row omits the new columns. */
+interface StoredCouponConditions {
+  discountPercent: number | null;
+  discountAmount: { toFixed(digits: number): string } | null;
+  couponCurrency?: string | null;
+  minimumSpendAmount?: { toFixed(digits: number): string } | null;
+  minimumSpendCurrency?: string | null;
+  eligibleCountries?: string[] | null;
+  audience?: string | null;
+  sourceId?: string | null;
+  checkedAt?: Date | null;
+  couponValidUntil?: Date | null;
+}
 function requirePublish(actor:ActorContext){if(!actor.canPublish)throw new DomainError('PUBLISH_FORBIDDEN','Owner publishing authorization required')}
 function makeSlug(name:string){return name.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'').slice(0,160)||'item'}
 const productInclude={translations:true,specs:true,reviewSummary:true,verdict:true} as const;
@@ -149,9 +173,42 @@ async function mutate(tx:Prisma.TransactionClient,name:ToolName,a:any,actor:Acto
       return existing?tx.category.update({where:{id:existing.id},data}):tx.category.create({data});
     }
     case 'bp_upsert_coupon':{
-      requirePublish(actor);const {id,idempotencyKey,...data}=a;
-      if(data.validFrom)data.validFrom=new Date(data.validFrom);if(data.validUntil)data.validUntil=new Date(data.validUntil);
-      if(data.validFrom&&data.validUntil&&data.validFrom>data.validUntil)throw new DomainError('INVALID_INPUT','Invalid coupon date range');
+      requirePublish(actor);const {id,idempotencyKey,...stated}=a;
+      if(stated.validFrom)stated.validFrom=new Date(stated.validFrom);if(stated.validUntil)stated.validUntil=new Date(stated.validUntil);
+      if(stated.checkedAt)stated.checkedAt=new Date(stated.checkedAt);
+      if(stated.validFrom&&stated.validUntil&&stated.validFrom>stated.validUntil)throw new DomainError('INVALID_INPUT','Invalid coupon date range');
+      // Read by primary key so the update can merge the stored conditions. The additive
+      // coupon columns are typed structurally here: this module must compile whether or
+      // not the generated client has been regenerated yet.
+      const existing=id?await (tx.coupon as unknown as { findUnique(args:{where:{id:string}}):Promise<StoredCouponConditions|null>}).findUnique({where:{id}}):null;
+      if(id&&!existing)throw new DomainError('NOT_FOUND','Coupon not found');
+      // An update may omit money fields; the merged row is what the contract must accept.
+      const merged={
+        discountPercent:stated.discountPercent!==undefined?stated.discountPercent:existing?.discountPercent??null,
+        discountAmount:stated.discountAmount!==undefined?(stated.discountAmount===null?null:stated.discountAmount):existing?.discountAmount?.toFixed(6)??null,
+        couponCurrency:stated.couponCurrency!==undefined?stated.couponCurrency:existing?.couponCurrency??null,
+        minimumSpendAmount:stated.minimumSpendAmount!==undefined?(stated.minimumSpendAmount===null?null:stated.minimumSpendAmount):existing?.minimumSpendAmount?.toFixed(6)??null,
+        minimumSpendCurrency:stated.minimumSpendCurrency!==undefined?stated.minimumSpendCurrency:existing?.minimumSpendCurrency??null,
+        eligibleCountries:stated.eligibleCountries!==undefined?(stated.eligibleCountries??[]):existing?.eligibleCountries??[],
+        audience:stated.audience!==undefined?(stated.audience??'PUBLIC'):existing?.audience??'PUBLIC',
+        sourceId:stated.sourceId!==undefined?stated.sourceId:existing?.sourceId??null,
+        checkedAt:stated.checkedAt!==undefined?stated.checkedAt:existing?.checkedAt??null,
+        validUntil:stated.validUntil!==undefined?stated.validUntil:existing?.couponValidUntil??null,
+      };
+      // A checkedAt without a registered source is an unsourced claim, on create or update alike.
+      const issues=couponScopeIssues({
+        ...merged,
+        // A check date is an optional, sourced field; an optional null must not read as a claim.
+        // An unstated audience is unknown here: the column default decides it, not a guess.
+        checkedAt: merged.checkedAt ?? null,
+        audience: stated.audience === undefined ? (existing?.audience ?? null) : merged.audience,
+      });
+      if(issues.length)throw new DomainError('INVALID_INPUT',issues.map(issue=>`${issue.path}: ${issue.code}`).join('; '));
+      // The table has a single validUntil; the coupon's own end is mirrored into couponValidUntil
+      // so the structured timestamp with its offset travels with the row.
+      if(stated.validUntil!==undefined)stated.couponValidUntil=stated.validUntil;
+      // stated never carries an id; the row key does.
+      const data={...stated,...(id?{}:{audience:merged.audience,eligibleCountries:merged.eligibleCountries})};
       return id?tx.coupon.update({where:{id},data}):tx.coupon.create({data});
     }
     case 'bp_upload_image':return uploadImage(a);
@@ -173,12 +230,16 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
   const schema=schemas[name as ToolName];const parsed=schema.safeParse(input);
   if(!parsed.success)throw new DomainError('INVALID_INPUT',parsed.error.issues.map(x=>`${x.path.join('.')}: ${x.message}`).join('; '));
   const a:any=parsed.data;
-  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS};
+  if(name==='bp_get_capabilities')return {publishing:{allowed:actor.canPublish},states:['DRAFT','REVIEW','PUBLISHED','ARCHIVED'],publicMedia:true,priceFreshnessHours:48,verdictPolicy:VERDICT_POLICY,publicFilters:PUBLIC_FILTERS,internationalOffers:{contractVersion:2,enabled:false,tools:[...OFFER_MUTATION_NAMES,'bp_get_offer'],deliveryCountries:['SA','US'],displayCurrencies:['SAR','USD'],sourcePolicies:getAllSourcePolicies(),agentInstructionVersion:'2026-11-02.2'}};
   if(name==='bp_list_products'&&a.categoryId&&a.uncategorized)throw new DomainError('INVALID_INPUT','Use categoryId or uncategorized, not both');
   if(name==='bp_list_products')return db.product.findMany({where:{...(a.status?{publishStatus:a.status}:{}),...(a.categoryId?{categoryId:a.categoryId}:{}),...(a.uncategorized?{categoryId:null}:{})},include:productInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_product'){const p=await db.product.findUnique({where:{id:a.id},include:{...productInclude,prices:{include:{store:true},orderBy:{scrapedAt:'desc'},take:100}}});if(!p)throw new DomainError('NOT_FOUND','Product not found');return p}
   if(name==='bp_list_content')return db.contentPage.findMany({where:a.status?{publishStatus:a.status}:{},include:contentInclude,take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
   if(name==='bp_get_content'){const c=await db.contentPage.findUnique({where:{id:a.id},include:contentInclude});if(!c)throw new DomainError('NOT_FOUND','Content not found');return c}
+  if(name==='bp_get_offer'){
+    // A read: no receipt, no write. Offer writers are reconciled by their own idempotencyKey.
+    const offer=await getOffer(db,a.id,actor);return json(offer);
+  }
   if(name==='bp_list_stores')return db.store.findMany({take:a.limit,skip:a.offset,orderBy:{name:'asc'}});
   if(name==='bp_list_categories')return db.category.findMany({include:{_count:{select:{products:true}}},take:a.limit,skip:a.offset,orderBy:[{order:'asc'},{name:'asc'}]});
   if(name==='bp_list_coupons')return db.coupon.findMany({where:a.storeId?{storeId:a.storeId}:{},include:{store:true},take:a.limit,skip:a.offset,orderBy:{createdAt:'desc'}});
@@ -194,8 +255,9 @@ export async function executeTool(name:string,input:unknown,actor:ActorContext,d
     if(['bp_set_status','bp_upsert_store','bp_upsert_category','bp_upsert_coupon'].includes(name))requirePublish(actor);
     return existing.result;
   }
+  const isOfferMutation=(OFFER_MUTATION_NAMES as readonly string[]).includes(name);
   try{return await db.$transaction(async tx=>{
-    const result=await mutate(tx,name as ToolName,a,actor);
+    const result=isOfferMutation?await applyOfferMutation(tx,name as OfferMutationName,a,actor):await mutate(tx,name as ToolName,a,actor);
     const serialized=json(result);await tx.operationReceipt.create({data:{key,inputHash,result:serialized}});return serialized;
   },{timeout:15000})}catch(error:any){
     if(error instanceof DomainError){

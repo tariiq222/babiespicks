@@ -3,7 +3,7 @@ vi.mock('server-only', () => ({}));
 import { createPublicQueries } from '../public-queries';
 
 function database() {
-  return { product: { count: vi.fn().mockResolvedValue(0), findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, contentPage: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, publicOffer: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, store: { findUnique: vi.fn().mockResolvedValue(null) } };
+  return { product: { count: vi.fn().mockResolvedValue(0), findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, contentPage: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, publicOffer: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null) }, store: { findUnique: vi.fn().mockResolvedValue(null) }, purchaseOffer: { findMany: vi.fn().mockResolvedValue([]) } };
 }
 
 describe('public publication boundary', () => {
@@ -87,7 +87,7 @@ describe('published offer discovery', () => {
 
 it('never advertises a purchase link for a missing or invalid latest destination', async () => {
   const db = database();
-  const now = new Date(); const store = { id: 's', slug: 'amazon', name: 'Amazon', url: 'https://www.amazon.sa', isActive: true };
+  const now = new Date(); const store = { id: 's', slug: 'amazon', name: 'Amazon', url: 'https://www.amazon.sa/?tag=test-sa-21', isActive: true };
   const row = { id: 'p', name: 'Product', slug: 'p', translations: [], specs: [], verdict: null, reviewSummary: null, category: null };
   for (const url of [null, '', 'https://attacker.example/p', 'javascript:alert(1)']) {
     db.product.findFirst.mockResolvedValue({ ...row, prices: [
@@ -106,4 +106,156 @@ it('projects galleries and display sources without exposing internal source note
  const product=await createPublicQueries(db as never).getProduct('p');
  expect(product?.imageUrls).toEqual(['https://m.media-amazon.com/one.jpg']);
  expect(product?.sources).toEqual([{url:'https://www.amazon.sa/dp/X',field:'reviewSummary',checkedAt:'2026-10-21T12:00:00Z'}]);
+});
+
+// ── Task 7: international offer reads ───────────────────────────────────────
+import { selectOffers, parseShoppingContext, type OfferObservation, type SelectOffersInput } from '@babiespicks/domain';
+import { encodeCatalogCursor, decodeCatalogCursor } from '../public-queries';
+
+const NO_POLICIES: SelectOffersInput['policies'] = [];
+const CONTEXT = parseShoppingContext({ locale: 'ar', shipTo: 'SA', displayCurrency: 'SAR', budget: null, audience: 'PUBLIC' });
+const NOW = new Date('2026-11-02T12:00:00Z');
+
+function offerRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'offer-us-1', listingId: 'lst-1', sellerKey: 'seller-a', fulfillerKey: 'ful-a', isActive: true, audience: 'PUBLIC',
+    listing: {
+      id: 'lst-1', productId: 'p', marketplaceCode: 'US',
+      product: { publishStatus: 'PUBLISHED', isActive: true },
+      store: { id: 's-us', name: 'أمازون أمريكا', slug: 'amazon-us', isActive: true, marketplaceCode: 'US' },
+    },
+    priceObservations: [],
+    deliveryEvidence: [],
+    ...overrides,
+  };
+}
+function observation(overrides: Partial<OfferObservation> = {}): OfferObservation {
+  return {
+    id: 'obs-1', offerId: 'offer-us-1', productId: 'p', listingId: 'lst-1', marketplaceCode: 'US',
+    sellerKey: 'seller-a', fulfillerKey: 'ful-a', observedSellerKey: 'seller-a', observedFulfillerKey: 'ful-a',
+    scopeKey: 'price:US:ship-to:US', shipTo: 'US', price: { amount: '20', currency: 'USD' }, originalPrice: null,
+    audience: 'PUBLIC', availability: 'AVAILABLE', taxBasis: 'EXCLUDED',
+    sourceId: 'amazon-creators-api-us', checkedAt: '2026-11-02T11:00:00Z', expiresAt: '2026-11-02T12:30:00Z', isActive: true,
+    ...overrides,
+  };
+}
+function policyDb(policies: SelectOffersInput['policies']) {
+  return {
+    selectOffers: (input: SelectOffersInput) => selectOffers({ ...input, policies, now: NOW }),
+  };
+}
+
+describe('international product offers (Task 7)', () => {
+  it('projects the engine selection without drafts, internal source fields or SAR filtering', async () => {
+    const db = database();
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([offerRow({
+      priceObservations: [{ id: 'obs-1', offerId: 'offer-us-1', scopeKey: 'price:US:in-marketplace', shipTo: null, amount: '20', currency: 'USD', originalAmount: null, audience: 'PUBLIC', availability: 'AVAILABLE', taxBasis: 'EXCLUDED', sourceId: 'amazon-creators-api-us', checkedAt: new Date('2026-11-02T11:50:00Z'), expiresAt: new Date('2026-11-02T13:00:00Z') }],
+    })]) };
+    const queries = createPublicQueries(db as never);
+    const result = await queries.getProductOffers('p', CONTEXT, NOW);
+    // Without a trusted source the US price reaches pendingDelivery, never a quote.
+    expect(result.offers!.quotes).toHaveLength(0);
+    expect(result.offers!.pendingDelivery).toHaveLength(1);
+    const quote = result.offers!.pendingDelivery[0]!;
+    // Engine fields pass through verbatim, including the T6 extras.
+    expect(quote.price).toEqual({ amount: '20', currency: 'USD' });
+    expect(quote.originalPrice).toBeNull(); // original missing in this row
+    expect(quote.convertedPrice).toBeNull();
+    expect(quote.convertedOriginalPrice).toBeNull();
+    expect(quote.discountPercent).toBeNull();
+    // No internal source identity, no draft marker, no store URL or name in the projection.
+    expect(JSON.stringify(quote)).not.toContain('sourceId');
+    expect(JSON.stringify(quote)).not.toContain('DRAFT');
+    expect(JSON.stringify(quote)).not.toContain('amazon-us');
+    expect(JSON.stringify(quote)).not.toContain('http');
+  });
+
+  it('keeps an expired source out of the public selection', async () => {
+    const expired = observation({ expiresAt: '2026-11-02T11:30:00Z' });
+    const db = database();
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([offerRow()]) };
+    const queries = createPublicQueries({ ...db, ...policyDb(NO_POLICIES) } as never);
+    const selection = await queries.getOfferSelection('p', CONTEXT, NOW);
+    expect(selection.quotes).toHaveLength(0);
+    void expired;
+  });
+
+  it('reads a legacy-only product without throwing and without comparison claims', async () => {
+    const db = database();
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([]) };
+    db.product.findFirst.mockResolvedValue({ id: 'p', name: 'P', slug: 'p', translations: [], specs: [], category: null, verdict: null, reviewSummary: null, imageUrls: [], prices: [{ price: 149.5, originalPrice: null, currency: 'SAR', storeId: 's', url: 'https://www.amazon.sa/dp/X', inStock: true, scrapedAt: new Date('2026-11-02T10:00:00Z'), store: { id: 's', name: 'Amazon', slug: 'amazon', isActive: true, url: 'https://www.amazon.sa/?tag=test-sa-21' } }] } as never);
+    const queries = createPublicQueries(db as never);
+    const result = await queries.getProductOffers('p', CONTEXT, NOW);
+    expect(result.legacyPrice).toEqual({ price: 149.5, originalPrice: null, currency: 'SAR', storeId: 's', checkedAt: new Date('2026-11-02T10:00:00Z').toISOString(), store: { id: 's', name: 'Amazon', slug: 'amazon' } });
+    expect(result.offers!.quotes).toHaveLength(0);
+    expect(result.offers!.bestByGroup).toEqual({});
+    expect(result.total).toBe(0); // the mocked count
+    expect(result.contextKey).toBeTypeOf('string');
+  });
+
+  it('falls back to the legacy price only when no international rows exist, and mixes legacy with new', async () => {
+    const db = database();
+    // Pre-activation product: no international rows at all → legacy price view.
+    db.product.findMany.mockResolvedValue([
+      { id: 'p', name: 'P', slug: 'p', translations: [], specs: [], category: null, verdict: null, reviewSummary: null, imageUrls: [], prices: [{ price: 149.5, originalPrice: null, currency: 'SAR', storeId: 's', url: 'https://www.amazon.sa/dp/X', inStock: true, scrapedAt: new Date('2026-11-02T10:00:00Z'), store: { id: 's', name: 'Amazon', slug: 'amazon', isActive: true, url: 'https://www.amazon.sa/?tag=test-sa-21' } }] } as never,
+    ]);
+    db.product.count.mockResolvedValue(1);
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([]) };
+    const queries = createPublicQueries(db as never);
+    const page = await queries.getCatalogPage(CONTEXT, {}, null, { productId: 'p', now: NOW });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]!.product.legacyOnly).toBe(true);
+    expect(page.items[0]!.legacyPrice).toEqual({ price: 149.5, originalPrice: null, currency: 'SAR', storeId: 's', checkedAt: new Date('2026-11-02T10:00:00Z').toISOString(), store: { id: 's', name: 'Amazon', slug: 'amazon' } });
+    expect(page.items[0]!.offers).toBeNull(); // no international selection exists at all
+    // Mixed product: live USD + legacy SAR rows → international path, engine reads both.
+    const mixed = offerRow({
+      priceObservations: [
+        { id: 'obs-legacy-2', offerId: 'offer-us-1', scopeKey: 'legacy-sar-in-marketplace', shipTo: null, amount: '100', currency: 'SAR', originalAmount: null, audience: 'PUBLIC', availability: 'AVAILABLE', taxBasis: 'UNKNOWN', sourceId: 'legacy-sar-backfill', checkedAt: new Date('2026-11-02T11:40:00Z'), expiresAt: new Date('2026-11-02T13:40:00Z') },
+        { id: 'obs-live', offerId: 'offer-us-1', scopeKey: 'price:US:in-marketplace', shipTo: null, amount: '20', currency: 'USD', originalAmount: null, audience: 'PUBLIC', availability: 'AVAILABLE', taxBasis: 'EXCLUDED', sourceId: 'amazon-creators-api-us', checkedAt: new Date('2026-11-02T11:50:00Z'), expiresAt: new Date('2026-11-02T13:00:00Z') },
+      ],
+    });
+    db.product.findMany.mockResolvedValue([
+      { id: 'p', name: 'P', slug: 'p', translations: [], specs: [], category: null, verdict: null, reviewSummary: null, imageUrls: [], prices: [] } as never,
+    ]);
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([mixed]) };
+    const international = await queries.getCatalogPage(CONTEXT, {}, null, { productId: 'p', now: NOW });
+    expect(international.items).toHaveLength(1);
+    expect(international.items[0]!.product.legacyOnly).toBe(false);
+    expect(international.items[0]!.legacyPrice).toBeNull();
+    // The legacy SAR row is read (no throw) but stays untrusted: no quote, no conversion.
+    expect(international.items[0]!.offers!.quotes).toHaveLength(0);
+    expect(international.items[0]!.offers!.pendingDelivery).toHaveLength(1);
+    expect(international.items[0]!.offers!.pendingDelivery[0]!.price).toEqual({ amount: '20', currency: 'USD' });
+    expect(international.items[0]!.offers!.pendingDelivery[0]!.comparisonGroup).toBeNull();
+  });
+
+  it('paginates with a deterministic bounded page and a stable cursor key', async () => {
+    const db = database();
+    db.product.findMany.mockResolvedValue([]); db.product.count.mockResolvedValue(0);
+    const queries = createPublicQueries({ ...db, ...policyDb(NO_POLICIES) } as never);
+    await queries.getCatalogPage(CONTEXT, {}, null, { limit: 999 });
+    expect(db.product.findMany.mock.calls[0][0].take).toBe(48);
+    await queries.getCatalogPage(CONTEXT, {}, null, { limit: 0 });
+    expect(db.product.findMany.mock.calls[1][0].take).toBe(1);
+    const cursor = encodeCatalogCursor('prod_1', NOW.toISOString());
+    expect(decodeCatalogCursor(cursor)).toEqual({ id: 'prod_1' });
+    expect(decodeCatalogCursor('garbage')).toBeNull();
+    await queries.getCatalogPage(CONTEXT, {}, cursor, {});
+    expect(db.product.findMany.mock.calls[2][0].cursor).toEqual({ id: 'prod_1' });
+    expect(db.product.findMany.mock.calls[2][0].skip).toBe(1);
+  });
+
+  it('computes filterOptions from every eligible row, not the filtered subset', async () => {
+    const db = database();
+    db.product.findMany.mockResolvedValue([
+      { id: 'p1', name: 'A', slug: 'a', translations: [], specs: [], category: { name: 'نوم', nameEn: 'Sleep', slug: 'sleep', order: 1 }, verdict: null, reviewSummary: null, brand: 'BrandA', imageUrls: [], prices: [] },
+      { id: 'p2', name: 'B', slug: 'b', translations: [], specs: [], category: { name: 'عناية', nameEn: 'Care', slug: 'care', order: 2 }, verdict: null, reviewSummary: null, brand: 'BrandB', imageUrls: [], prices: [] },
+    ] as never);
+    db.product.count.mockResolvedValue(2);
+    db.purchaseOffer = { findMany: vi.fn().mockResolvedValue([offerRow({ listing: { id: 'lst-1', productId: 'p1', marketplaceCode: 'US', product: { publishStatus: 'PUBLISHED', isActive: true }, store: { id: 's-us', name: 'أمازون أمريكا', slug: 'amazon-us', isActive: true, marketplaceCode: 'US' } } })]) };
+    const queries = createPublicQueries({ ...db, ...policyDb(NO_POLICIES) } as never);
+    const page = await queries.getCatalogPage(CONTEXT, { category: 'sleep' }, null, { now: NOW });
+    expect(page.filterOptions.categories.map(c => c.slug)).toEqual(['sleep', 'care']);
+    expect(page.filterOptions.brands).toEqual(['BrandA', 'BrandB']);
+  });
 });

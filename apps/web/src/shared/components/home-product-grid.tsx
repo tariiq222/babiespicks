@@ -5,6 +5,7 @@ import { getVerdictVariant, type Product } from '../lib/api';
 import { ProductName } from './product-name';
 import { ProductImage } from './product-image';
 import { SarPrice } from './sar-price';
+import { MoneyPrice } from './money-price';
 import { VerdictPill, VERDICT_CLASS } from './verdict-pill';
 import { CatalogEmptyState } from './catalog-empty-state';
 
@@ -24,7 +25,10 @@ export function HomeProductGrid({ products, locale }: { products: Product[]; loc
         <h3 className="text-[13px] text-charcoal mt-3 leading-tight min-h-[32px]"><ProductName product={p} locale={locale} /></h3>
         <div className="flex items-center justify-between mt-3 gap-2">
           <VerdictPill variant={getVerdictVariant(p.verdict?.type)} score={p.verdict?.overallScore} label={p.verdict ? tc(`verdict.${p.verdict.type}`) : tc('notRated')} />
-          {p.prices[0] && <SarPrice amount={p.prices[0].price} className="text-[12px] text-charcoal" />}
+          {/* The stored price keeps its real currency; SAR keeps its wrapper. */}
+          {p.prices[0] && (p.prices[0].currency === 'SAR'
+            ? <SarPrice amount={p.prices[0].price} className="text-[12px] text-charcoal" />
+            : <MoneyPrice price={{ amount: String(p.prices[0].price), currency: p.prices[0].currency }} locale={locale === 'ar' ? 'ar' : 'en'} className="text-[12px] text-charcoal" />)}
         </div>
       </Link>)}
     </div>

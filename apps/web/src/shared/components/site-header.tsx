@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import { LogoMark } from './logo-mark';
+import { ShoppingPreferences } from './shopping-preferences';
+import {useShoppingContext} from './shopping-context-provider';
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -12,6 +14,8 @@ export function SiteHeader() {
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
+  const context = useShoppingContext();
+  const contextQuery = {shipTo:context.shipTo??'',currency:context.displayCurrency??''};
 
   const otherLocale = locale === 'ar' ? 'en' : 'ar';
 
@@ -21,7 +25,7 @@ export function SiteHeader() {
     const q = (form.elements.namedItem('q') as HTMLInputElement)?.value.trim();
     if (q) {
       setSearchOpen(false);
-      router.push(`/?q=${encodeURIComponent(q)}`);
+      router.push({pathname:'/',query:{q,...contextQuery}});
     }
   };
 
@@ -29,7 +33,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 bg-cream/95 backdrop-blur hairline-b">
       <div className="max-w-7xl mx-auto px-5 md:px-8 lg:px-12 h-16 flex items-center gap-5">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0">
+        <Link href={{pathname:'/',query:contextQuery}} className="flex items-center gap-2 shrink-0">
           <LogoMark size={36} />
           {locale === 'ar' ? (
             <div className="leading-tight text-right">
@@ -44,8 +48,8 @@ export function SiteHeader() {
 
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-5 me-1">
-          <Link href="/" className={`text-[13px] transition-colors ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.offers')}</Link>
-          <Link href="/coupons" className={`text-[13px] transition-colors ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.coupons')}</Link>
+          <Link href={{pathname:'/',query:contextQuery}} className={`text-[13px] transition-colors ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.offers')}</Link>
+          <Link href={{pathname:'/coupons',query:contextQuery}} className={`text-[13px] transition-colors ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone hover:text-charcoal'}`}>{t('nav.coupons')}</Link>
         </nav>
 
         {/* End cluster */}
@@ -72,9 +76,13 @@ export function SiteHeader() {
             <i className={`ti text-[18px] ${searchOpen ? 'ti-x' : 'ti-search'}`}></i>
           </button>
 
+          {/* Destination and display-currency preferences (Task 8): never touches
+              the language, and never infers a location from IP. */}
+          <ShoppingPreferences compact />
+
           {/* Language toggle */}
           <Link
-            href={pathname}
+            href={{pathname,query:contextQuery}}
             locale={otherLocale}
             className="w-11 h-11 grid place-items-center rounded-full hover:bg-linen text-stone relative"
             aria-label={t('header.langToggleAriaLabel')}
@@ -117,8 +125,8 @@ export function SiteHeader() {
       {/* Mobile dropdown */}
       {open && (
         <div className="md:hidden hairline-t bg-cream px-5 py-2 flex flex-col">
-          <Link href="/" onClick={() => setOpen(false)} className={`py-2 text-sm ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.offers')}</Link>
-          <Link href="/coupons" onClick={() => setOpen(false)} className={`py-2 text-sm ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.coupons')}</Link>
+          <Link href={{pathname:'/',query:contextQuery}} onClick={() => setOpen(false)} className={`py-2 text-sm ${pathname === '/' ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.offers')}</Link>
+          <Link href={{pathname:'/coupons',query:contextQuery}} onClick={() => setOpen(false)} className={`py-2 text-sm ${pathname?.startsWith('/coupons') ? 'text-charcoal font-medium' : 'text-stone'}`}>{t('nav.coupons')}</Link>
         </div>
       )}
     </header>

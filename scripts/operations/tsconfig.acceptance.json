@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "node"
+    ],
+    "typeRoots": [
+      "../../apps/web/node_modules/@types"
+    ]
+  },
+  "include": [
+    "./international-acceptance.ts",
+    "./international-acceptance.integration.ts",
+    "./international-acceptance.browser.ts"
+  ]
+}
