@@ -12,29 +12,44 @@ async function rpc(method:string,params?:unknown,database?:Parameters<typeof exe
 }
 const INTERNATIONAL_TOOLS=['bp_upsert_listing','bp_upsert_offer','bp_get_offer','bp_record_offer_price','bp_record_delivery_evidence','bp_record_fx_snapshot'];
 describe('real domain schemas through SDK without database writes',()=>{
-  it('advertises a strict monthly progress read and serves an editor without writes or revalidation',async()=>{
+  it('advertises a strict daily progress read and serves an editor without writes or revalidation',async()=>{
     const list=await rpc('tools/list');
     const tool=list.body.result.tools.find((tool:{name:string})=>tool.name==='bp_get_publication_progress');
     expect(tool).toBeDefined();
     expect(tool.annotations).toMatchObject({readOnlyHint:true,destructiveHint:false});
     expect(tool.inputSchema.additionalProperties).toBe(false);
-    expect(Object.keys(tool.inputSchema.properties)).toEqual(['month','excludeReviewIds']);
+    expect(Object.keys(tool.inputSchema.properties)).toEqual(['date']);
     expect(isReadTool(tool.name)).toBe(true);
     const revalidate=vi.fn(async()=>'ok' as const);
     // Any non-count database access (bodies, writes, receipts) throws.
     const database={product:{count:async()=>0,findMany:async()=>[]}} as never;
-    const response=await rpc('tools/call',{name:tool.name,arguments:{month:'2026-11'}},database,revalidate);
+    const response=await rpc('tools/call',{name:tool.name,arguments:{date:'2026-11-03'}},database,revalidate);
     expect(response.body.result.isError).not.toBe(true);
-    expect(response.body.result.structuredContent).toMatchObject({month:'2026-11',target:50,firstPublished:0,remaining:50,editorialReviewedFromMonth:0,editorialReviewRemaining:0,multiSourceReviewedFromMonth:0,reviewCandidates:[]});
+    expect(response.body.result.structuredContent).toMatchObject({date:'2026-11-03',dailyMinimum:3,dailyMaximum:6,firstPublishedToday:0,remainingToMinimum:3,remainingCapacity:6});
     expect(response.body.result.structuredContent).not.toHaveProperty('revalidation');
     expect(revalidate).not.toHaveBeenCalled();
-    for(const args of [{month:'2026-13'},{actor:{canPublish:true}},{idempotencyKey:'k'}]){
+    for(const args of [{date:'2026-02-29'},{actor:{canPublish:true}},{idempotencyKey:'k'}]){
       const rejected=await rpc('tools/call',{name:tool.name,arguments:args},database,revalidate);
       expect(rejected.body.result.isError).toBe(true);
     }
     const capability=await rpc('tools/call',{name:'bp_get_capabilities',arguments:{}});
-    expect(capability.body.result.structuredContent.publishing).toMatchObject({allowed:false,monthlyTarget:50});
-    expect(capability.body.result.structuredContent.internationalOffers).toMatchObject({enabled:false,agentInstructionVersion:'2026-11-03.2'});
+    expect(capability.body.result.structuredContent.publishing).toMatchObject({allowed:false,dailyTarget:{min:3,max:6}});
+    expect(capability.body.result.structuredContent.internationalOffers).toMatchObject({enabled:false,agentInstructionVersion:'2026-11-03.3'});
+  });
+  it('advertises bounded section reads and serves an editor without invalidation',async()=>{
+    const list=await rpc('tools/list');
+    const tool=list.body.result.tools.find((tool:{name:string})=>tool.name==='bp_get_product_section');
+    expect(tool.annotations).toMatchObject({readOnlyHint:true,destructiveHint:false});
+    expect(tool.inputSchema.additionalProperties).toBe(false);
+    const revalidate=vi.fn(async()=>'ok' as const);
+    const response=await rpc('tools/call',{name:tool.name,arguments:{id:'p',section:'sources'}},{product:{findUnique:async()=>({id:'p',version:2,publishStatus:'PUBLISHED',sources:[]})}} as never,revalidate);
+    expect(response.body.result.structuredContent).toMatchObject({id:'p',section:'sources',chunk:'[]',nextOffset:null});
+    expect(response.body.result.structuredContent).not.toHaveProperty('revalidation');
+    expect(revalidate).not.toHaveBeenCalled();
+    for(const args of [{id:'p',section:'sources',actor:{canPublish:true}},{id:'p',section:'sources',offset:1},{id:'p',section:'translation'}]){
+      const rejected=await rpc('tools/call',{name:tool.name,arguments:args},{} as never,revalidate);
+      expect(rejected.body.result.isError).toBe(true);
+    }
   });
   it('accepts marketplace store metadata through MCP without granting an editor publishing rights',async()=>{
     const database={operationReceipt:{findUnique:async()=>null},$transaction:async(work:(tx:unknown)=>Promise<unknown>)=>work({})};
